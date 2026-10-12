@@ -1,0 +1,54 @@
+# 🎯 RCWS Stage 1: 2-Axis Visual Servoing & Target Tracking System
+
+**Raspberry Pi 5 (Hailo-8 AI Vision)**와 **STM32 NUCLEO-F401RE (500Hz Real-Time Motor Control)**를 결합한 2축 원격 제어 무장/카메라 시스템(RCWS)의 Stage 1 프로토타입 프로젝트입니다.
+
+카메라가 장착된 상단 짐벌(Eye-in-Hand 구조)에서 실시간으로 타겟(스마트폰 등)을 검출하고, 칼만 필터(Kalman Filter)로 미래 궤적을 예측한 뒤, 고속 UART 패킷 통신과 500Hz PD 제어 루프를 통해 2축 디지털 서보모터(Pan/Tilt)를 정밀하게 구동합니다.
+
+---
+
+## 🛠️ 1. System Architecture & Hardware
+
+| 구분 | 부품 / 사양 | 역할 및 설정 |
+| :--- | :--- | :--- |
+| **Upper Controller** | Raspberry Pi 5 + Hailo-8 NPU | 실시간 객체 검출, 2D 등속도 칼만 필터, 8-Byte UART 패킷 송신 |
+| **Lower Controller** | STM32 NUCLEO-F401RE | Cortex-M4 (84MHz, Hardware FPU 활성화), DMA 링버퍼 수신, 500Hz PD 제어 |
+| **Actuators** | Feetech STS3215 (x2) | 12V 시리얼 버스 서보모터 (1 Mbps, 0~4095 스텝, 중앙값 `2048`) |
+| **Pan Axis (좌우)** | Servo ID `1` | 구동 범위 제한: `1024 ~ 3072` ($\pm 90^\circ$) |
+| **Tilt Axis (상하)** | Servo ID `2` | 구동 범위 제한: `1365 ~ 2730` ($\pm 60^\circ$) |
+
+### 🔌 Pinout & Wiring (배선도)
+* **RPi 5 $\leftrightarrow$ STM32 (UART1, 115,200 bps, 8N1)**
+  * RPi `GPIO 14 (Pin 8, TX)` $\rightarrow$ STM32 `PA10 (USART1_RX)` (`DMA2_Stream2` Circular)
+  * RPi `GPIO 15 (Pin 10, RX)` $\rightarrow$ STM32 `PA9 (USART1_TX)`
+  * RPi `GND (Pin 6)` $\rightarrow$ STM32 `GND` **(공통 접지 필수)**
+* **STM32 $\leftrightarrow$ Feetech Servo Bus (USART6, 1,000,000 bps)**
+  * STM32 `PC6 (USART6_TX)` $\rightarrow$ FE-URT-1 시리얼 버스 보드 (`DMA2_Stream6` Normal)
+  * STM32 `PC7 (USART6_RX)` $\rightarrow$ FE-URT-1 시리얼 버스 보드
+
+---
+
+## 📂 2. Directory Structure
+
+```text
+capstone_project/
+├── GEMINI.md                     # AI 에이전트 시스템 규칙 및 하드웨어 아키텍처 가드레일
+├── docs/
+│   └── STAGE1_SPEC.md            # Stage 1 상세 수학 모델 및 프로토콜 명세서
+└── rcws_stage1/
+    ├── rpi5_vision/              # [Raspberry Pi 5] 비전 및 궤적 예측 노드
+    │   ├── kalman_filter.py      # 4-State 등속도 칼만 필터 (Coasting & 선행 예측 포함)
+    │   ├── uart_tx.py            # 8-Byte 바이너리 패킷 직렬화 및 UART 송신기
+    │   ├── tracker_node.py       # 카메라 캡처 + 추론 + 필터 + 송신 통합 메인 루프
+    │   └── test_pipeline.py      # 29개 항목 자동화 유닛/통합 테스트 스위트
+    └── stm32_fw/                 # [STM32F401RE] 500Hz 실시간 모터 제어 펌웨어
+        ├── platformio.ini        # PlatformIO 빌드 설정 (STM32Cube HAL, Hard-FPU)
+        ├── scripts/
+        │   └── fpu_link_flags.py # Cortex-M4 FPU 하드웨어 부동소수점 링커 스크립트
+        ├── include/
+        │   ├── protocol.h        # 8-Byte 패킷 구조체 및 FSM 파서 헤더
+        │   ├── feetech_sts.h     # Feetech STS3215 Sync Write 드라이버 헤더
+        │   └── stm32f4xx_hal_conf.h
+        └── src/
+            ├── protocol.c        # Sticky-0xFF 방어 및 바이트 슬립 복구 FSM 파서
+            ├── feetech_sts.c     # 22-Byte Sync Write 패킷 생성 및 ID 2 초기화 루틴
+            └── main.c            # TIM2 500Hz 인터럽트, LPF 적용 PD 제어기, 워치독
