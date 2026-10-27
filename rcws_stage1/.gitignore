@@ -1,0 +1,6 @@
+build/
+*.rlog
+*.rclip
+*.png
+models/*.hef
+__pycache__/
