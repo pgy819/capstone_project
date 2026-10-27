@@ -40,8 +40,9 @@ bool ZnccTracker::init(const cv::Mat& y, const RectF& box) {
   while (full / s > cfg_.tmpl_max && s < 16) s *= 2;
   int side = std::max(cfg_.tmpl_min, int(std::lround(full / s))) | 1;  // odd at matching scale
   const int side_px = side * s;
-  const int x0 = int(std::lround(box.cx() - 0.5 * side_px));
-  const int y0 = int(std::lround(box.cy() - 0.5 * side_px));
+  // snap to the reduced grid so template and search pixels cover identical full-res blocks
+  const int x0 = int(std::lround((box.cx() - 0.5 * side_px) / s)) * s;
+  const int y0 = int(std::lround((box.cy() - 0.5 * side_px) / s)) * s;
   const int saved = s_;
   s_ = s;
   cv::Mat t;
@@ -68,7 +69,7 @@ void ZnccTracker::refresh(const cv::Mat& y, const RectF& box) {
   cv::addWeighted(tmpl_, 1.0 - cfg_.update_alpha, t, cfg_.update_alpha, 0.0, tmpl_);
 }
 
-NccResult ZnccTracker::match(const cv::Mat& y, cv::Point2d pred, double radius) const {
+NccResult ZnccTracker::match(const cv::Mat& y, cv::Point2d pred, double radius, uint32_t frame_id) const {
   NccResult r;
   if (tmpl_.empty()) return r;
   const int side = tmpl_.cols;
@@ -79,16 +80,28 @@ NccResult ZnccTracker::match(const cv::Mat& y, cv::Point2d pred, double radius) 
   int x0 = int(std::lround(pred.x - 0.5 * side_px)) - rad * s_;
   int y0 = int(std::lround(pred.y - 0.5 * side_px)) - rad * s_;
   // clip the window to the image on a scale grid
-  const int cx0 = std::max(0, x0), cy0 = std::max(0, y0);
+  int cx0 = std::max(0, x0), cy0 = std::max(0, y0);
   const int x1 = std::min(y.cols, x0 + win_px), y1 = std::min(y.rows, y0 + win_px);
   const int w = ((x1 - cx0) / s_) * s_, h = ((y1 - cy0) / s_) * s_;
   if (w < side_px + 2 * s_ || h < side_px + 2 * s_) return r;
-  cv::Mat roi = y(cv::Rect(cx0, cy0, w, h)), search;
-  if (s_ == 1) roi.convertTo(search, CV_32F);
-  else {
-    cv::Mat t;
-    cv::resize(roi, t, cv::Size(w / s_, h / s_), 0, 0, cv::INTER_AREA);
-    t.convertTo(search, CV_32F);
+  cv::Mat search;
+  if (s_ == 1) {
+    y(cv::Rect(cx0, cy0, w, h)).convertTo(search, CV_32F);
+  } else {
+    // reduce the whole frame once per frame (1536x864 -> 1/s); windows are then cut from it.
+    // The reduced grid is anchored at (0,0), so window origins are snapped to multiples of s.
+    if (small_id_ != frame_id || small_s_ != s_) {
+      cv::resize(y(cv::Rect(0, 0, (y.cols / s_) * s_, (y.rows / s_) * s_)), small_,
+                 cv::Size(y.cols / s_, y.rows / s_), 0, 0, cv::INTER_AREA);
+      small_id_ = frame_id;
+      small_s_ = s_;
+    }
+    const int sx = cx0 / s_, sy = cy0 / s_;
+    const cv::Rect sr = cv::Rect(sx, sy, w / s_, h / s_) & cv::Rect(0, 0, small_.cols, small_.rows);
+    if (sr.width < side + 2 || sr.height < side + 2) return r;
+    small_(sr).convertTo(search, CV_32F);
+    cx0 = sx * s_;   // origin of the window actually used
+    cy0 = sy * s_;
   }
   cv::Mat res;
   cv::matchTemplate(search, tmpl_, res, cv::TM_CCOEFF_NORMED);

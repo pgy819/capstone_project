@@ -111,6 +111,7 @@ void Perception::reset_track() {
   ncc_hist_.clear();
   ncc_off_ = {0, 0};
   off_n_ = 0;
+  strong_rejects_ = 0;
   sprt_L_ = 0;
   coast_ncc_only_ = false;
 }
@@ -170,6 +171,7 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
 
   // best phone candidate: in SEARCH by score; otherwise best gated (score x likelihood)
   const Detection* best = nullptr;
+  const Detection* strong = nullptr;  // best confident phone that failed the gate
   VisionMeas best_m;
   double best_d2 = 0, best_key = -1;
   for (const auto& d : b.dets) {
@@ -180,7 +182,12 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
       continue;
     }
     const GateResult g = est_.gate(m);
-    if (!g.pass) { log_meas(m, false, g.d2); stats_.meas_gated_out++; continue; }
+    if (!g.pass) {
+      log_meas(m, false, g.d2);
+      stats_.meas_gated_out++;
+      if (d.score >= tc.thr_acquire && (!strong || d.score > strong->score)) strong = &d;
+      continue;
+    }
     const double key = d.score * std::exp(-0.5 * g.d2);
     if (key > best_key) { best = &d; best_m = m; best_d2 = g.d2; best_key = key; }
   }
@@ -241,6 +248,27 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
     case TrackState::TRACK:
     case TrackState::COAST:
     case TrackState::REACQ: {
+      if (best) strong_rejects_ = 0;
+      else if (strong && ++strong_rejects_ >= cfg_.trk.strong_reject_reinit) {
+        // The detector keeps seeing a confident phone where the filter does not expect it:
+        // the filter is wrong, not the detector. Re-anchor the track on the detection.
+        const VisionMeas m = det_meas(*strong, b);
+        est_.reset();
+        est_.update(m);
+        est_.update_range(m);
+        log_meas(m, true, 0);
+        tgt_box_ = strong->box;
+        t_last_meas_ = m.t_cap_ns;
+        t_last_confirm_ = now;
+        const HistFrame* h = hist(b.frame_seq);
+        if (h && ncc_.init(h->y, strong->box)) { ncc_off_ = ncc_.anchor(); off_n_ = 0; }
+        else ncc_.clear();
+        ncc_hist_.clear();
+        strong_rejects_ = 0;
+        stats_.template_reinit++;
+        if (state_ != TrackState::TRACK) set_state(TrackState::TRACK, StateReason::REACQ_DET, now);
+        break;
+      }
       if (!best || best->score < tc.thr_track) break;
       const HistFrame* h = hist(b.frame_seq);
       // NCC result for the same frame, if any (drift check, Sec 3.6)
@@ -300,9 +328,12 @@ void Perception::run_ncc(const FrameView& f, int64_t now) {
   if (!est_.predict_pixel(t_pred, &pred, &sp)) return;
   const cv::Mat y(f.main_h, f.main_w, CV_8UC1, const_cast<uint8_t*>(f.main_y), f.main_stride);
   const double radius = std::max(3.0 * sp, double(cfg_.ncc.search_min));
-  const NccResult r = ncc_.match(y, pred - ncc_off_, radius);
+  // prediction too uncertain for a local search: leave it to the detector this frame
+  if (radius > 1.5 * ncc_.side() * ncc_.scale() + 48) { stats_.ncc_fail++; return; }
+  const NccResult r = ncc_.match(y, pred - ncc_off_, radius, f.seq);
   if (log_) {
-    RecNcc rec{now, f.seq, float(r.u), float(r.v), r.rho, r.second, float(radius), int16_t(r.tmpl), uint8_t(r.ok), 0};
+    RecNcc rec{now, f.seq, float(r.u), float(r.v), r.rho, r.second, float(radius), int16_t(r.tmpl), uint8_t(r.ok),
+               uint8_t(r.scale)};
     log_->write(RecType::NCC, rec);
   }
   if (!r.ok) { stats_.ncc_fail++; return; }
@@ -317,7 +348,8 @@ void Perception::run_ncc(const FrameView& f, int64_t now) {
   m.v = float(mv);
   m.t_cap_ns = t_cap_of(f, mv);
   const double unconfirmed = std::max(0.0, s_of(now - t_last_confirm_));
-  m.sigma_px = float(std::max<double>(cfg_.ncc.sigma_floor_px, cfg_.ncc.sigma_n_px / std::sqrt(std::max(r.rho, 0.1f))) +
+  // sub-pixel accuracy holds at the matching scale: in full-res pixels it is x scale
+  m.sigma_px = float(r.scale * std::max<double>(cfg_.ncc.sigma_floor_px, cfg_.ncc.sigma_n_px / std::sqrt(std::max(r.rho, 0.1f))) +
                      cfg_.ncc.sigma_growth_px_per_s * unconfirmed);
   m.conf = r.rho;
   m.w = tgt_box_.w;
@@ -370,8 +402,10 @@ bool Perception::submit_main_crop(const FrameView& f, cv::Rect r, DetKind kind) 
   // A region much larger than the model input would be downscaled anyway: take it from the
   // lores stream instead of converting up to 864x864 main pixels (field data: TRACK frames
   // took 26-49 ms with close, large targets).
-  // Use lores only when the region still has >= 0.9x the model input width there (no detail lost).
-  if (f.lo_y && double(r.width) * f.lo_w / f.main_w >= 0.9 * in.width) {
+  // Regions larger than the model input are downscaled anyway; cutting them from lores
+  // (2.4x smaller) avoids a full-resolution YUV->RGB conversion. Targets this large keep
+  // >= 40 px in lores. Field run 2: 864 px ROIs from main cost ~10 ms per frame on Pi 5.
+  if (f.lo_y && r.width > in.width) {
     const double k = double(f.lo_w) / f.main_w;
     cv::Rect lr(int(r.x * k) & ~1, int(r.y * k) & ~1, int(r.width * k) & ~1, int(r.height * k) & ~1);
     lr = clamp_shift(lr, f.lo_w & ~1, f.lo_h & ~1);

@@ -75,11 +75,13 @@ struct TrackCfg {
   double sprt_alpha = 0.01, sprt_beta = 0.05, sprt_forget = 0.95;
   float gate_chi2 = 9.21f;
   float phone_height_m = 0.15f;
+  int strong_reject_reinit = 3;         // consecutive strong detections outside the gate -> re-anchor
 };
 
 struct EstimatorCfg {
-  double q_cv = 0.02;                   // rad^2/s^3 white-accel PSD (CV) [tune on P4 logs]
-  double q_ca = 20.0;                   // rad^2/s^5 white-jerk PSD (CA) [tune on P4 logs]
+  // Field run 2 (hand-held phone, 0.4-1 m): median 34 deg/s, ~400 deg/s^2 -> much larger than first guess
+  double q_cv = 5.0;                    // rad^2/s^3 white-accel PSD (CV) [tune on P4 logs]
+  double q_ca = 500.0;                  // rad^2/s^5 white-jerk PSD (CA) [tune on P4 logs]
   std::array<double, 4> pi{0.97, 0.03, 0.05, 0.95};
   double sigma_det_px0 = 1.5, sigma_det_c = 0.0005;  // R model sqrt(s0^2 + c*A) [measure]
   double lead_s = 0.005;

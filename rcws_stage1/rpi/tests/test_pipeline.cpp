@@ -26,9 +26,9 @@ struct RunResult {
 };
 
 RunResult run(const Config& cfg, const SynthTraj& tr, int frames, const std::string& log_path = "",
-              const std::string& clip_path = "") {
+              const std::string& clip_path = "", OracleCfg oc = OracleCfg{}) {
   SyntheticSource src(cfg.cam, tr, frames);
-  OracleDetector det(src, {640, 640}, OracleCfg{});
+  OracleDetector det(src, {640, 640}, oc);
   det.max_in_flight = cfg.det.max_in_flight;
   CameraModel cam(cfg.intr);
   BinLog log;
@@ -165,4 +165,32 @@ TEST(pipeline_tracks_large_plain_phone) {
   CHECK(r.track_frames > 0.85 * r.visible_frames);
   CHECK(r.rms_mrad < 2.0);       // 420 px target matched at 1/8 scale
   CHECK(r.proc_avg_ms < 4.0);     // PC budget; Pi 5 ~2-3x
+}
+
+// Field regression (2026-10-28 run 2): phone 0.4-1 m away (~210x340 px), jerky hand motion
+// (median ~34 deg/s, ~400 deg/s^2). With the first IMM tuning half of the confident detections
+// fell outside the gate and the track kept collapsing into COAST.
+TEST(pipeline_tracks_handheld_jerky_motion) {
+  Config cfg;
+  SynthTraj tr;
+  const double cx = cfg.cam.main_w / 2.0, cy = cfg.cam.main_h / 2.0;
+  tr.center = [cx, cy](double t) {
+    return cv::Point2d(cx + 120 * std::sin(2 * M_PI * 1.3 * t) + 40 * std::sin(2 * M_PI * 3.1 * t + 1.0),
+                       cy + 80 * std::sin(2 * M_PI * 0.9 * t) + 30 * std::sin(2 * M_PI * 2.7 * t + 0.4));
+  };
+  tr.tgt_w = 210;
+  tr.tgt_h = 340;
+  tr.plain = true;
+  OracleCfg oc;
+  oc.latency_frames = 1;
+  oc.box_sigma_rel = 0.015;   // ~5 px edge jitter at this size, like the field log
+  const RunResult r = run(cfg, tr, 4 * 120, "", "", oc);
+  int coast = 0;
+  for (uint8_t s : r.states) coast += s == uint8_t(TrackState::COAST);
+  std::printf("  hand-held: first TRACK %.3f s, tracked %d/%d, COAST frames %d, RMS %.3f mrad, on_frame avg %.2f max %.2f ms\n",
+              r.t_first_track, r.track_frames, r.visible_frames, coast, r.rms_mrad, r.proc_avg_ms, r.proc_max_ms);
+  CHECK(r.track_frames > 0.9 * r.visible_frames);
+  CHECK(coast < 0.05 * r.visible_frames);
+  CHECK(r.rms_mrad < 5.0);
+  CHECK(r.proc_avg_ms < 3.0);
 }

@@ -66,7 +66,7 @@ struct RecNcc {
   uint32_t seq;
   float u, v, rho, second, radius;
   int16_t tmpl;
-  uint8_t ok, pad;
+  uint8_t ok, scale;   // scale: matching scale factor (1,2,4,8)
 };
 #pragma pack(pop)
 

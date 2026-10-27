@@ -53,6 +53,7 @@ class SyntheticSource final : public IFrameSource {
 struct OracleCfg {
   int latency_frames = 2;
   double box_sigma_px = 1.5;   // per-edge jitter in main-stream pixels
+  double box_sigma_rel = 0.0;  // additional jitter as a fraction of box size (large, close targets)
   double p_miss = 0.05;
   double p_false = 0.02;       // per request
   int min_side_in = 8;         // smaller than this in model input -> missed

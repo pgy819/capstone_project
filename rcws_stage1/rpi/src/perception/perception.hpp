@@ -89,6 +89,7 @@ class Perception {
   RectF tgt_box_{};               // last confirmed target size/position
   cv::Point2d ncc_off_;           // DET centre - NCC template centre (anchor bias, Sec 3.6)
   int off_n_ = 0;
+  int strong_rejects_ = 0;        // consecutive strong phone detections rejected by the gate
   float gain_ = 0;
 
   std::deque<HistFrame> hist_;

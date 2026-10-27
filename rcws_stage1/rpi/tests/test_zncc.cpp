@@ -44,14 +44,14 @@ TEST(zncc_subpixel_accuracy) {
   RectF box{float(x0), float(y0), 30, 60};
   CHECK(t.init(f0, box));
   // template centre reference in frame 0
-  const NccResult r0 = t.match(f0, {box.cx(), box.cy()}, 8);
+  const NccResult r0 = t.match(f0, {box.cx(), box.cy()}, 8, 0);
   CHECK(r0.ok);
   double se = 0;
   int n = 0;
   for (int k = 1; k <= 40; ++k) {
     const double dx = 0.37 * k, dy = -0.21 * k;
     cv::Mat f = scene(x0 + dx, y0 + dy, 2.0, &tex, rng);
-    const NccResult r = t.match(f, {r0.u + dx + 0.8, r0.v + dy - 0.6}, 10);
+    const NccResult r = t.match(f, {r0.u + dx + 0.8, r0.v + dy - 0.6}, 10, uint32_t(k));
     CHECK(r.ok);
     const double ex = (r.u - r0.u) - dx, ey = (r.v - r0.v) - dy;
     se += ex * ex + ey * ey;
@@ -74,6 +74,6 @@ TEST(zncc_rejects_featureless_and_lost_target) {
   cv::Mat empty;
   cv::Mat dummy;
   cv::Mat f1 = scene(-500, -500, 2.0, &tex, rng);  // target gone
-  const NccResult r = t.match(f1, {215, 180}, 12);
+  const NccResult r = t.match(f1, {215, 180}, 12, 1);
   CHECK(!r.ok);
 }

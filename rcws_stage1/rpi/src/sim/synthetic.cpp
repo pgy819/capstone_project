@@ -129,8 +129,9 @@ bool OracleDetector::submit(DetRequest&& r) {
     const bool big_enough = std::min(g.w, g.h) * k >= c_.min_side_in;
     if (inside && big_enough && U(rng_) > c_.p_miss) {
       Detection d;
-      const float x0 = g.x + float(N(rng_)), y0 = g.y + float(N(rng_));
-      const float x1 = g.x + g.w + float(N(rng_)), y1 = g.y + g.h + float(N(rng_));
+      std::normal_distribution<double> Nr(0, c_.box_sigma_rel * std::max(g.w, g.h) + 1e-9);
+      const float x0 = g.x + float(N(rng_) + Nr(rng_)), y0 = g.y + float(N(rng_) + Nr(rng_));
+      const float x1 = g.x + g.w + float(N(rng_) + Nr(rng_)), y1 = g.y + g.h + float(N(rng_) + Nr(rng_));
       d.box = {x0, y0, x1 - x0, y1 - y0};
       d.score = float(0.55 + 0.4 * U(rng_));
       d.cls = ObjClass::Phone;
