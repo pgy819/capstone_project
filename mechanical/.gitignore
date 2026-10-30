@@ -1,0 +1,9 @@
+__pycache__/
+# generated outputs (attach to GitHub Releases instead of committing)
+out/
+out_v0*/
+print_v04/
+*.glb
+viewer/rcws_gimbal_viewer*.html
+recheck_v03.json
+*.gcode

@@ -1,0 +1,245 @@
+<title>RCWS 짐벌 v0.1</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: workshop bench — the model fills the left, a spec sheet runs down the right; stacks on phones. */
+:root {
+  --bg: #eef0f2; --panel: #f9fafb; --fg: #1b2026; --muted: #5d6670; --rule: #d3d8de;
+  --accent: #2f6fd6; --warn: #b4560b; --stage: #e2e6ea;
+  --f-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15191e; --panel: #1c2128; --fg: #e4e8ec; --muted: #9aa4af; --rule: #2e3540;
+  --accent: #6a9cf0; --warn: #e39a52; --stage: #11151a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15191e; --panel: #1c2128; --fg: #e4e8ec; --muted: #9aa4af; --rule: #2e3540;
+  --accent: #6a9cf0; --warn: #e39a52; --stage: #11151a; color-scheme: dark }
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.55; }
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; min-height: 100%;
+  padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); box-sizing: border-box; }
+.stage { position: sticky; top: max(16px, env(safe-area-inset-top, 0px)); height: calc(100vh - 32px); min-height: 480px; background: var(--stage); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.hud { position: absolute; left: 12px; top: 10px; font: 12px/1.4 var(--f-mono); color: var(--muted); pointer-events: none; }
+.hud b { color: var(--fg); font-weight: 500; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+aside { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+section { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; text-wrap: balance; }
+h2 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+p { margin: 0; }
+.sub { color: var(--muted); font-size: 13px; }
+.ctrl { display: grid; grid-template-columns: 44px minmax(0,1fr) 64px; align-items: center; gap: 10px; margin-block: 6px; }
+.ctrl label { font-weight: 500; }
+.ctrl output { font: 13px var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+button { font: 500 12px var(--f-body); color: var(--fg); background: transparent; border: 1px solid var(--rule); border-radius: 4px; padding: 5px 9px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.parts { display: grid; gap: 4px; }
+.parts label { display: grid; grid-template-columns: 16px 12px minmax(0,1fr) auto; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.sw { width: 12px; height: 12px; border-radius: 2px; }
+.tag { font: 11px var(--f-mono); color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+td { padding: 4px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td:last-child { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 10px; }
+tr:last-child td { border-bottom: 0; }
+ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
+.verify li::marker { color: var(--warn); }
+.verify b { color: var(--warn); font-weight: 600; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0,1fr); } .stage { position: relative; top: 0; height: 62vh; min-height: 360px; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <div class="stage">
+    <canvas id="view" aria-label="짐벌 3D 모델 (드래그로 회전, 휠로 확대)"></canvas>
+    <div class="loading" id="loading">모델 불러오는 중…</div>
+    <div class="hud">드래그 회전 · 휠 확대 · 우클릭 이동<br>ψ <b id="hud-psi">0.0°</b> &nbsp; θ <b id="hud-th">0.0°</b> &nbsp; 단위 mm</div>
+  </div>
+  <aside>
+    <section>
+      <h1>RCWS 상단부 2축 짐벌 v0.1</h1>
+      <p class="sub">Pan(ID 1) · Tilt(ID 2) STS3215, Camera Module 3 Wide, 하판에 Pi 5 + AI HAT+. 렌즈 중심을 두 회전축 교점에 둔 초안입니다.</p>
+    </section>
+    <section aria-labelledby="h-pose">
+      <h2 id="h-pose">자세</h2>
+      <div class="ctrl"><label for="psi">Pan ψ</label><input id="psi" type="range" min="-180" max="180" step="1" value="0"><output id="psi-o" for="psi">0°</output></div>
+      <div class="ctrl"><label for="th">Tilt θ</label><input id="th" type="range" min="-90" max="90" step="1" value="0"><output id="th-o" for="th">0°</output></div>
+      <div class="btns">
+        <button type="button" data-pose="0,0">정면</button>
+        <button type="button" data-pose="60,30">ψ 60°, θ 30°</button>
+        <button type="button" data-pose="-120,-45">ψ −120°, θ −45°</button>
+        <button type="button" id="sweep">스윕 재생</button>
+      </div>
+      <p class="sub" style="margin-top:8px">ψ는 오른쪽, θ는 위쪽이 양수입니다(설계이론서 1.3절 규약). 파란 선은 시선축, 빨간 선은 Pan축, 노란 선은 Tilt축입니다.</p>
+    </section>
+    <section aria-labelledby="h-parts">
+      <h2 id="h-parts">부품</h2>
+      <div class="parts" id="parts"></div>
+      <div class="btns"><button type="button" id="xray">하판 투명</button></div>
+    </section>
+    <section aria-labelledby="h-dims">
+      <h2 id="h-dims">주요 치수와 추정치</h2>
+      <table>
+        <tr><td>Tilt축 높이 (상판 윗면 기준)</td><td>52 mm</td></tr>
+        <tr><td>베이스 높이 (하판 바닥 → 상판 윗면)</td><td>53 mm</td></tr>
+        <tr><td>베이스 크기</td><td>138 × 104 mm</td></tr>
+        <tr><td>회전부 최대 반경 / 높이</td><td>64 / 70 mm</td></tr>
+        <tr><td>렌즈 중심 ↔ 축 교점</td><td>≈ 0 mm</td></tr>
+        <tr><td>Tilt 가동 범위 (기구 간섭 기준)</td><td>±90°</td></tr>
+        <tr><td>Pan 가동 범위 (기구 간섭 기준)</td><td>360°</td></tr>
+        <tr><td>Pan 회전부 질량</td><td>≈ 85 g</td></tr>
+        <tr><td>Pan 회전부 무게중심 편심</td><td>≈ 30 mm (+Y)</td></tr>
+        <tr><td>Pan 관성 모멘트</td><td>≈ 1.2×10⁻⁴ kg·m²</td></tr>
+        <tr><td>Tilt 관성 모멘트</td><td>≈ 3×10⁻⁷ kg·m²</td></tr>
+        <tr><td>400°/s² 가속 시 Pan 토크</td><td>≈ 0.9 mN·m</td></tr>
+      </table>
+      <p class="sub" style="margin-top:8px">질량은 PLA 유효 충전율 40 % 가정, STS3215 55 g. 실제 가동 범위는 카메라 FPC 길이와 케이블 정리로 줄어듭니다.</p>
+    </section>
+    <section aria-labelledby="h-verify">
+      <h2 id="h-verify">실측이 필요한 값</h2>
+      <ul class="verify">
+        <li><b>STS3215 외형</b>: 출처마다 45.2×24.7×35 / 40.5×20×38 mm로 다름. 몸체·출력축 위치·혼 지름</li>
+        <li><b>STS3215 케이스 나사 위치</b>: Tilt 서보를 암에 고정하는 4점 위치는 임시값</li>
+        <li><b>카메라 홀·렌즈 위치</b>: Camera Module 2 도면 기준 가정</li>
+        <li><b>Pi 스택 높이</b>: 쿨러 + AI HAT+ 스페이서 포함 30 mm 가정</li>
+        <li><b>하단부 체결 규격</b>: Stage 2 플랫폼과 맞물릴 홀 패턴 미정</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const GLB_B64 = "__GLB__";
+const H_TILT = __HTILT__;
+const PARTS = [
+  // name, label, colour, group (base | pan | tilt), purchased?
+  ["top_deck", "상판", "#c9ced4", "base", 0],
+  ["lower_deck", "하판", "#c9ced4", "base", 0],
+  ["pillars", "기둥 ×4", "#8d959e", "base", 0],
+  ["pan_cage", "Pan 서보 케이지", "#8d959e", "base", 0],
+  ["pan_servo", "Pan 서보 STS3215", "#2a2d31", "base", 1],
+  ["pi5_stack", "Pi 5 + 쿨러 + AI HAT+", "#2f8a52", "base", 1],
+  ["pan_horn", "Pan 혼", "#a7abb0", "pan", 1],
+  ["pan_yoke", "Pan 요크", "#2f6fd6", "pan", 0],
+  ["tilt_servo", "Tilt 서보 STS3215", "#2a2d31", "pan", 1],
+  ["bearing_625", "625ZZ 베어링", "#b9bdc2", "pan", 1],
+  ["tilt_horn", "Tilt 혼", "#a7abb0", "tilt", 1],
+  ["tilt_cradle", "Tilt 크래들", "#e48a2a", "tilt", 0],
+  ["camera", "Camera Module 3 Wide", "#1e6b45", "tilt", 1],
+];
+const canvas = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+cam.up.set(0, 0, 1);
+cam.position.set(260, -230, 190);
+const controls = new THREE.OrbitControls(cam, canvas);
+controls.target.set(-20, 0, 15);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8090a0, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(200, -150, 300); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xffffff, 0.25); fill.position.set(-200, 200, 100); scene.add(fill);
+
+const panPivot = new THREE.Group(); scene.add(panPivot);
+const tiltPivot = new THREE.Group(); tiltPivot.position.set(0, 0, H_TILT); panPivot.add(tiltPivot);
+const meshes = {};
+
+function line(pts, color, parent) {
+  const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(...p)));
+  const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
+  l.renderOrder = 10; parent.add(l); return l;
+}
+line([[0, 0, -60], [0, 0, H_TILT + 40]], 0xd64545, scene);            // pan axis
+line([[0, -75, 0], [0, 75, 0]], 0xe0b020, tiltPivot);                // tilt axis
+line([[0, 0, 0], [220, 0, 0]], 0x3a7bf0, tiltPivot);                 // boresight
+
+function b64ToBuf(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+new THREE.GLTFLoader().parse(b64ToBuf(GLB_B64), "", (gltf) => {
+  const root = gltf.scene; scene.add(root); root.updateMatrixWorld(true);
+  const found = [];
+  root.traverse(o => { if (o.isMesh) found.push(o); });
+  for (const m of found) {
+    const key = PARTS.find(p => p[0] === m.name || p[0] === (m.parent && m.parent.name) || m.name.startsWith(p[0]));
+    if (!key) continue;
+    const [name, , color, group] = key;
+    m.material = new THREE.MeshStandardMaterial({ color, roughness: 0.62, flatShading: true, metalness: name.includes("servo") || name.includes("horn") || name.includes("bearing") ? 0.35 : 0.05, side: THREE.DoubleSide });
+    if (group === "pan") panPivot.attach(m);
+    else if (group === "tilt") tiltPivot.attach(m);
+    meshes[name] = m;
+  }
+  // frame the whole assembly
+  const bb = new THREE.Box3().setFromObject(scene), c = bb.getCenter(new THREE.Vector3()), r = bb.getSize(new THREE.Vector3()).length() / 2;
+  controls.target.copy(c);
+  const d = r / Math.sin(THREE.MathUtils.degToRad(cam.fov / 2)) * 0.68;
+  cam.position.copy(c).add(new THREE.Vector3(0.62, -0.58, 0.52).normalize().multiplyScalar(d));
+  cam.near = d / 50; cam.far = d * 10; cam.updateProjectionMatrix();
+  document.getElementById("loading").hidden = true;
+  buildPartList();
+}, (err) => { document.getElementById("loading").textContent = "모델을 불러오지 못했습니다: " + err; });
+
+function buildPartList() {
+  const box = document.getElementById("parts");
+  for (const [name, label, color, group, bought] of PARTS) {
+    if (!meshes[name]) continue;
+    const id = "p-" + name;
+    const row = document.createElement("label");
+    row.htmlFor = id;
+    row.innerHTML = `<input type="checkbox" id="${id}" checked><span class="sw" style="background:${color}"></span><span>${label}</span><span class="tag">${bought ? "구매" : "출력"} · ${group === "base" ? "고정" : group === "pan" ? "Pan" : "Tilt"}</span>`;
+    row.querySelector("input").addEventListener("change", e => { meshes[name].visible = e.target.checked; });
+    box.appendChild(row);
+  }
+}
+
+let xray = false;
+document.getElementById("xray").addEventListener("click", (e) => {
+  xray = !xray;
+  for (const n of ["top_deck", "lower_deck", "pan_cage"]) {
+    const m = meshes[n]; if (!m) continue;
+    m.material.transparent = xray; m.material.opacity = xray ? 0.25 : 1; m.material.depthWrite = !xray;
+  }
+  e.target.textContent = xray ? "하판 불투명" : "하판 투명";
+});
+
+const psiIn = document.getElementById("psi"), thIn = document.getElementById("th");
+function setPose(psi, th) {
+  psiIn.value = psi; thIn.value = th;
+  panPivot.rotation.z = -THREE.MathUtils.degToRad(psi);     // psi positive to the right (clockwise from above)
+  tiltPivot.rotation.y = -THREE.MathUtils.degToRad(th);     // theta positive up
+  const f = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(0) + "°";
+  document.getElementById("psi-o").textContent = f(+psi);
+  document.getElementById("th-o").textContent = f(+th);
+  document.getElementById("hud-psi").textContent = (+psi).toFixed(1) + "°";
+  document.getElementById("hud-th").textContent = (+th).toFixed(1) + "°";
+}
+psiIn.addEventListener("input", () => { sweeping = false; setPose(+psiIn.value, +thIn.value); });
+thIn.addEventListener("input", () => { sweeping = false; setPose(+psiIn.value, +thIn.value); });
+document.querySelectorAll("[data-pose]").forEach(b => b.addEventListener("click", () => { sweeping = false; const [p, t] = b.dataset.pose.split(",").map(Number); setPose(p, t); }));
+let sweeping = false, t0 = 0;
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+document.getElementById("sweep").addEventListener("click", () => { sweeping = !sweeping; t0 = performance.now(); });
+
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  cam.aspect = r.width / Math.max(r.height, 1); cam.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas);
+function tick(now) {
+  if (sweeping) {
+    const s = (now - t0) / 1000 * (reduce ? 0.3 : 1);
+    setPose(Math.round(150 * Math.sin(s * 0.6)), Math.round(70 * Math.sin(s * 1.1)));
+  }
+  controls.update(); renderer.render(scene, cam); requestAnimationFrame(tick);
+}
+setPose(0, 0); resize(); requestAnimationFrame(tick);
+</script>
