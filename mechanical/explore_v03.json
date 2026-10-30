@@ -1,0 +1,1994 @@
+[
+ {
+  "wrap_r": 36.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 79.0,
+  "disc_d": 86.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.149,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.062,
+   "0,0": 0.0,
+   "90,-30": 0.111,
+   "90,0": 0.0,
+   "180,-30": 0.192,
+   "180,0": 0.0
+  },
+  "mass_g": 109.4,
+  "com_r": 20.9,
+  "com_z": 54.8,
+  "Iz": 0.00013368633645140267,
+  "top_z": 97.0,
+  "cables": {
+   "camera FPC": 379,
+   "tilt servo bus": 358,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.178
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 79.0,
+  "disc_d": 94.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.171,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.071,
+   "0,0": 0.0,
+   "90,-30": 0.112,
+   "90,0": 0.0,
+   "180,-30": 0.192,
+   "180,0": 0.0
+  },
+  "mass_g": 111.3,
+  "com_r": 20.6,
+  "com_z": 54.3,
+  "Iz": 0.00013761406287178893,
+  "top_z": 97.0,
+  "cables": {
+   "camera FPC": 396,
+   "tilt servo bus": 365,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.229
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 94.0,
+  "disc_d": 86.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.09,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.017,
+   "0,0": 0.0,
+   "90,-30": 0.049,
+   "90,0": 0.0,
+   "180,-30": 0.14,
+   "180,0": 0.0
+  },
+  "mass_g": 111.6,
+  "com_r": 20.5,
+  "com_z": 65.4,
+  "Iz": 0.00013492182285140266,
+  "top_z": 112.0,
+  "cables": {
+   "camera FPC": 394,
+   "tilt servo bus": 365,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.231
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 86.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.188,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.097,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 108.3,
+  "com_r": 21.2,
+  "com_z": 61.4,
+  "Iz": 0.00013310977611235628,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 372,
+   "tilt servo bus": 422,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.231
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 78.0,
+  "disc_d": 96.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.183,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.067,
+   "0,0": 0.0,
+   "90,-30": 0.111,
+   "90,0": 0.0,
+   "180,-30": 0.196,
+   "180,0": 0.0
+  },
+  "mass_g": 111.5,
+  "com_r": 20.6,
+  "com_z": 53.4,
+  "Iz": 0.00013987721519520083,
+  "top_z": 96.0,
+  "cables": {
+   "camera FPC": 378,
+   "tilt servo bus": 357,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.252
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 94.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.21,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.108,
+   "0,0": 0.0,
+   "90,-30": 0.15,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 110.3,
+  "com_r": 20.8,
+  "com_z": 60.8,
+  "Iz": 0.00013703750253274256,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 389,
+   "tilt servo bus": 431,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.277
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 94.0,
+  "disc_d": 94.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.107,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.022,
+   "0,0": 0.0,
+   "90,-30": 0.049,
+   "90,0": 0.0,
+   "180,-30": 0.14,
+   "180,0": 0.0
+  },
+  "mass_g": 113.5,
+  "com_r": 20.1,
+  "com_z": 64.7,
+  "Iz": 0.00013884954927178894,
+  "top_z": 112.0,
+  "cables": {
+   "camera FPC": 411,
+   "tilt servo bus": 373,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.278
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 79.0,
+  "disc_d": 102.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.196,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.085,
+   "0,0": 0.0,
+   "90,-30": 0.122,
+   "90,0": 0.0,
+   "180,-30": 0.192,
+   "180,0": 0.0
+  },
+  "mass_g": 114.1,
+  "com_r": 20.1,
+  "com_z": 53.6,
+  "Iz": 0.00014351890728439128,
+  "top_z": 97.0,
+  "cables": {
+   "camera FPC": 413,
+   "tilt servo bus": 373,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.288
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 93.0,
+  "disc_d": 96.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.111,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.019,
+   "0,0": 0.0,
+   "90,-30": 0.051,
+   "90,0": 0.0,
+   "180,-30": 0.142,
+   "180,0": 0.0
+  },
+  "mass_g": 113.7,
+  "com_r": 20.1,
+  "com_z": 63.8,
+  "Iz": 0.00014111270159520084,
+  "top_z": 111.0,
+  "cables": {
+   "camera FPC": 393,
+   "tilt servo bus": 364,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.301
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 96.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.22,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.097,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 110.6,
+  "com_r": 20.7,
+  "com_z": 60.6,
+  "Iz": 0.00013938302061615446,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 372,
+   "tilt servo bus": 422,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.301
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 78.0,
+  "disc_d": 104.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.208,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.08,
+   "0,0": 0.0,
+   "90,-30": 0.116,
+   "90,0": 0.0,
+   "180,-30": 0.196,
+   "180,0": 0.0
+  },
+  "mass_g": 113.4,
+  "com_r": 20.2,
+  "com_z": 52.9,
+  "Iz": 0.000145465628905099,
+  "top_z": 96.0,
+  "cables": {
+   "camera FPC": 395,
+   "tilt servo bus": 364,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.313
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 86.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.188,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.097,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 108.3,
+  "com_r": 22.0,
+  "com_z": 55.6,
+  "Iz": 0.00014701201291101118,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 372,
+   "tilt servo bus": 377,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.315
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 86.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.332,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.205,
+   "0,0": 0.0,
+   "90,-30": 0.25,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 106.1,
+  "com_r": 21.7,
+  "com_z": 50.9,
+  "Iz": 0.00013187428987939098,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 357,
+   "tilt servo bus": 408,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": 0.332
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 94.0,
+  "disc_d": 102.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.126,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.032,
+   "0,0": 0.0,
+   "90,-30": 0.053,
+   "90,0": 0.0,
+   "180,-30": 0.14,
+   "180,0": 0.0
+  },
+  "mass_g": 116.3,
+  "com_r": 19.6,
+  "com_z": 63.7,
+  "Iz": 0.0001447543936843913,
+  "top_z": 112.0,
+  "cables": {
+   "camera FPC": 428,
+   "tilt servo bus": 382,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.337
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 102.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.235,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.126,
+   "0,0": 0.0,
+   "90,-30": 0.164,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 113.0,
+  "com_r": 20.3,
+  "com_z": 59.9,
+  "Iz": 0.00014294234694534492,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 407,
+   "tilt servo bus": 441,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.337
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 93.0,
+  "disc_d": 104.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.13,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.023,
+   "0,0": 0.0,
+   "90,-30": 0.051,
+   "90,0": 0.0,
+   "180,-30": 0.142,
+   "180,0": 0.0
+  },
+  "mass_g": 115.6,
+  "com_r": 19.8,
+  "com_z": 63.1,
+  "Iz": 0.000146701115305099,
+  "top_z": 111.0,
+  "cables": {
+   "camera FPC": 410,
+   "tilt servo bus": 372,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.366
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 94.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.21,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.108,
+   "0,0": 0.0,
+   "90,-30": 0.15,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 110.3,
+  "com_r": 21.7,
+  "com_z": 55.1,
+  "Iz": 0.00015093322528615772,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 389,
+   "tilt servo bus": 385,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.366
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 104.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.242,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.108,
+   "0,0": 0.0,
+   "90,-30": 0.15,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 112.5,
+  "com_r": 20.4,
+  "com_z": 60.0,
+  "Iz": 0.00014497143432605264,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 389,
+   "tilt servo bus": 431,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.367
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 94.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.341,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.233,
+   "0,0": 0.0,
+   "90,-30": 0.274,
+   "90,0": 0.0,
+   "180,-30": 0.329,
+   "180,0": 0.036
+  },
+  "mass_g": 108.0,
+  "com_r": 21.3,
+  "com_z": 50.4,
+  "Iz": 0.00013580201629977725,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 375,
+   "tilt servo bus": 417,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": 0.379
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 96.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.22,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.097,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 110.6,
+  "com_r": 21.6,
+  "com_z": 54.9,
+  "Iz": 0.0001532852574186883,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 372,
+   "tilt servo bus": 377,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.389
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 78.0,
+  "disc_d": 112.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 172,
+  "fov_self": {
+   "-30": 0.23,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.094,
+   "0,0": 0.0,
+   "90,-30": 0.126,
+   "90,0": 0.0,
+   "180,-30": 0.196,
+   "180,0": 0.0
+  },
+  "mass_g": 116.0,
+  "com_r": 19.8,
+  "com_z": 52.2,
+  "Iz": 0.000153085667964995,
+  "top_z": 96.0,
+  "cables": {
+   "camera FPC": 413,
+   "tilt servo bus": 372,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.392
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 96.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.35,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.205,
+   "0,0": 0.0,
+   "90,-30": 0.25,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 108.3,
+  "com_r": 21.2,
+  "com_z": 50.3,
+  "Iz": 0.00013814753438318915,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 357,
+   "tilt servo bus": 408,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": 0.402
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 86.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.332,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.205,
+   "0,0": 0.0,
+   "90,-30": 0.25,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 106.1,
+  "com_r": 22.6,
+  "com_z": 45.0,
+  "Iz": 0.0001457765267053882,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 357,
+   "tilt servo bus": 367,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": 0.421
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 102.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.235,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.126,
+   "0,0": 0.0,
+   "90,-30": 0.164,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 113.0,
+  "com_r": 21.1,
+  "com_z": 54.3,
+  "Iz": 0.0001568293830765066,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 407,
+   "tilt servo bus": 393,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.421
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 93.0,
+  "disc_d": 112.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 172,
+  "fov_self": {
+   "-30": 0.153,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.035,
+   "0,0": 0.0,
+   "90,-30": 0.057,
+   "90,0": 0.0,
+   "180,-30": 0.142,
+   "180,0": 0.0
+  },
+  "mass_g": 118.3,
+  "com_r": 19.3,
+  "com_z": 62.3,
+  "Iz": 0.000154321154364995,
+  "top_z": 111.0,
+  "cables": {
+   "camera FPC": 427,
+   "tilt servo bus": 381,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.441
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 112.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 172,
+  "fov_self": {
+   "-30": 0.259,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.126,
+   "0,0": 0.0,
+   "90,-30": 0.164,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 115.1,
+  "com_r": 19.9,
+  "com_z": 59.2,
+  "Iz": 0.00015259147338594862,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 407,
+   "tilt servo bus": 441,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.441
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 104.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.242,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.108,
+   "0,0": 0.0,
+   "90,-30": 0.15,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 112.5,
+  "com_r": 21.2,
+  "com_z": 54.4,
+  "Iz": 0.00015886715707705328,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 389,
+   "tilt servo bus": 384,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.45
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 94.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.341,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.233,
+   "0,0": 0.0,
+   "90,-30": 0.274,
+   "90,0": 0.0,
+   "180,-30": 0.329,
+   "180,0": 0.036
+  },
+  "mass_g": 108.0,
+  "com_r": 22.2,
+  "com_z": 44.6,
+  "Iz": 0.00014969773908053474,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 375,
+   "tilt servo bus": 374,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": 0.467
+ },
+ {
+  "wrap_r": 36.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 96.0,
+  "annulus": 11.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.35,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.205,
+   "0,0": 0.0,
+   "90,-30": 0.25,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 108.4,
+  "com_r": 22.1,
+  "com_z": 44.5,
+  "Iz": 0.00015204977121306533,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 357,
+   "tilt servo bus": 366,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": 0.491
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 102.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.374,
+   "0": 0.01,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.276,
+   "0,0": 0.0,
+   "90,-30": 0.304,
+   "90,0": 0.0,
+   "180,-30": 0.347,
+   "180,0": 0.036
+  },
+  "mass_g": 110.8,
+  "com_r": 20.8,
+  "com_z": 49.8,
+  "Iz": 0.0001417068607123796,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 394,
+   "tilt servo bus": 426,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.01,
+  "fov_b": 0.036,
+  "score": 0.503
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 104.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.357,
+   "0": 0.008,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.233,
+   "0,0": 0.0,
+   "90,-30": 0.274,
+   "90,0": 0.0,
+   "180,-30": 0.329,
+   "180,0": 0.036
+  },
+  "mass_g": 110.3,
+  "com_r": 20.9,
+  "com_z": 49.8,
+  "Iz": 0.00014373594809308733,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 375,
+   "tilt servo bus": 417,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.008,
+  "fov_b": 0.036,
+  "score": 0.52
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 112.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 172,
+  "fov_self": {
+   "-30": 0.259,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.126,
+   "0,0": 0.0,
+   "90,-30": 0.164,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 115.1,
+  "com_r": 20.7,
+  "com_z": 53.7,
+  "Iz": 0.00016647850952071578,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 407,
+   "tilt servo bus": 392,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": 0.524
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 102.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.374,
+   "0": 0.01,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.276,
+   "0,0": 0.0,
+   "90,-30": 0.304,
+   "90,0": 0.0,
+   "180,-30": 0.347,
+   "180,0": 0.036
+  },
+  "mass_g": 110.8,
+  "com_r": 21.6,
+  "com_z": 44.1,
+  "Iz": 0.0001555938968708836,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 394,
+   "tilt servo bus": 382,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.01,
+  "fov_b": 0.036,
+  "score": 0.587
+ },
+ {
+  "wrap_r": 40.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 104.0,
+  "annulus": 15.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 170,
+  "fov_self": {
+   "-30": 0.357,
+   "0": 0.008,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.233,
+   "0,0": 0.0,
+   "90,-30": 0.274,
+   "90,0": 0.0,
+   "180,-30": 0.329,
+   "180,0": 0.036
+  },
+  "mass_g": 110.3,
+  "com_r": 21.7,
+  "com_z": 44.1,
+  "Iz": 0.0001576316708714303,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 375,
+   "tilt servo bus": 374,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.008,
+  "fov_b": 0.036,
+  "score": 0.604
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 112.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 172,
+  "fov_self": {
+   "-30": 0.393,
+   "0": 0.023,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.276,
+   "0,0": 0.0,
+   "90,-30": 0.304,
+   "90,0": 0.0,
+   "180,-30": 0.347,
+   "180,0": 0.036
+  },
+  "mass_g": 112.9,
+  "com_r": 20.4,
+  "com_z": 49.2,
+  "Iz": 0.0001513559871529833,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 393,
+   "tilt servo bus": 426,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.023,
+  "fov_b": 0.036,
+  "score": 0.692
+ },
+ {
+  "wrap_r": 44.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 112.0,
+  "annulus": 19.5,
+  "fail": [],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 172,
+  "fov_self": {
+   "-30": 0.393,
+   "0": 0.023,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.276,
+   "0,0": 0.0,
+   "90,-30": 0.304,
+   "90,0": 0.0,
+   "180,-30": 0.347,
+   "180,0": 0.036
+  },
+  "mass_g": 112.9,
+  "com_r": 21.2,
+  "com_z": 43.6,
+  "Iz": 0.00016524302331509278,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 393,
+   "tilt servo bus": 382,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.023,
+  "fov_b": 0.036,
+  "score": 0.776
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 88.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.339,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.19,
+   "0,0": 0.0,
+   "90,-30": 0.245,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 106.5,
+  "com_r": 22.5,
+  "com_z": 44.8,
+  "Iz": 0.00014757984220530236,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 341,
+   "tilt servo bus": 359,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "rim",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 88.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.192,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.092,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 108.7,
+  "com_r": 22.0,
+  "com_z": 55.4,
+  "Iz": 0.00014881532841092538,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 355,
+   "tilt servo bus": 369,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 78.0,
+  "disc_d": 88.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.154,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.066,
+   "0,0": 0.0,
+   "90,-30": 0.111,
+   "90,0": 0.0,
+   "180,-30": 0.196,
+   "180,0": 0.0
+  },
+  "mass_g": 109.6,
+  "com_r": 20.9,
+  "com_z": 53.9,
+  "Iz": 0.00013540426791577007,
+  "top_z": 96.0,
+  "cables": {
+   "camera FPC": 361,
+   "tilt servo bus": 349,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "rim",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 93.0,
+  "disc_d": 88.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.094,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.019,
+   "0,0": 0.0,
+   "90,-30": 0.051,
+   "90,0": 0.0,
+   "180,-30": 0.142,
+   "180,0": 0.0
+  },
+  "mass_g": 111.8,
+  "com_r": 20.4,
+  "com_z": 64.5,
+  "Iz": 0.00013663975431577003,
+  "top_z": 111.0,
+  "cables": {
+   "camera FPC": 376,
+   "tilt servo bus": 356,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 88.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.339,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.19,
+   "0,0": 0.0,
+   "90,-30": 0.245,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 106.5,
+  "com_r": 21.6,
+  "com_z": 50.7,
+  "Iz": 0.0001336745871037584,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 341,
+   "tilt servo bus": 399,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "rim",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 88.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 168,
+  "fov_self": {
+   "-30": 0.192,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.092,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 108.7,
+  "com_r": 21.1,
+  "com_z": 61.2,
+  "Iz": 0.0001349100733367237,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 355,
+   "tilt servo bus": 413,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 78.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 166,
+  "fov_self": {
+   "-30": 0.308,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.19,
+   "0,0": 0.0,
+   "90,-30": 0.245,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 104.3,
+  "com_r": 23.0,
+  "com_z": 45.3,
+  "Iz": 0.0001427390597283961,
+  "top_z": 75.0,
+  "cables": {
+   "camera FPC": 341,
+   "tilt servo bus": 360,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "groove",
+  "orient": "back",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 78.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 166,
+  "fov_self": {
+   "-30": 0.162,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.092,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 106.5,
+  "com_r": 22.4,
+  "com_z": 56.2,
+  "Iz": 0.0001439745459340191,
+  "top_z": 90.0,
+  "cables": {
+   "camera FPC": 355,
+   "tilt servo bus": 370,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 0.0,
+  "H_TILT": 79.0,
+  "disc_d": 78.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 166,
+  "fov_self": {
+   "-30": 0.121,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.062,
+   "0,0": 0.0,
+   "90,-30": 0.111,
+   "90,0": 0.0,
+   "180,-30": 0.192,
+   "180,0": 0.0
+  },
+  "mass_g": 107.5,
+  "com_r": 21.3,
+  "com_z": 55.3,
+  "Iz": 0.00013064585242907698,
+  "top_z": 97.0,
+  "cables": {
+   "camera FPC": 362,
+   "tilt servo bus": 350,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "groove",
+  "orient": "down",
+  "h_extra": 15.0,
+  "H_TILT": 94.0,
+  "disc_d": 78.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 166,
+  "fov_self": {
+   "-30": 0.077,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.017,
+   "0,0": 0.0,
+   "90,-30": 0.049,
+   "90,0": 0.0,
+   "180,-30": 0.14,
+   "180,0": 0.0
+  },
+  "mass_g": 109.8,
+  "com_r": 20.8,
+  "com_z": 66.1,
+  "Iz": 0.000131881338829077,
+  "top_z": 112.0,
+  "cables": {
+   "camera FPC": 377,
+   "tilt servo bus": 357,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 0.0,
+  "H_TILT": 57.0,
+  "disc_d": 78.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 166,
+  "fov_self": {
+   "-30": 0.308,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.19,
+   "0,0": 0.0,
+   "90,-30": 0.245,
+   "90,0": 0.0,
+   "180,-30": 0.32,
+   "180,0": 0.036
+  },
+  "mass_g": 104.3,
+  "com_r": 22.1,
+  "com_z": 51.4,
+  "Iz": 0.00012883380585706531,
+  "top_z": 93.0,
+  "cables": {
+   "camera FPC": 341,
+   "tilt servo bus": 399,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.036,
+  "score": null
+ },
+ {
+  "wrap_r": 32.0,
+  "stop": "groove",
+  "orient": "up",
+  "h_extra": 15.0,
+  "H_TILT": 72.0,
+  "disc_d": 78.0,
+  "annulus": 7.5,
+  "fail": [
+   "cable annulus 7.5 mm < 9 mm"
+  ],
+  "static": [],
+  "tilt_overlap_max": 0.0,
+  "pan_overlap_max": 0.0,
+  "stop_deg": 166,
+  "fov_self": {
+   "-30": 0.162,
+   "0": 0.0,
+   "30": 0.0
+  },
+  "fov_base": {
+   "0,-30": 0.092,
+   "0,0": 0.0,
+   "90,-30": 0.144,
+   "90,0": 0.0,
+   "180,-30": 0.216,
+   "180,0": 0.0
+  },
+  "mass_g": 106.5,
+  "com_r": 21.5,
+  "com_z": 62.1,
+  "Iz": 0.0001300692920900306,
+  "top_z": 108.0,
+  "cables": {
+   "camera FPC": 355,
+   "tilt servo bus": 413,
+   "servo bus to STM32": 63,
+   "UART to STM32": 160
+  },
+  "fov_s": 0.0,
+  "fov_b": 0.0,
+  "score": null
+ }
+]
