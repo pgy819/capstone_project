@@ -25,12 +25,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "print_v04")
 BED = (220.0, 220.0, 250.0)          # typical FDM bed [VERIFY your printer]
 VARIANT = dict(wrap_r=36.0, stop="groove", tilt_orient="down")
+H_TILT_KEEP = 79.0
 
 
 def configure():
     g.configure(**VARIANT)
     # bus-cable hole off the arm/gusset footprint (connectors face down at angle ~90 deg)
     g.HOLE_BUS = (135.0, g.R_MID)
+    # Tilt-axis height kept at the v0.3 value. Since the servo plugs moved to the face opposite the horn, 63 mm
+    # would also fit (lower CoM) but costs 6 deg of down-look and more FOV occlusion; see metrics_v04.json.
+    g.H_TILT = max(g.H_TILT, H_TILT_KEEP)
 
 
 def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
@@ -63,6 +67,20 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
     return turntable, arm_s, arm_i
 
 
+def lower_deck_with_pillars():
+    """Option (user, 11-02): lower deck and the four pillars as one print. Pillars grow out of the deck top
+    with a 3 mm cone at the root (r5.8, flush with the deck corner radius); the bottom screw holes are filled (4 fewer M3x10), the top keeps a
+    d2.8 x 12 pilot for the M3x10 that holds the top deck."""
+    out = g.lower_deck()
+    for x, y in g.PILLARS:
+        out = out.cut(g.cyl_z(1.8, g.LOWER_TOP - g.DECK_T - 1, g.LOWER_TOP + 1, x, y))      # old through hole
+        col = g.cyl_z(4.0, g.LOWER_TOP - g.DECK_T, -g.DECK_T, x, y)
+        root = cq.Workplane("XY").workplane(offset=g.LOWER_TOP).center(x, y).circle(5.8).workplane(offset=3.0).circle(4.0).loft()
+        out = out.union(col).union(root)
+        out = out.cut(g.cyl_z(1.4, -g.DECK_T - 12.0, 1, x, y))
+    return out
+
+
 def fit_coupon():
     """6806 seat test at four allowances, left to right: shaft -0.10/-0.05/+0.05/+0.15, bore +0.05/+0.10/+0.20/+0.30 (radius)."""
     out = None
@@ -90,6 +108,7 @@ ORIENT = {
     "arm_idle": [((1, 0, 0), 90)],           # outer (-Y) face on the plate
     "tilt_cradle": [((0, 1, 0), -90)],       # back plate on the plate, camera standoffs up
     "fit_coupon": [],
+    "lower_deck_with_pillars": [],           # option: replaces lower_deck + pillars, deck bottom on the plate
     "eye_plate": [((0, 1, 0), -90)],         # back face on the plate, rim and engraving up
 }
 
@@ -115,7 +134,7 @@ def main():
     yoke, y_srv_in, y_srv_out, y_idle_in = g.turntable_yoke()
     tt, arm_s, arm_i = split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in)
     printed = {n: v[0] for n, v in parts.items() if v[2] and n != "turntable_yoke"}
-    printed.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i)
+    printed.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, lower_deck_with_pillars=lower_deck_with_pillars())
     bought = {n: v[0] for n, v in parts.items() if not v[2]}
 
     for d in ("step", "stl", "step_reference"):
@@ -124,11 +143,13 @@ def main():
     report = {}
     assy = cq.Assembly(name="RCWS_gimbal_v04")
     colors = {n: v[1] for n, v in parts.items()}
+    colors["lower_deck_with_pillars"] = (0.80, 0.82, 0.85)
     colors.update(turntable=(0.20, 0.45, 0.85), arm_servo=(0.25, 0.50, 0.90), arm_idle=(0.25, 0.50, 0.90))
     for name, shape in printed.items():
         assert shape.val().isValid(), name
         cq.exporters.export(shape, os.path.join(OUT, "step", f"{name}.step"))
-        assy.add(shape, name=name, color=cq.Color(*colors.get(name, (0.7, 0.7, 0.7))))
+        if name != "lower_deck_with_pillars":
+            assy.add(shape, name=name, color=cq.Color(*colors.get(name, (0.7, 0.7, 0.7))))
         s = shape
         for axis, ang in ORIENT[name]:
             s = s.rotate((0, 0, 0), axis, ang)

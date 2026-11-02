@@ -30,7 +30,9 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out_v03")
 SV_L, SV_W, SV_H = 45.2, 24.7, 35.0      # STS3215 case [VERIFY: sources disagree]
 SV_SHAFT_FROM_END = 11.2                 # shaft centre from the near end [VERIFY]
 SV_BOSS_H, SV_BOSS_D = 4.0, 9.0          # output boss [VERIFY]
-SV_CONN_W, SV_CONN_H, SV_CONN_D = 16.0, 7.0, 6.0   # two 5264-3P sockets on the far end face [VERIFY]
+SV_CONN_W, SV_CONN_H, SV_CONN_D = 16.0, 7.0, 6.0   # two 5264-3P sockets side by side [VERIFY]
+SV_CONN_X = (SV_L - 2 * SV_SHAFT_FROM_END) / 2  # centre of the wide face opposite the horn (user, 11-02) [VERIFY]
+SV_PLUG = 14.0                                      # plug + cable bend room out of that face
 HORN_D, HORN_T = 24.0, 4.0               # disc horn [VERIFY]
 
 CAM_W, CAM_H, CAM_PCB = 25.0, 24.0, 1.0  # Camera Module 3 Wide [VERIFY holes/lens as Camera v2]
@@ -93,6 +95,8 @@ GROOVE_LUG_HALF = 4.0                     # groove stop: lug half-width on the t
 STOP_BLOCK_HALF = 5.0
 FIT_SHAFT = -0.05                        # radius allowance on printed pins/tubes that go into a bearing bore
 FIT_BORE = 0.15                          # printed bores that take a bearing OD (radius allowance)
+PI_WINDOW = None                        # top-deck opening over the Pi (tried 11-02, user reverted: slots in the lower deck instead)
+PI_SLOT_W, PI_SLOT_HALF_L = 4.5, 46.0     # long narrow slots in the lower deck under the Pi: cooling + cable pass
 MOUNT_TAB_R = 43.0                       # bearing-mount fixing tabs outside the channel wall (M3 heat-set inserts)
 
 
@@ -114,8 +118,8 @@ def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     DECK_EXIT = (180.0, R_MID)
     z_top = DISC_Z0 + DISC_T
     h = max(z_top + 25.0 + 3.0, 57.0)                # cradle sweep r=22.2 + FPC loop under the cradle
-    if tilt_orient == "down":                        # connector face + 14 mm plug + 2 mm above the disc
-        h = max(h, z_top + (SV_L - SV_SHAFT_FROM_END) + 2.0 + 14.0 + 2.0)
+    if tilt_orient == "down":                        # body end 2 mm above the disc (plugs now point outward, +Y)
+        h = max(h, z_top + (SV_L - SV_SHAFT_FROM_END) + 2.0)
     H_TILT = h
     cx, cy, _ = tilt_conn_point()
     HOLE_BUS = (math.degrees(math.atan2(cy, cx)), R_MID)
@@ -147,7 +151,7 @@ def tilt_rot(shape):
 
 def tilt_conn_point():
     """Centre of the plug zone in front of the tilt servo connectors (assembly coords)."""
-    return tilt_tf((SV_L - SV_SHAFT_FROM_END + 9.0, 0.0, -SV_H + 7.5))
+    return tilt_tf((SV_CONN_X, 0.0, -SV_H - 2.0 - SV_PLUG / 2))
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -180,18 +184,17 @@ def arc_slot(a_deg, r, tang, rad, z0, z1):
 
 # ----------------------------------------------------------------------------- purchased-part envelopes
 def servo_z_up():
-    """Shaft on +Z at (0,0); case top face at z=0; L along +x; connectors on the far end (+x)."""
+    """Shaft on +Z at (0,0); case top face at z=0; L along +x; connectors on the bottom face (-Z, opposite the horn)."""
     body = box(-SV_SHAFT_FROM_END, SV_L - SV_SHAFT_FROM_END, -SV_W / 2, SV_W / 2, -SV_H, 0).edges("|Z").fillet(2.0)
     boss = cyl_z(SV_BOSS_D / 2, 0, SV_BOSS_H)
-    xe = SV_L - SV_SHAFT_FROM_END
-    conn = box(xe, xe + 2.0, -SV_CONN_W / 2, SV_CONN_W / 2, -SV_H + 4, -SV_H + 4 + SV_CONN_H)
+    conn = box(SV_CONN_X - SV_CONN_H / 2, SV_CONN_X + SV_CONN_H / 2, -SV_CONN_W / 2, SV_CONN_W / 2, -SV_H - 2.0, -SV_H + 0.5)
     return body.union(boss).union(conn)
 
 
 def servo_conn_keepout_z_up():
     """Plug + bend room in front of the connector face (not printed, used for checks)."""
-    xe = SV_L - SV_SHAFT_FROM_END + 2.0
-    return box(xe, xe + 14.0, -SV_CONN_W / 2 - 1, SV_CONN_W / 2 + 1, -SV_H + 2, -SV_H + 6 + SV_CONN_H)
+    return box(SV_CONN_X - SV_CONN_H / 2 - 2, SV_CONN_X + SV_CONN_H / 2 + 2, -SV_CONN_W / 2 - 1, SV_CONN_W / 2 + 1,
+               -SV_H - 2.0 - SV_PLUG, -SV_H - 2.0)
 
 
 def camera_module():
@@ -255,6 +258,11 @@ def top_deck():
     for a in (45, 135, 225, 315):  # bearing-mount screws (M3) into inserts in the mount tabs
         x, y = polar(a, MOUNT_TAB_R)
         deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, x, y))
+    # open window over the Pi (user, 11-02): cooling air + room for more cables; rim kept clear of the
+    # pillar holes, bearing-mount tabs, Stage-2 M4 holes and the FPC drop
+    if PI_WINDOW:
+        x0, x1, hy = PI_WINDOW
+        deck = deck.cut(box(x0, x1, -hy, hy, -DECK_T - 1, 1).edges("|Z").fillet(6.0))
     # Stage-2 interface: 4x M4 on a 70 mm square around the pan axis [VERIFY]
     for sx in (-35, 35):
         for sy in (-35, 35):
@@ -304,8 +312,10 @@ def lower_deck():
         # d2.4 peg through the Pi's d2.7 hole; tip heat-staked (no M2.5 screws)
         deck = deck.union(cyl_z(1.2, LOWER_TOP + PI_STANDOFF, LOWER_TOP + PI_STANDOFF + PI_PCB + 1.6, x, y))
     ox, oy = pi_origin()
-    for i in range(5):  # vents under the cooler
-        deck = deck.cut(box(ox + 10 + i * 8, ox + 14 + i * 8, oy - 70, oy - 20, LOWER_TOP - DECK_T - 1, LOWER_TOP + 1))
+    for i in range(5):  # long narrow slots under the Pi (user, 11-02): air in from below + cables through
+        xc = ox + 12 + i * 8
+        deck = deck.cut(box(xc - PI_SLOT_W / 2, xc + PI_SLOT_W / 2, -PI_SLOT_HALF_L, PI_SLOT_HALF_L,
+                            LOWER_TOP - DECK_T - 1, LOWER_TOP + 1).edges("|Z").fillet(PI_SLOT_W / 2 - 0.01))
     # cable tie slots along the +X edge (servo bus / UART to the STM32 off-board)
     for y in (-20, 0, 20):
         deck = deck.cut(box(DECK_X1 - 10, DECK_X1 - 7, y - 2, y + 2, LOWER_TOP - DECK_T - 1, LOWER_TOP + 1))
@@ -333,8 +343,9 @@ def pan_cage():
     for (xa, xb, ya, yb), (sx, sy) in zip(CAGE_EARS(x0, x1, y0, y1, t), CAGE_SCREWS(x0, x1, y0, y1, t)):
         e = box(xa, xb, ya, yb, z0, z1).cut(cyl_z(1.7, z0 - 1, z1 + 1, sx, sy)).cut(cyl_z(3.1, z0 - 1, z1 - 6.0, sx, sy))
         flange = e if flange is None else flange.union(e)
-    # open end wall for the two bus connectors (+X)
-    cage = cage.union(flange).cut(box(x1 - 1, x1 + t + 1, -SV_CONN_W / 2 - 1.5, SV_CONN_W / 2 + 1.5, z0 + t, z0 + t + SV_CONN_H + 6))
+    # floor opening under the two bus connectors (bottom face of the servo)
+    cage = cage.union(flange).cut(box(SV_CONN_X - SV_CONN_H / 2 - 2.5, SV_CONN_X + SV_CONN_H / 2 + 2.5,
+                                      -SV_CONN_W / 2 - 1.5, SV_CONN_W / 2 + 1.5, z0 - 1, z0 + t + 1))
     return cage
 
 
@@ -545,10 +556,10 @@ def cable_routes(y_srv_out):
     bus = [(cx, cy, cz), (0.5 * (cx + bx), 0.5 * (cy + by), 0.5 * (cz + DISC_Z0 + DISC_T) + 4), (bx, by, DISC_Z0 + DISC_T + 2),
            (bx, by, DISC_Z0 - 2)]
     bus += [(*polar(HOLE_BUS[0] + 30 * k, R_MID - ANNULUS / 4), 6) for k in range(1, 12)]
-    pan_conn = (SV_L - SV_SHAFT_FROM_END + 8, 0, SV_TOP - SV_H + 8)
-    bus += [(ex + 2, ey + 6, 6), (ex + 2, ey + 6, -DECK_T - 3), (-20, 20, -DECK_T - 6), (pan_conn[0], 18, -DECK_T - 6),
-            pan_conn]
-    out = [pan_conn, (DECK_X1 - 8, 0, SV_TOP - SV_H + 8), (DECK_X1 - 8, 0, LOWER_TOP + 3), (DECK_X1 + 25, 0, LOWER_TOP + 3)]
+    pan_conn = (SV_CONN_X, 0, SV_TOP - SV_H - 2.0 - SV_PLUG / 2)
+    bus += [(ex + 2, ey + 6, 6), (ex + 2, ey + 6, -DECK_T - 3), (-20, 20, -DECK_T - 6), (SV_L - SV_SHAFT_FROM_END + 6, 18, -DECK_T - 6),
+            (SV_L - SV_SHAFT_FROM_END + 6, 0, pan_conn[2]), pan_conn]
+    out = [pan_conn, (DECK_X1 - 8, 0, pan_conn[2]), (DECK_X1 - 8, 0, LOWER_TOP + 3), (DECK_X1 + 25, 0, LOWER_TOP + 3)]
     gx, gy = pi_to_deck(sum(PI_GPIO_X) / 2, PI_W - 3)
     uart = [(gx, gy, hat_top + 8), (gx + 8, gy, hat_top + 14), (DECK_X1 - 12, 10, hat_top + 14),
             (DECK_X1 - 8, 10, LOWER_TOP + 3), (DECK_X1 + 25, 10, LOWER_TOP + 3)]
