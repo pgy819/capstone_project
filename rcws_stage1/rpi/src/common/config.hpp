@@ -43,6 +43,12 @@ struct DetectorCfg {
   float thr_acquire = 0.60f;            // hysteresis (Sec 3.4)
   float thr_track = 0.30f;
   int max_in_flight = 2;
+  // v3: resize Y/U/V planes before RGB conversion for regions larger than the model input
+  // (false = v2 behaviour: convert the whole crop, then resize RGB)
+  bool preproc_i420 = true;
+  // v3: with preproc_i420, use INTER_LINEAR instead of INTER_AREA for 1-2x downscale (~4x faster
+  // on 864 -> 640, slight aliasing). Off by default: A/B on real frames before enabling.
+  bool linear_mild_downscale = false;
 };
 
 struct RoiCfg {

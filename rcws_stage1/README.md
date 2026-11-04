@@ -28,7 +28,7 @@ sudo apt install -y cmake g++ pkg-config libopencv-dev libcamera-dev hailo-all p
 cd rcws/rpi
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/rcws_tests                       # 14 tests, 0 failed checks 이어야 함
+./build/rcws_tests                       # 18 tests, 0 failed checks 이어야 함 (v3: test_preproc 3개 추가)
 sudo setcap cap_sys_nice+ep build/rcws_vision   # SCHED_FIFO 허용 (Core 1, 우선순위 70)
 ```
 
@@ -104,3 +104,44 @@ python3 tools/calibrate_camera.py "calib_*.jpg" --cols 9 --rows 6 --square 0.025
 | 맞춤 2-클래스 HEF 학습 파이프라인 | §3.11 | **미포함** (데이터 수집부터 필요) |
 
 합성 장면 기준 결과(약 14°/s 사인 궤적, 오라클 검출기 박스 잡음 σ = 1.5 px): 획득 0.04 s, TRACK 중 추정 오차 RMS 약 0.3 mrad, 0.35 s 가림 후 즉시 복귀, 유사 물체(디코이)에 잠기지 않음. 실제 카메라에서는 블러·조명·검출기 특성이 달라지므로 P2–P4 실측으로 다시 확인해야 한다.
+
+## 6. v3 변경점 — YOLO 검출 성능 튜닝
+
+v2(이 폴더의 직전 버전, `../v2`)와 같은 구조에 아래만 추가했다. 런타임 동작 변경은 모두 설정 플래그로 끌 수 있다.
+
+| 항목 | 위치 | 기본값 | v2로 되돌리기 |
+|---|---|---|---|
+| ROI 전처리: YUV 평면에서 먼저 축소 후 RGB 변환 (크롭 > 모델 입력일 때만) | `detect/detector.cpp` `make_request_i420`, `perception.cpp` | `detector.preproc_i420 = true` | `false` |
+| 1–2배 축소에 bilinear 사용 (INTER_AREA 비정수 축소가 병목) | 같은 함수 | `detector.linear_mild_downscale = false` | 기본이 v2와 같음 |
+| 맞춤 2-클래스 모델 데이터셋 추출 (ROI 크롭 분포 + NCC 보강 + 캘리브레이션 셋) | `tools/model/export_dataset.py` | 오프라인 | — |
+| YOLOv8 미세조정 + ONNX 출력 | `tools/model/train_yolo.py` | 오프라인 (GPU PC) | — |
+| 도메인 캘리브레이션 HEF 컴파일 | `tools/model/hailo/compile_hef.sh` | 오프라인 (Hailo SW Suite) | — |
+| 맞춤 HEF용 설정 | `config/rcws_custom2cls.ini` | — | `rcws.ini` 사용 |
+| 검출기 A/B 지표 (검출률·중심 오차·정지 지터·처리시간, 나빠지면 WORSE 표시) | `tools/det_report.py` | — | — |
+
+개발 PC(x86) 측정, 864×864 ROI → 640×640: v2 3.37 ms, v3 2.44 ms(×1.38), v3+bilinear 0.68 ms(×4.97). v2 대비 픽셀 평균차 0.07, 표적 중심 역사상 차이 ≤ 0.04 px. **Pi 5 실측은 아직 없다.**
+
+### A/B 절차 (같은 프레임으로 비교)
+```bash
+# 1) 실기 녹화 (클립 + 로그)
+./build/rcws_vision --config config/rcws.ini --source camera --detector hailo --log base.rlog --clip-seconds 2
+# 2) 같은 클립에 대해 설정만 바꿔 NPU로 재검출 (--detector replay 는 기록된 박스를 재주입하므로 검출기 비교 불가)
+./build/rcws_vision --config config/rcws.ini        --source replay:run.rclip --detector hailo --log a.rlog
+./build/rcws_vision --config config/rcws_lin.ini    --source replay:run.rclip --detector hailo --log b.rlog
+python3 tools/det_report.py a.rlog b.rlog
+```
+
+### 맞춤 모델 파이프라인 — 보류 (사용하지 않음)
+> 개발 제약(기획서 V2.6 부록 B.11): 모델 학습·HEF 재컴파일과 추가 구매가 필요한 선택은 제외한다. 검출기는 Model Zoo COCO HEF로 고정하고, `tools/model/`과 `config/rcws_custom2cls.ini`는 보존만 한다. 검출 개선은 설정 A/B(임계값, `roi.k_s`, 검출 주기, 전처리 플래그)와 Model Zoo 사전 컴파일 HEF 교체로 한정한다.
+
+```bash
+python3 tools/model/export_dataset.py --run run1.rclip:run1.rlog --run run2.rclip:run2.rlog \
+        -o ds --ncc-fill --roi-crops 3 --calib 1024 --blur 0.2      # Pi 또는 PC
+python3 tools/model/train_yolo.py ds/data.yaml --model yolov8s.pt     # GPU PC
+tools/model/hailo/compile_hef.sh runs/rcws/rcws_2cls/weights/best.onnx ds/calib   # Hailo SW Suite
+cp rcws_2cls_h8.hef rpi/models/ && ./build/rcws_vision --config config/rcws_custom2cls.ini ...
+python3 tools/tests/test_tools.py     # 도구 자체 시험 (numpy + opencv-python만 필요)
+```
+세션 분할: 녹화 1개 = 촬영 세션 1개. `--run`을 둘 이상 주면 마지막(또는 `--val-run`) 세션이 통째로 검증에 간다. 유사 물체만 찍은 녹화는 `--neg-run decoys.rclip`으로 라벨 없이 넣는다. 설계 근거: 상세설계기획서 V2.6 부록 B.6.
+
+라벨 품질: 모니터 시험대에서 TRUTH를 기록한 녹화가 가장 정확하다. 검출기 박스만으로 만든 의사 라벨은 COCO 모델의 편향을 물려받으므로 `--det-thr`를 높게 두고, `--ncc-fill`로 YOLO가 놓친 프레임(어려운 양성 샘플)을 보강한다.

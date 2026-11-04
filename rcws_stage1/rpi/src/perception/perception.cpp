@@ -367,6 +367,16 @@ bool Perception::submit_main_crop(const FrameView& f, cv::Rect r, DetKind kind) 
   r = clamp_shift(r, f.main_w & ~1, f.main_h & ~1);
   if (r.width < 16 || r.height < 16) return false;
   const cv::Size in = det_->input_size();
+  // v3: plane-domain downscale (detector.preproc_i420). Only when the region is larger than the
+  // model input; for upscaling the v2 path converts fewer pixels and is kept.
+  auto plane_path = [&](int w, int h, const uint8_t* u, const uint8_t* v) {
+    return cfg_.det.preproc_i420 && u && v && (w > in.width || h > in.height);
+  };
+  auto submit = [&](DetRequest&& req) {
+    const bool ok = det_->submit(std::move(req));
+    ok ? stats_.det_submitted++ : stats_.det_rejected++;
+    return ok;
+  };
   // A region much larger than the model input would be downscaled anyway: take it from the
   // lores stream instead of converting up to 864x864 main pixels (field data: TRACK frames
   // took 26-49 ms with close, large targets).
@@ -375,24 +385,29 @@ bool Perception::submit_main_crop(const FrameView& f, cv::Rect r, DetKind kind) 
     const double k = double(f.lo_w) / f.main_w;
     cv::Rect lr(int(r.x * k) & ~1, int(r.y * k) & ~1, int(r.width * k) & ~1, int(r.height * k) & ~1);
     lr = clamp_shift(lr, f.lo_w & ~1, f.lo_h & ~1);
-    cv::Mat rgb = i420_crop_to_rgb(f.lo_y, f.lo_u, f.lo_v, f.lo_w, f.lo_h, f.lo_stride, f.lo_uv_stride, lr);
     const float to_main = float(f.main_w) / float(f.lo_w);
+    if (plane_path(lr.width, lr.height, f.lo_u, f.lo_v)) {
+      const I420View v{f.lo_y, f.lo_u, f.lo_v, f.lo_w, f.lo_h, f.lo_stride, f.lo_uv_stride};
+      return submit(make_request_i420(v, lr, in, to_main, f.seq, f.t_sof_ns, kind, cfg_.det.linear_mild_downscale));
+    }
+    cv::Mat rgb = i420_crop_to_rgb(f.lo_y, f.lo_u, f.lo_v, f.lo_w, f.lo_h, f.lo_stride, f.lo_uv_stride, lr);
     DetRequest req = make_request(rgb, cv::Rect(0, 0, rgb.cols, rgb.rows), in, to_main, f.seq, f.t_sof_ns, kind);
     req.map.crop = {lr.x * to_main, lr.y * to_main, lr.width * to_main, lr.height * to_main};
-    const bool ok = det_->submit(std::move(req));
-    ok ? stats_.det_submitted++ : stats_.det_rejected++;
-    return ok;
+    return submit(std::move(req));
+  }
+  if (plane_path(r.width, r.height, f.main_u, f.main_v)) {
+    const I420View v{f.main_y, f.main_u, f.main_v, f.main_w, f.main_h, f.main_stride, f.main_uv_stride};
+    return submit(make_request_i420(v, r, in, 1.f, f.seq, f.t_sof_ns, kind, cfg_.det.linear_mild_downscale));
   }
   cv::Mat rgb = yuv420_crop_to_rgb(f, r);
   DetRequest req = make_request(rgb, cv::Rect(0, 0, rgb.cols, rgb.rows), in, 1.f, f.seq, f.t_sof_ns, kind);
   req.map.crop = {float(r.x), float(r.y), float(r.width), float(r.height)};
-  const bool ok = det_->submit(std::move(req));
-  ok ? stats_.det_submitted++ : stats_.det_rejected++;
-  return ok;
+  return submit(std::move(req));
 }
 
 bool Perception::submit_global(const FrameView& f) {
   if (f.lo_y) {
+    // lores (640x360) already fits a 640x640 input: s = 1, so the plane path is not taken here
     cv::Mat rgb = lores_to_rgb(f);
     DetRequest req = make_request(rgb, cv::Rect(0, 0, rgb.cols, rgb.rows), det_->input_size(),
                                   float(f.main_w) / float(f.lo_w), f.seq, f.t_sof_ns, DetKind::Global);

@@ -82,6 +82,7 @@ add_executable(rcws_tests
   tests/test_imm.cpp
   tests/test_zncc.cpp
   tests/test_pipeline.cpp
+  tests/test_preproc.cpp
 )
 target_link_libraries(rcws_tests PRIVATE rcws_core)
 add_test(NAME rcws_tests COMMAND rcws_tests)

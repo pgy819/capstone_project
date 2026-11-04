@@ -40,6 +40,21 @@ class IDetector {
 DetRequest make_request(const cv::Mat& src_rgb, const cv::Rect& src_roi, cv::Size input, float src_to_main,
                         uint32_t seq, int64_t t_sof, DetKind kind);
 
+// Borrowed I420 (YUV420 planar) image. u/v may be null (grayscale source).
+struct I420View {
+  const uint8_t* y = nullptr;
+  const uint8_t* u = nullptr;
+  const uint8_t* v = nullptr;
+  int w = 0, h = 0, y_stride = 0, uv_stride = 0;
+};
+
+// Same mapping as make_request(), but scales the Y/U/V planes first and converts only the
+// model-input-sized result to RGB. For a region larger than the input (s < 1) this skips the
+// full-size YUV->RGB conversion and the 3-channel resize (v3, detector.preproc_i420).
+// roi is aligned to even coordinates.
+DetRequest make_request_i420(const I420View& src, cv::Rect roi, cv::Size input, float src_to_main,
+                             uint32_t seq, int64_t t_sof, DetKind kind, bool linear_mild_downscale = false);
+
 // Map raw detections (model input pixels) back to main-stream coordinates.
 Detection map_back(const InputMap& m, float x0, float y0, float x1, float y1, float score, ObjClass cls);
 
