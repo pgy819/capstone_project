@@ -33,7 +33,8 @@ class ZnccTracker {
   // Blend the template toward the patch centred at (box centre) (alpha = cfg.update_alpha).
   void refresh(const cv::Mat& y, const RectF& box);
   // Search around pred within +-radius px (main-stream pixels).
-  NccResult match(const cv::Mat& y, cv::Point2d pred, double radius) const;
+  // frame_id identifies the frame so the reduced image is computed once per frame and scale.
+  NccResult match(const cv::Mat& y, cv::Point2d pred, double radius, uint32_t frame_id) const;
 
   int side() const { return tmpl_.cols; }
   int scale() const { return s_; }
@@ -48,6 +49,9 @@ class ZnccTracker {
   cv::Mat tmpl_;   // CV_32F at the matching scale
   int s_ = 1;      // matching scale factor
   cv::Point2d anchor_;
+  mutable cv::Mat small_;          // whole frame reduced by s_ (cache)
+  mutable uint32_t small_id_ = ~0u;
+  mutable int small_s_ = 0;
 };
 
 }  // namespace rcws

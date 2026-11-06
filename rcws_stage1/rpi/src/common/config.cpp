@@ -58,6 +58,7 @@ std::map<std::string, Ref> registry(Config& c) {
   m["track.sprt_pd"] = &t.sprt_pd; m["track.sprt_pfa"] = &t.sprt_pfa; m["track.sprt_alpha"] = &t.sprt_alpha;
   m["track.sprt_beta"] = &t.sprt_beta; m["track.sprt_forget"] = &t.sprt_forget;
   m["track.gate_chi2"] = &t.gate_chi2; m["track.phone_height_m"] = &t.phone_height_m;
+  m["track.strong_reject_reinit"] = &t.strong_reject_reinit;
 
   auto& e = c.est;
   m["estimator.q_cv"] = &e.q_cv; m["estimator.q_ca"] = &e.q_ca;

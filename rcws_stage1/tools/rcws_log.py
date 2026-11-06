@@ -24,7 +24,7 @@ EST = np.dtype([("t", "<i8"), ("psi", "<f8"), ("psi_d", "<f8"), ("psi_dd", "<f8"
                 ("theta_dd", "<f8"), ("sig_psi", "<f8"), ("sig_theta", "<f8"), ("mu_ca", "<f4"), ("range_m", "<f4")])
 STATE = np.dtype([("t", "<i8"), ("from", "u1"), ("to", "u1"), ("reason", "u1"), ("pad", "u1")])
 NCC = np.dtype([("t", "<i8"), ("seq", "<u4"), ("u", "<f4"), ("v", "<f4"), ("rho", "<f4"), ("second", "<f4"),
-                ("radius", "<f4"), ("tmpl", "<i2"), ("ok", "u1"), ("pad", "u1")])
+                ("radius", "<f4"), ("tmpl", "<i2"), ("ok", "u1"), ("scale", "u1")])
 TRUTH = np.dtype([("t", "<i8"), ("seq", "<u4"), ("u", "<f4"), ("v", "<f4"), ("w", "<f4"), ("h", "<f4"),
                   ("visible", "u1"), ("pad", "u1", 3)])
 

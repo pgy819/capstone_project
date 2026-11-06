@@ -8,8 +8,17 @@ using namespace rcws;
 
 static int64_t ns(double s) { return int64_t(s * 1e9); }
 
-TEST(imm_tracks_constant_velocity) {
+// Filter mechanics are checked with low process noise (smooth target); the runtime default
+// q is tuned for hand-held motion and trades velocity smoothness for responsiveness.
+static EstimatorCfg smooth_cfg() {
   EstimatorCfg c;
+  c.q_cv = 0.02;
+  c.q_ca = 20.0;
+  return c;
+}
+
+TEST(imm_tracks_constant_velocity) {
+  EstimatorCfg c = smooth_cfg();
   Imm1D f(c, false);
   std::mt19937 rng(1);
   std::normal_distribution<double> n(0, 5e-4);
@@ -28,7 +37,7 @@ TEST(imm_tracks_constant_velocity) {
 }
 
 TEST(imm_switches_to_ca_on_manoeuvre) {
-  EstimatorCfg c;
+  EstimatorCfg c = smooth_cfg();
   Imm1D f(c, false);
   f.init(0, 0, 1e-6);
   double mu_max = 0;
