@@ -19,8 +19,9 @@ capstone_project/
 │   ├── README.md              비전 런타임 빌드·실행·보정 절차
 │   ├── GEMINI.md              AI 에이전트 규칙, 하드웨어 계약
 │   ├── rpi/                   [Raspberry Pi 5] C++20 비전 런타임 (CMake)
-│   ├── tools/                 Python 로그 분석·보정·검출 A/B 도구
-│   └── stm32_fw/              [STM32F401RE] 500 Hz 모터 제어 펌웨어 (PlatformIO)
+│   ├── tools/                 Python 로그 분석·보정·검출 A/B, 서보 식별 캡처 도구
+│   ├── matlab/                서보 시스템 식별, 추적 루프 설계, 지연 vs 오차 시뮬레이션
+│   └── stm32_fw/              [STM32F401RE] 500 Hz 모터 제어 펌웨어 (PlatformIO, env sysid = 서보 식별 시험 모드)
 └── mechanical/                상단부 2축 짐벌 기구 (CadQuery → CATIA STEP / 3D 프린팅 STL)
 ```
 

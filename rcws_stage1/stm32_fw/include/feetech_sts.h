@@ -62,6 +62,9 @@ void STS_SyncWrite_PosSpeed(uint16_t pan_pos, uint16_t pan_speed,
  * Connect ONLY the servo to be renamed to the bus while running this.
  */
 HAL_StatusTypeDef STS_Assign_ID(uint8_t old_id, uint8_t new_id);
+
+/** Called after PA4 returns low at the end of every USART6 transmission (weak no-op). */
+void STS_TxDoneHook(void);
 #endif
 
 #ifdef __cplusplus

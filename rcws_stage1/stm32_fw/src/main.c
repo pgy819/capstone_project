@@ -7,12 +7,20 @@
  *  USART6 : PC6/PC7  1 Mbps 8N1, TX DMA2_Stream6 / CH5 normal    (Feetech STS3215 bus)
  *  PA4    : half-duplex direction, PA5: LD2 status LED, PC13: B1 commissioning button
  *  TIM2   : 500 Hz (PSC 83, ARR 1999) -> PD servo loop inside TIM2_IRQHandler
+ *  Build env "sysid" (-DRCWS_SYSID): servo identification test mode instead (see sysid.h)
  *
  *  NVIC priorities (group 4): USART6/DMA2_S6 = 1, TIM2 = 2, USART1/DMA2_S2 = 3, SysTick = 15
  */
 #include "stm32f4xx_hal.h"
 #include "protocol.h"
 #include "feetech_sts.h"
+#ifdef RCWS_SYSID
+#include "sysid.h"
+#endif
+
+#ifndef RCWS_VCP_BAUD
+#define RCWS_VCP_BAUD 115200u   /* sysid env: 921600 */
+#endif
 
 /* ------------------------------------------------------------------------- */
 /* Control constants (STAGE1_SPEC Module B §2)                               */
@@ -49,6 +57,7 @@ DMA_HandleTypeDef  hdma_usart1_rx;
 DMA_HandleTypeDef  hdma_usart6_tx;
 TIM_HandleTypeDef  htim2;
 
+#ifndef RCWS_SYSID
 /* ------------------------------------------------------------------------- */
 /* Servo-loop state (owned by TIM2_IRQHandler)                               */
 /* ------------------------------------------------------------------------- */
@@ -62,6 +71,7 @@ static uint8_t is_first_track_frame = 1u;
 
 typedef enum { SERVO_TIMEOUT = 0, SERVO_HOLD, SERVO_TRACKING } ServoState_t;
 static volatile ServoState_t g_servo_state = SERVO_TIMEOUT;   /* read by LED task */
+#endif
 
 /* ------------------------------------------------------------------------- */
 /* Prototypes                                                                 */
@@ -73,9 +83,11 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_TIM2_Init(void);
+#ifndef RCWS_SYSID
 static void Commissioning_CheckAndRun(void);
 static void Servo_ControlStep(void);
 static void Led_Task(void);
+#endif
 void Error_Handler(void);
 
 /* ========================================================================= */
@@ -91,6 +103,16 @@ int main(void)
     MX_USART6_UART_Init();
     MX_TIM2_Init();
 
+#ifdef RCWS_SYSID
+    /* System-identification test mode: no vision link, PC drives the excitation over the VCP. */
+    SysId_Init();
+    if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK) {
+        Error_Handler();
+    }
+    while (1) {
+        SysId_Poll();
+    }
+#else
     static const char banner[] = "\r\nRCWS Stage1 FW: 500Hz 2-axis visual servo\r\n";
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)banner, (uint16_t)(sizeof(banner) - 1u), 50u);
 
@@ -108,8 +130,10 @@ int main(void)
         Protocol_Poll();    /* drain USART1 DMA ring -> FSM parser */
         Led_Task();
     }
+#endif
 }
 
+#ifndef RCWS_SYSID
 /* ========================================================================= */
 /* 500 Hz servo loop                                                         */
 /* ========================================================================= */
@@ -231,6 +255,7 @@ static void Led_Task(void)
         HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
     }
 }
+#endif /* !RCWS_SYSID */
 
 /* ========================================================================= */
 /* Clock: HSI 16 MHz / M16 * N336 / P4 = 84 MHz                              */
@@ -322,7 +347,7 @@ static void MX_USART1_UART_Init(void)
 static void MX_USART2_UART_Init(void)
 {
     huart2.Instance          = USART2;
-    huart2.Init.BaudRate     = 115200;
+    huart2.Init.BaudRate     = RCWS_VCP_BAUD;
     huart2.Init.WordLength   = UART_WORDLENGTH_8B;
     huart2.Init.StopBits     = UART_STOPBITS_1;
     huart2.Init.Parity       = UART_PARITY_NONE;
@@ -476,7 +501,11 @@ void TIM2_IRQHandler(void)
     if (__HAL_TIM_GET_FLAG(&htim2, TIM_FLAG_UPDATE) != RESET &&
         __HAL_TIM_GET_IT_SOURCE(&htim2, TIM_IT_UPDATE) != RESET) {
         __HAL_TIM_CLEAR_IT(&htim2, TIM_IT_UPDATE);
+#ifdef RCWS_SYSID
+        SysId_Tick();
+#else
         Servo_ControlStep();
+#endif
     }
 }
 

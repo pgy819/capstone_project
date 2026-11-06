@@ -111,11 +111,17 @@ HAL_StatusTypeDef STS_Assign_ID(uint8_t old_id, uint8_t new_id)
     return st;
 }
 
+/* Overridden by sysid.c to arm the status-packet reception (weak: no-op in tracking mode). */
+__attribute__((weak)) void STS_TxDoneHook(void)
+{
+}
+
 /* PA4 back to LOW once the last byte has physically left the shift register. */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART6) {
         HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
+        STS_TxDoneHook();
     }
 }
 #endif /* RCWS_HOST_TEST */
