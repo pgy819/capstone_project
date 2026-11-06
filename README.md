@@ -34,6 +34,11 @@ capstone_project/
 ├── GEMINI.md                     # AI 에이전트 시스템 규칙 및 하드웨어 아키텍처 가드레일
 ├── docs/
 │   └── STAGE1_SPEC.md            # Stage 1 상세 수학 모델 및 프로토콜 명세서
+├── mechanical/                   # 상단부 2축 Pan-Tilt 짐벌 기구 (CadQuery → CATIA STEP / 3D 프린팅 STL)
+│   ├── README.md                 # 설계 특징, 버전별 변경 이유, 확인이 필요한 치수
+│   ├── gimbal_v03.py             # 현재 형상 생성기 (치수·공차 파라미터)
+│   ├── gimbal_print.py           # 출력용 분할·방향 지정·STEP/STL 내보내기
+│   └── docs/PRINT_GUIDE.md       # 출력·조립 가이드
 └── rcws_stage1/
     ├── rpi5_vision/              # [Raspberry Pi 5] 비전 및 궤적 예측 노드
     │   ├── kalman_filter.py      # 4-State 등속도 칼만 필터 (Coasting & 선행 예측 포함)

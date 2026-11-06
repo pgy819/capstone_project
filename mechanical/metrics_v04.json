@@ -1,5 +1,5 @@
 {
- "before_H79": {
+ "H79_kept": {
   "H_TILT": 79.0,
   "mass_g": 105.7,
   "com_r": 22.7,
@@ -20,20 +20,20 @@
    "180,-30": 0.192,
    "180,0": 0.0
   },
-  "sys_com_z_above_platform": 59.6,
+  "sys_com_z_above_platform": 60.0,
   "cables": {
    "camera FPC": 379,
-   "tilt servo bus": 401,
-   "servo bus to STM32": 62,
+   "tilt servo bus": 423,
+   "servo bus to STM32": 77,
    "UART to STM32": 160
   }
  },
- "now": {
+ "H63_option": {
   "H_TILT": 63.0,
   "mass_g": 103.3,
   "com_r": 23.3,
   "com_z": 42.6,
-  "Iz": 0.00013075458414870772,
+  "Iz": 0.00013075458414870777,
   "top_z": 81.0,
   "boresight_down_deg": -32,
   "fov_self": {
@@ -49,11 +49,11 @@
    "180,-30": 0.276,
    "180,0": 0.015
   },
-  "sys_com_z_above_platform": 56.3,
+  "sys_com_z_above_platform": 56.7,
   "cables": {
    "camera FPC": 363,
-   "tilt servo bus": 396,
-   "servo bus to STM32": 62,
+   "tilt servo bus": 415,
+   "servo bus to STM32": 77,
    "UART to STM32": 160
   }
  }

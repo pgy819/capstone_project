@@ -33,6 +33,8 @@ def run(h_override=None):
                 sys_com_z_above_platform=round(cz / stot - (g.LOWER_TOP - g.DECK_T), 1),
                 cables={k: round(g.length(v)) for k, v in routes.items()})
 if __name__ == "__main__":
-    old = run(79.0); new = run()
-    for k in new: print(f"{k:26s} {old[k]}  ->  {new[k]}")
-    json.dump({"before_H79": old, "now": new}, open("metrics_v04.json", "w"), indent=1)
+    # Tilt-axis height kept (79 mm, H_TILT_KEEP) vs the lowest height the servo layout allows (63 mm)
+    kept = run(79.0); low = run(63.0)
+    for k in kept: print(f"{k:26s} {kept[k]}  ->  {low[k]}")
+    here = os.path.dirname(os.path.abspath(__file__))
+    json.dump({"H79_kept": kept, "H63_option": low}, open(os.path.join(here, "metrics_v04.json"), "w"), indent=1)
