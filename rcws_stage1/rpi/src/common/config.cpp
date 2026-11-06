@@ -39,6 +39,7 @@ std::map<std::string, Ref> registry(Config& c) {
   m["detector.score_min"] = &d.score_min; m["detector.thr_acquire"] = &d.thr_acquire; m["detector.thr_track"] = &d.thr_track;
   m["detector.max_in_flight"] = &d.max_in_flight; m["detector.preproc_i420"] = &d.preproc_i420;
   m["detector.linear_mild_downscale"] = &d.linear_mild_downscale;
+  m["detector.lores_large_roi"] = &d.lores_large_roi;
 
   auto& r = c.roi;
   m["roi.k_s"] = &r.k_s; m["roi.s_min"] = &r.s_min; m["roi.s_max"] = &r.s_max;

@@ -28,7 +28,7 @@ sudo apt install -y cmake g++ pkg-config libopencv-dev libcamera-dev hailo-all p
 cd rcws/rpi
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/rcws_tests                       # 18 tests, 0 failed checks 이어야 함 (v3: test_preproc 3개 추가)
+./build/rcws_tests                       # 19 tests, 0 failed checks 이어야 함 (v3: test_preproc 3개, run 2 회귀 시험 1개 추가)
 sudo setcap cap_sys_nice+ep build/rcws_vision   # SCHED_FIFO 허용 (Core 1, 우선순위 70)
 ```
 
@@ -113,6 +113,7 @@ v2(이 폴더의 직전 버전, `../v2`)와 같은 구조에 아래만 추가했
 |---|---|---|---|
 | ROI 전처리: YUV 평면에서 먼저 축소 후 RGB 변환 (크롭 > 모델 입력일 때만) | `detect/detector.cpp` `make_request_i420`, `perception.cpp` | `detector.preproc_i420 = true` | `false` |
 | 1–2배 축소에 bilinear 사용 (INTER_AREA 비정수 축소가 병목) | 같은 함수 | `detector.linear_mild_downscale = false` | 기본이 v2와 같음 |
+| 모델 입력보다 넓은 ROI는 lores에서 크롭 (run 2 수정) | `perception.cpp` `submit_main_crop` | `detector.lores_large_roi = true` | `false`: lores는 해상도 손실이 없을 때만, 나머지는 메인 + 위 전처리 |
 | 맞춤 2-클래스 모델 데이터셋 추출 (ROI 크롭 분포 + NCC 보강 + 캘리브레이션 셋) | `tools/model/export_dataset.py` | 오프라인 | — |
 | YOLOv8 미세조정 + ONNX 출력 | `tools/model/train_yolo.py` | 오프라인 (GPU PC) | — |
 | 도메인 캘리브레이션 HEF 컴파일 | `tools/model/hailo/compile_hef.sh` | 오프라인 (Hailo SW Suite) | — |

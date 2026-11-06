@@ -49,6 +49,10 @@ struct DetectorCfg {
   // v3: with preproc_i420, use INTER_LINEAR instead of INTER_AREA for 1-2x downscale (~4x faster
   // on 864 -> 640, slight aliasing). Off by default: A/B on real frames before enabling.
   bool linear_mild_downscale = false;
+  // field run 2: crop regions wider than the model input from the lores stream (cheapest, but the
+  // crop is then upscaled to the model input). false = v2/v3 rule: lores only when it still holds
+  // >= 0.9x the model input width, otherwise main stream (+ preproc_i420 downscale). A/B on real frames.
+  bool lores_large_roi = true;
 };
 
 struct RoiCfg {

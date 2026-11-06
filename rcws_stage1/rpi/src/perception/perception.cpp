@@ -409,13 +409,14 @@ bool Perception::submit_main_crop(const FrameView& f, cv::Rect r, DetKind kind) 
     ok ? stats_.det_submitted++ : stats_.det_rejected++;
     return ok;
   };
-  // A region much larger than the model input would be downscaled anyway: take it from the
-  // lores stream instead of converting up to 864x864 main pixels (field data: TRACK frames
-  // took 26-49 ms with close, large targets).
   // Regions larger than the model input are downscaled anyway; cutting them from lores
   // (2.4x smaller) avoids a full-resolution YUV->RGB conversion. Targets this large keep
   // >= 40 px in lores. Field run 2: 864 px ROIs from main cost ~10 ms per frame on Pi 5.
-  if (f.lo_y && r.width > in.width) {
+  // detector.lores_large_roi = false keeps the earlier rule (lores only without detail loss) so the
+  // v3 plane-domain downscale of the main crop can be compared on the same clip.
+  const bool use_lores = cfg_.det.lores_large_roi ? r.width > in.width
+                                                  : double(r.width) * f.lo_w / f.main_w >= 0.9 * in.width;
+  if (f.lo_y && use_lores) {
     const double k = double(f.lo_w) / f.main_w;
     cv::Rect lr(int(r.x * k) & ~1, int(r.y * k) & ~1, int(r.width * k) & ~1, int(r.height * k) & ~1);
     lr = clamp_shift(lr, f.lo_w & ~1, f.lo_h & ~1);
