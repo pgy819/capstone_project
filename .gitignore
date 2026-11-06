@@ -1,0 +1,13 @@
+# build outputs
+.pio/
+build/
+__pycache__/
+*.pyc
+# runtime logs and clips (rcws_vision)
+*.rlog
+*.rclip
+# local working copies of earlier versions (history lives in git tags)
+/v1/
+/v2/
+/v3/
+/2axis-tracking-gimbal/
