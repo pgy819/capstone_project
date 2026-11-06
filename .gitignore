@@ -6,6 +6,8 @@ __pycache__/
 # runtime logs and clips (rcws_vision)
 *.rlog
 *.rclip
+# field-run logs are small (~1 MB/min) and kept with their summaries
+!docs/field_runs/**/*.rlog
 # local working copies of earlier versions (history lives in git tags)
 /v1/
 /v2/

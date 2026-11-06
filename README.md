@@ -14,6 +14,7 @@
 ```text
 capstone_project/
 ├── docs/STAGE1_SPEC.md        Stage 1 수학 모델·프로토콜 명세 (v1 기준)
+├── docs/field_runs/           현장 실행 기록 (요약, 그래프, .rlog 로그)
 ├── rcws_stage1/
 │   ├── README.md              비전 런타임 빌드·실행·보정 절차
 │   ├── GEMINI.md              AI 에이전트 규칙, 하드웨어 계약
