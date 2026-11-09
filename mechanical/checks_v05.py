@@ -14,7 +14,8 @@ import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # pairs that touch by design (screw in a threaded/insert hole or a horn modelled as a solid disc)
-EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn")}
+EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"),
+            ("turntable_yoke", "fasteners_pan")}   # unsplit yoke has no arm-foot holes; checked on the split parts below
 
 
 def main():
@@ -32,6 +33,21 @@ def main():
         v = e.overlap(allm[a], allm[b])
         if v > 0.5:
             res["static"].append(f"{a} x {b} {v:.1f} mm3")
+    yoke, a, b, c = g.turntable_yoke()
+    tt, arm_s, arm_i = gp.split_yoke(yoke, a, b, c)
+    for n, sh in (("turntable", tt), ("arm_servo", arm_s), ("arm_idle", arm_i), ("lower_deck_with_pillars", None)):
+        if sh is None:   # one-piece option has no bottom pillar bolts: check against the top bolts only
+            top = None
+            for x, y in g.PILLARS:
+                f = g.m3(x, y, 0.0, up=False, nut_z=-g.DECK_T - 5.0, nut_rot=g.pillar_slot_dir(x, y))
+                top = f if top is None else top.union(f)
+            v = e.overlap(e.mesh(n, gp.lower_deck_with_pillars()), e.mesh("top_bolts", top))
+            if v > 0.5:
+                res["static"].append(f"{n} x top pillar bolts {v:.1f} mm3")
+            continue
+        v = e.overlap(e.mesh(n, sh), M["fasteners_pan"])
+        if v > 0.5:
+            res["static"].append(f"{n} x fasteners_pan {v:.1f} mm3")
     mt = trimesh.boolean.union([M[n] for n in ["tilt_horn", "tilt_cradle", "camera", "eye_plate"]])
     fixed = trimesh.boolean.union([M["turntable_yoke"], M["tilt_servo"], K["keepout tilt servo plugs"]])
     res["tilt_overlap_max_mm3"] = round(max(e.overlap(e.rot(mt, d, [0, 1, 0], [0, 0, g.H_TILT]), fixed) for d in range(-90, 91, 10)), 2)

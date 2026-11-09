@@ -28,8 +28,8 @@
  },
  "boresight_down_deg": -38,
  "volumes_cm3": {
-  "horn_coupler": 5.11,
-  "turntable_yoke": 47.61,
+  "horn_coupler": 4.84,
+  "turntable_yoke": 46.0,
   "bearing_mount": 28.87,
   "pan_cage": 23.12,
   "top_deck": 74.45,

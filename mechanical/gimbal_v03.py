@@ -63,6 +63,7 @@ BRG_PAN = (42.0, 30.0, 7.0)              # 6806 (61806) OD, ID, W
 DECK_T = 5.0
 DECK_X0, DECK_X1, DECK_Y = -100.0, 50.0, 110.0
 PILLARS = [(-94.0, 49.0), (44.0, 49.0), (44.0, -49.0), (-30.0, -49.0)]   # kept off the port zones
+PILLAR_R = 5.0                           # v0.5.1: d10 so a side nut slot fits (v0.4: d8)
 BASE_GAP = 55.0                          # top-deck underside -> lower-deck top
 LOWER_TOP = -DECK_T - BASE_GAP
 
@@ -77,8 +78,8 @@ DISC_Z0, DISC_T, DISC_R = 22.0, 4.0, 56.0
 # torsion (blades loaded along their length). No sliding contact, no spring preload -> no backlash, no creep.
 FLEX_T, FLEX_GAP = 1.2, 0.7              # blade thickness (3 perimeters @0.4) / slot width (FDM-safe) [mm]
 FLEX_H2 = 3.0                            # stage-2 blade height at the disc top face (axial compliance) [mm]
-FLEX_HUB = (6.0, 4.5)                    # hub half-size x, y
-HUB_SCREWS = ((3.0, 0.0), (-3.0, 0.0))   # flexure hub -> rigid hub, M3x10 into heat-set inserts
+FLEX_HUB = (6.5, 4.5)                    # hub half-size x, y
+HUB_SCREWS = ((3.5, 0.0), (-3.5, 0.0))   # flexure hub -> rigid hub, M3x10 into nuts in side slots (v0.5.1)
 HUB_R = TUBE_ID / 2 - 1.0                # rigid hub radius inside the fixed tube
 HORN_SCREW_R = 8.0                       # disc horn hole circle [VERIFY]
 STOP_R, STOP_HALF_W = 52.0, 6.0          # hard stop at 180 deg (rear)
@@ -202,6 +203,14 @@ def hex_z(af, z0, z1, x=0.0, y=0.0, rot=0.0):
     """Hexagonal prism (across flats af) for nut pockets."""
     return (cq.Workplane("XY").polygon(6, af / math.cos(math.pi / 6)).extrude(z1 - z0)
             .rotate((0, 0, 0), (0, 0, 1), rot).translate((x, y, z0)))
+
+
+def nut_slot(x, y, z_nut, a_deg, length):
+    """Side-entry nut trap: M3 nut (flats across the slot) slides in along direction a_deg from `length` mm away
+    and stops centred on the bolt at (x, y); nut bottom at z_nut. The closed end is shaped by the nut corner."""
+    corner = NUT_AF / math.sqrt(3) + 0.1
+    s = box(-corner, length, -NUT_POCKET_AF / 2, NUT_POCKET_AF / 2, z_nut - 0.1, z_nut + NUT_POCKET_H - 0.1)
+    return s.rotate((0, 0, 0), (0, 0, 1), a_deg).translate((x, y, 0))
 
 
 def polar(a_deg, r):
@@ -331,10 +340,22 @@ def bearing_mount():
     return m
 
 
-def pillars():
+def pillar_slot_dir(x, y):
+    """Nut slots open toward the nearest deck edge (away from the Pi and cables)."""
+    d = {0: DECK_X1 - x, 180: x - DECK_X0, 90: DECK_Y / 2 - y, 270: y + DECK_Y / 2}
+    return min(d, key=d.get)
+
+
+def pillars(top=True, bottom=True):
+    """v0.5.1: d10 pillars, through hole d3.4, M3 nut in a side slot 5 mm in from each end (M3x10 through the deck)."""
     p = None
     for x, y in PILLARS:
-        s = cyl_z(4.0, LOWER_TOP, -DECK_T, x, y).cut(cyl_z(1.4, LOWER_TOP - 1, 0, x, y))
+        a = pillar_slot_dir(x, y)
+        s = cyl_z(PILLAR_R, LOWER_TOP, -DECK_T, x, y).cut(cyl_z(1.7, LOWER_TOP - 1, 0, x, y))
+        if top:
+            s = s.cut(nut_slot(x, y, -DECK_T - 5.0, a, PILLAR_R + 2))
+        if bottom:
+            s = s.cut(nut_slot(x, y, LOWER_TOP + 5.0 - NUT_H, a, PILLAR_R + 2))
         p = s if p is None else p.union(s)
     return p
 
@@ -391,7 +412,7 @@ def pan_cage():
 # ----------------------------------------------------------------------------- printed parts: rotating
 def horn_coupler():
     """Rigid hub (v0.5): 4x M3x10 down into the horn (5 mm floor, tip ends 1 mm below the horn), 2x heat-set
-    inserts on top for the flexure hub. Only a 0.7 mm pad under the flexure hub touches the turntable."""
+    nuts in side slots for the flexure hub. Only a 0.7 mm pad under the flexure hub touches the turntable."""
     z0, z1 = PAN_HORN_Z + HORN_T, DISC_Z0 - FLEX_GAP          # horn top .. under the flexure frame
     c = cyl_z(HUB_R, z0, z1)
     hx, hy = FLEX_HUB
@@ -400,8 +421,9 @@ def horn_coupler():
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
         c = c.cut(cyl_z(1.7, z0 - 1, z1 + 1, x, y)).cut(cyl_z(3.1, z0 + 5.0, z1 + 1, x, y))
     c = c.cut(cyl_z(3.25, z0 - 1, z0 + 4.0))                 # horn spline-screw head
-    for x, y in HUB_SCREWS:
-        c = c.cut(cyl_z(2.1, DISC_Z0 - 5.5, DISC_Z0 + 1, x, y))   # M3 heat-set insert d4.2 x 5.5
+    for x, y in HUB_SCREWS:      # M3x10 from the flexure hub top (z+5) ends at DISC_Z0-5: nut sits just above
+        c = c.cut(cyl_z(1.7, DISC_Z0 - 6.0, DISC_Z0 + 1, x, y))
+        c = c.cut(nut_slot(x, y, DISC_Z0 + DISC_T - 10.0, 0 if x > 0 else 180, HUB_R))
     return c
 
 
@@ -429,6 +451,18 @@ def flexure_bodies(z0, z1):
     return pocket, {"hub": hub, "stage1": b1, "frame": frame, "stage2": b2}
 
 
+ARM_FOOT_T, ARM_FOOT_W = 6.0, 8.0
+
+
+def ARM_BOLTS(y_srv_in, y_idle_in):
+    return [(xb, y_srv_in - ARM_FOOT_W / 2) for xb in (-9.0, 9.0)] + [(xb, y_idle_in + ARM_FOOT_W / 2) for xb in (-9.0, 9.0)]
+
+
+def ARM_NUT_Z():
+    """Nut bottom = tip of an M3x10 seated on the foot top."""
+    return DISC_Z0 + DISC_T + ARM_FOOT_T - 10.0
+
+
 def turntable_yoke():
     """Turntable disc + bearing housing + arms. Returns (solid, y_srv_in, y_srv_out, y_idle_in)."""
     y_srv_in = CRADLE_HALF_Y + HORN_T + 1.0
@@ -449,6 +483,10 @@ def turntable_yoke():
     y = y.cut(pocket)
     for b in fb.values():
         y = y.union(b)
+    # arm bolts (v0.5.1): M3x10 down through the arm foot into a nut in a radial side slot in the disc
+    for x, yb in ARM_BOLTS(y_srv_in, y_idle_in):
+        y = y.cut(cyl_z(1.7, DISC_Z0 - 0.01 + 1.0, z_disc_top + 1, x, yb))
+        y = y.cut(nut_slot(x, yb, ARM_NUT_Z(), 90 if yb > 0 else 270, DISC_R))
     # arms
     arm_s = box(-ARM_W / 2, ARM_W / 2, y_srv_in, y_srv_out, z_disc_top - 0.1, H_TILT).union(
         cyl_y(ARM_W / 2, y_srv_in, y_srv_out, 0, H_TILT))
@@ -496,7 +534,7 @@ def turntable_yoke():
         y = y.cut(gr.cut(lug))
     # lightening pockets in the disc (keep the ring under the arms solid)
     pr = min(7.0, ANNULUS / 2 - 1.0)
-    for a in (40, -40, 155, -140, -60, 60):
+    for a in (40, -40, 155, -140):          # (+-60 dropped in v0.5.1: arm nut slots run there)
         if abs(((a - HOLE_BUS[0]) + 180) % 360 - 180) < 25 or abs(((a - HOLE_FPC[0]) + 180) % 360 - 180) < 25:
             continue
         x, yy = polar(a, R_MID)
@@ -593,14 +631,15 @@ def eye_plate():
 
 
 # ----------------------------------------------------------------------------- fasteners (bought, for checks/BOM)
-def m3(x, y, z_head, up=True, nut_z=None, length=10.0):
+def m3(x, y, z_head, up=True, nut_z=None, length=10.0, nut_rot=None):
     """M3 socket-head screw (head d5.5 x 3) with its seat at z_head, shank `length` toward +Z (up) or -Z."""
     sgn = 1 if up else -1
     head = cyl_z(2.75, z_head - 3.0, z_head) if up else cyl_z(2.75, z_head, z_head + 3.0)
     shank = cyl_z(1.5, *sorted((z_head, z_head + sgn * length)), x=0, y=0)
     out = head.union(shank).translate((x, y, 0))
     if nut_z is not None:
-        out = out.union(hex_z(NUT_AF, nut_z, nut_z + NUT_H, x, y, math.degrees(math.atan2(y, x)) + 30))
+        rot = math.degrees(math.atan2(y, x)) + 30 if nut_rot is None else nut_rot
+        out = out.union(hex_z(NUT_AF, nut_z, nut_z + NUT_H, x, y, rot))
     return out
 
 
@@ -618,8 +657,15 @@ def fasteners():
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
         f = m3(x, y, PAN_HORN_Z + HORN_T + 5.0, up=False)
         pan = f if pan is None else pan.union(f)
-    for x, y in HUB_SCREWS:              # flexure hub (DISC_T) -> insert in the rigid hub
-        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
+    for x, y in HUB_SCREWS:              # flexure hub (DISC_T) -> nut in the rigid hub
+        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False, nut_z=DISC_Z0 + DISC_T - 10.0, nut_rot=0))
+    y_srv_in, y_idle_in = CRADLE_HALF_Y + HORN_T + 1.0, -(CRADLE_HALF_Y + 2.0)
+    for x, y in ARM_BOLTS(y_srv_in, y_idle_in):   # foot (6) + disc: nut in the disc slot
+        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False, nut_z=ARM_NUT_Z(), nut_rot=90))
+    for x, y in PILLARS:                 # through each deck into the pillar-end nuts
+        a = pillar_slot_dir(x, y)
+        base = base.union(m3(x, y, 0.0, up=False, nut_z=-DECK_T - 5.0, nut_rot=a))
+        base = base.union(m3(x, y, LOWER_TOP - DECK_T, nut_z=LOWER_TOP + 5.0 - NUT_H, nut_rot=a))
     return base, pan
 
 

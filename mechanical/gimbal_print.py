@@ -2,7 +2,7 @@
 
 * The one-piece turntable+yoke of v0.3 is split into three prints so nothing needs support:
     turntable (printed upside down), arm_servo (printed standing on its foot) and arm_idle (printed lying on its flat outer face),
-    joined by 2x M3 screws per arm into heat-set inserts in the turntable.
+    joined by 2x M3x10 per arm down into nuts held in radial side slots in the turntable disc (v0.5.1).
 * Every printed part is written twice:
     step/<part>.step      solid in assembly coordinates (CATIA: open each, or open the assembly STEP)
     stl/<part>_print.stl  re-oriented for the build plate, lowest point at z=0
@@ -44,8 +44,8 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
     upper = yoke.cut(g.box(-big, big, -big, big, -big, z_top))
     arm_s = upper.intersect(g.box(-big, big, 0, big, z_top, big))
     arm_i = upper.intersect(g.box(-big, big, -big, 0, z_top, big))
-    # bolt-down feet on the inner side of each arm, 2x M3 clearance; inserts in the turntable
-    foot_t, foot_w = 6.0, 8.0          # 6 mm foot + 4 mm into the turntable insert = M3x10
+    # bolt-down feet on the inner side of each arm, 2x M3 clearance; nuts in the turntable side slots
+    foot_t, foot_w = g.ARM_FOOT_T, g.ARM_FOOT_W   # 6 mm foot + 4 mm into the disc nut = M3x10
     y_idle_out = y_idle_in - g.ARM_T_IDLE
     feet = {"s": (y_srv_in - foot_w, y_srv_out), "i": (y_idle_out, y_idle_in + foot_w)}
     bolts = []
@@ -62,22 +62,27 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
         else:
             arm_i = arm_i.union(f).cut(g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 30, -9, yb)).cut(
                 g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 30, 9, yb))
-    for xb, yb in bolts:   # M3 heat-set insert (d4.2 x 4.5) from the top face of the turntable
-        turntable = turntable.cut(g.cyl_z(2.1, z_top - 4.5, z_top + 1, xb, yb))
+    assert sorted(bolts) == sorted(g.ARM_BOLTS(y_srv_in, y_idle_in))   # holes + nut slots are cut in turntable_yoke
+    for xb, yb in bolts:   # bolt holes again after the union: the gussets filled them (bug since v0.4)
+        hole = g.cyl_z(1.7, z_top - 1, z_top + foot_t + 1, xb, yb)
+        arm_s, arm_i = arm_s.cut(hole), arm_i.cut(hole)
     return turntable, arm_s, arm_i
 
 
 def lower_deck_with_pillars():
     """Option (user, 11-02): lower deck and the four pillars as one print. Pillars grow out of the deck top
-    with a 3 mm cone at the root (r5.8, flush with the deck corner radius); the bottom screw holes are filled (4 fewer M3x10), the top keeps a
-    d2.8 x 12 pilot for the M3x10 that holds the top deck."""
+    with a 3 mm cone at the root; the bottom screws are dropped (4 fewer M3x10 + nuts), the top keeps the
+    v0.5.1 side nut slot for the M3x10 that comes down through the top deck."""
     out = g.lower_deck()
     for x, y in g.PILLARS:
         out = out.cut(g.cyl_z(1.8, g.LOWER_TOP - g.DECK_T - 1, g.LOWER_TOP + 1, x, y))      # old through hole
-        col = g.cyl_z(4.0, g.LOWER_TOP - g.DECK_T, -g.DECK_T, x, y)
-        root = cq.Workplane("XY").workplane(offset=g.LOWER_TOP).center(x, y).circle(5.8).workplane(offset=3.0).circle(4.0).loft()
+        col = g.cyl_z(g.PILLAR_R, g.LOWER_TOP - g.DECK_T, -g.DECK_T, x, y)
+        root = (cq.Workplane("XY").workplane(offset=g.LOWER_TOP).center(x, y).circle(g.PILLAR_R + 0.8)
+                .workplane(offset=3.0).circle(g.PILLAR_R).loft())
         out = out.union(col).union(root)
-        out = out.cut(g.cyl_z(1.4, -g.DECK_T - 12.0, 1, x, y))
+    out = out.cut(g.pillars(top=False, bottom=False).cut(g.pillars(top=True, bottom=False)))   # slots only
+    for x, y in g.PILLARS:
+        out = out.cut(g.cyl_z(1.7, -g.DECK_T - 14.0, 1, x, y))
     return out
 
 
