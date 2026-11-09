@@ -14,7 +14,7 @@ import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # pairs that touch by design (screw in a threaded/insert hole or a horn modelled as a solid disc)
-EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("tilt_servo", "tilt_horn"),
+EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("camera", "fasteners_tilt"),
             ("turntable_yoke", "fasteners_pan")}   # unsplit yoke has no arm-foot holes; checked on the split parts below
 
 
@@ -48,7 +48,7 @@ def main():
         v = e.overlap(e.mesh(n, sh), M["fasteners_pan"])
         if v > 0.5:
             res["static"].append(f"{n} x fasteners_pan {v:.1f} mm3")
-    mt = trimesh.boolean.union([M[n] for n in ["tilt_horn", "tilt_cradle", "camera", "eye_plate"]])
+    mt = trimesh.boolean.union([M[n] for n in ["tilt_horn", "tilt_cradle", "camera", "eye_plate", "fasteners_tilt"]])
     fixed = trimesh.boolean.union([M["turntable_yoke"], M["tilt_servo"], K["keepout tilt servo plugs"]])
     # baseline at 0 deg = spline inside the horn (by design); report what rotation adds on top of it
     base0 = e.overlap(mt, fixed)

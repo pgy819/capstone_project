@@ -1,8 +1,6 @@
 {
  "static": [
-  "lower_deck x pi5_stack 57.9 mm3",
-  "turntable_yoke x tilt_cradle 4.1 mm3",
-  "tilt_cradle x camera 11.3 mm3"
+  "turntable_yoke x tilt_cradle 4.1 mm3"
  ],
  "notes": [],
  "tilt_overlap_max_mm3": 0.0,

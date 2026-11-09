@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.5.2):
+"""Build the hand-off package of the current gimbal geometry (v0.5.3):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,7 +25,7 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v052"
+VER = "v053"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
@@ -57,6 +57,7 @@ BOUGHT = [
     ("B07", "pi5_stack", "Raspberry Pi 5 + 쿨러 + AI HAT+", "BASE"),
     ("B08", "fasteners_base", "M3 x 10 + M3 너트 (고정부)", "BASE"),
     ("B09", "fasteners_pan", "M3 x 10 + M3 너트 (Pan 회전부)", "PAN"),
+    ("B10", "fasteners_tilt", "M2 x 10 + M2 너트 (카메라)", "TILT"),
 ]
 PARAMS = [  # (name, description) -> value read from the generator
     ("DECK_T", "상판·하판 두께"), ("BASE_GAP", "상판 밑면 ~ 하판 윗면"), ("PILLAR_R", "기둥 반지름"),
@@ -166,6 +167,8 @@ def main():
             ("볼베어링", "6806-2RS 30×42×7", 1, "Pan 하중 지지"),
             ("나사", "M3 × 10 (한 종류)", "29 (일체형 하판 25)", "마운트 4, 케이지 3, 혼→강체 허브 4, 플렉셔 허브 2, 팔 4, Tilt 클램프 4, 기둥 8"),
             ("너트", "M3 육각 맞변 5.5 × 2.4", "25 (일체형 하판 21)", "육각 홈 7 (상판 3, 마운트 4), 옆 슬롯 18 (기둥 8, 팔 4, 강체 허브 2, 클램프 바 4)"),
+            ("나사 (Pi)", "M2.5 × 12", 4, "하판 아래에서 AI HAT+ 스페이서에 체결 (스페이서 없으면 M2.5 너트 4)"),
+            ("나사 + 너트 (카메라)", "M2 × 10 + M2 너트", "4 + 4", "크래들 뒷판 뒤 → 카메라 기판 앞 너트"),
             ("서보 동봉 나사", "혼용", 4, "크래들→Tilt 혼 4"),
             ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 500 mm", 1, "경로 약 380 mm"),
             ("서보 케이블", "5264-3P 900 mm", 1, "경로 약 360 mm"),

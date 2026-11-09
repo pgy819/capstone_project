@@ -1,4 +1,4 @@
-<title>2축 짐벌 v0.5.2</title>
+<title>2축 짐벌 v0.5.3</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -72,7 +72,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
   </div>
   <aside>
     <section>
-      <h1>상단부 2축 짐벌 v0.5.2</h1>
+      <h1>상단부 2축 짐벌 v0.5.3</h1>
       <p class="sub" id="lead"></p>
     </section>
     <section aria-labelledby="h-pose">
@@ -102,6 +102,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
         <tr><td>케이지 → 상판</td><td>M3 × 10 관통 + 너트 (상판 윗면 육각 홈)</td></tr>
         <tr><td>마운트 → 상판</td><td>M3 × 10 관통 + 너트 (탭 윗면 육각 홈)</td></tr>
         <tr><td>기둥 · 팔 · 허브</td><td>M3 × 10 관통 + 옆 슬롯 너트 (v0.5.1, 인서트 0개)</td></tr>
+        <tr><td>Pi · 카메라</td><td>M2.5 × 12 (Pi), M2 × 10 + 너트 (카메라) (v0.5.3)</td></tr>
         <tr><td>Tilt 서보 장착</td><td>혼이 팔 안쪽 U홈에 들어가고, 서보 뒷면을 클램프 바 2개로 눌러 고정 (v0.5.2, 실측 반영)</td></tr>
         <tr><td>Pan 구동</td><td>혼 → 강체 허브(M3 4개) → 플렉셔 허브(M3 2개) → 턴테이블</td></tr>
         <tr><td>축 정렬</td><td>마운트 바닥이 서보 출력 보스에 끼워져 6806과 서보 축이 같은 기준</td></tr>
@@ -170,6 +171,7 @@ const PARTS = [
   ["tilt_servo_clamp", "Tilt 서보 뒷면 클램프 바 ×2", "#4a86e8", "pan", 0],
   ["fasteners_base", "체결 부품 (M3 × 10, 너트) 고정부", "#d9bf4d", "base", 1],
   ["fasteners_pan", "체결 부품 (M3 × 10) Pan", "#d9bf4d", "pan", 1],
+  ["fasteners_tilt", "체결 부품 (M2 × 10, 카메라)", "#d9bf4d", "tilt", 1],
 ];
 const ROUTES = __ROUTES__;
 const EXPLORE = __EXPLORE__;
