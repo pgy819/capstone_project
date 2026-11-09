@@ -60,6 +60,7 @@ mechanical/
   explore_v03.py               설계공간 탐색
   recheck_v03.py               최종 후보 재검사 (시선 하향 한계, 시스템 무게중심)
   metrics_v04.py               Tilt축 높이 79 mm 유지 vs 63 mm 비교
+  make_package.py              CATIA용 STEP(조립·부품·파라미터) + 출력용 STL·출력 목록 묶음 생성 (파일 재검사 포함)
   checks_v05.py                v0.5 검수: 볼트·너트 포함 정적 간섭, Pan/Tilt 스윕, 스토퍼, 화각, 플렉셔 유동 여유
   publish_v05.py               3D 뷰어 HTML 생성 (publish_v04.py는 기록용)
   docs/PRINT_GUIDE.md          출력·조립 가이드
@@ -75,6 +76,7 @@ cd mechanical
 python gimbal_print.py     # print_v05/ 생성 (STEP, STL, 출력 보고서)
 python checks_v05.py       # 간섭·스윕·화각 검수 -> checks_v05.json
 python publish_v05.py      # viewer/gimbal_viewer_v05.html 생성
+python make_package.py     # gimbal_v051_package/ + .zip (01_CATIA, 02_PRINT, 03_DOCS)
 ```
 
 - **CATIA:** File → Open → `print_v05/gimbal_v05_assembly.step`. 부품마다 CATPart가 만들어진 CATProduct로 열립니다.
