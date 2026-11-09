@@ -127,9 +127,8 @@ ORIENT = {
     "tilt_cradle": [((0, 1, 0), -90)],       # back plate on the plate, camera standoffs up
     "fit_coupon": [],
     "lower_deck_with_pillars": [],           # option: replaces lower_deck + pillars, deck bottom on the plate
-    "eye_plate": [((0, 1, 0), -90)],
+    "eye_plate": [((0, 1, 0), -90)],          # back face on the plate, rim and engraving up
     "check_coupon": [],
-    "tilt_servo_clamp": [((1, 0, 0), 90)],   # servo-contact face on the plate, nut slots open upward         # back face on the plate, rim and engraving up
 }
 
 
