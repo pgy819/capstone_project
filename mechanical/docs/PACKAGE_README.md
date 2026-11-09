@@ -1,9 +1,9 @@
-# 상단부 2축 짐벌 v0.5.1 — CATIA 수정용 · 3D 프린팅용 묶음
+# 상단부 2축 짐벌 v0.5.2 — CATIA 수정용 · 3D 프린팅용 묶음
 
 ```text
 01_CATIA/
-  gimbal_v051_assembly.step   전체 조립 (BASE / PAN / TILT 하위 조립, 부품 이름·색 포함)
-  parts/      P01~P12, C01~C02  출력 부품 하나당 STEP 하나 (조립 좌표 그대로)
+  gimbal_v052_assembly.step   전체 조립 (BASE / PAN / TILT 하위 조립, 부품 이름·색 포함)
+  parts/      P01~P13, C01~C02  출력 부품 하나당 STEP 하나 (조립 좌표 그대로)
   reference/  B01~B09           구매 부품 형상 (서보, 6806, 혼, 카메라, Pi, 볼트·너트) — 간섭 확인용
   parameters.csv               형상을 결정하는 주요 치수 (원본 파이썬 변수 이름과 값)
 02_PRINT/
@@ -24,7 +24,7 @@
 
 ## CATIA에서 열고 수정하기
 
-1. **조립 전체:** File → Open → `gimbal_v051_assembly.step`. CATProduct가 만들어지고, 그 아래 BASE, PAN, TILT(PAN 아래) 제품과 부품별 CATPart가 생깁니다. 바로 File → Save All As로 CATProduct/CATPart로 저장해 두세요.
+1. **조립 전체:** File → Open → `gimbal_v052_assembly.step`. CATProduct가 만들어지고, 그 아래 BASE, PAN, TILT(PAN 아래) 제품과 부품별 CATPart가 생깁니다. 바로 File → Save All As로 CATProduct/CATPart로 저장해 두세요.
 2. **회전부 움직여 보기:** PAN은 Z축, TILT는 Y축(높이 79 mm) 둘레로 돌리면 됩니다. Assembly Design에서 Manipulation(회전, 축 지정)으로 돌리고, Analyze → Clash로 간섭을 확인할 수 있습니다.
 3. **부품 수정:** STEP으로 들어온 부품은 히스토리가 없는 솔리드 하나(PartBody)입니다. Part Design에서 그 위에 피처를 더하는 방식으로 고칩니다.
    - 구멍·홈 추가: 면 위에 스케치 → Pocket / Hole.
@@ -48,4 +48,4 @@
 
 ## 실측 전 가정값
 
-서보 외형·출력 보스 지름(9 mm)·혼 나사 원(반지름 8 mm), 카메라 장착 구멍, Pi 스택 높이는 실측 전 가정값입니다. 실물과 다르면 `parameters.csv`의 해당 값을 소스에서 고쳐 다시 만드세요.
+서보 축 면 아래 턱이 들어간 폭·혼 나사 원(반지름 8 mm), 카메라 장착 구멍, Pi 스택 높이는 실측 전 가정값입니다. 실물과 다르면 `parameters.csv`의 해당 값을 소스에서 고쳐 다시 만드세요.

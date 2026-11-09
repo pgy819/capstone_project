@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.5.1):
+"""Build the hand-off package of the current gimbal geometry (v0.5.2):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,13 +25,13 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v051"
+VER = "v052"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
 # part number, source name, Korean name, group, qty, print orientation, settings, order
 PRINTED = [
-    ("C01", "check_coupon", "확인 쿠폰 (보스 끼움·너트 홈·플렉셔 틈)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
+    ("C01", "check_coupon", "확인 쿠폰 (너트 홈·플렉셔 틈)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
     ("C02", "fit_coupon", "공차 쿠폰 (6806 축·구멍)", "-", 1, "그대로", "PLA 30 %, 층 0.2", 1),
     ("P01", "top_deck", "상판", "BASE", 1, "조립 방향 그대로", "충전 25 %, 벽 3", 2),
     ("P02", "lower_deck", "하판", "BASE", 1, "조립 방향 그대로", "충전 25 %, 벽 3", 2),
@@ -45,6 +45,7 @@ PRINTED = [
     ("P10", "arm_idle", "부싱쪽 팔", "PAN", 1, "바깥면이 바닥(눕혀서)", "충전 60 %, 벽 4", 4),
     ("P11", "tilt_cradle", "Tilt 크래들", "TILT", 1, "뒷판이 바닥", "충전 60 %, 벽 4", 4),
     ("P12", "eye_plate", "눈 장식판", "TILT", 1, "뒷면이 바닥", "충전 100 %, 층 0.12 권장", 4),
+    ("P13", "tilt_servo_clamp", "Tilt 서보 뒷면 클램프 바 (2개 한 파일)", "PAN", 1, "서보 닿는 면이 바닥", "충전 100 %", 4),
 ]
 BOUGHT = [
     ("B01", "pan_servo", "Feetech STS3215 (Pan, ID 1)", "BASE"),
@@ -61,10 +62,10 @@ PARAMS = [  # (name, description) -> value read from the generator
     ("DECK_T", "상판·하판 두께"), ("BASE_GAP", "상판 밑면 ~ 하판 윗면"), ("PILLAR_R", "기둥 반지름"),
     ("H_TILT", "Tilt축 높이 (상판 윗면 기준)"), ("WRAP_R_OUT", "케이블 채널 바깥 반지름"), ("DISC_R", "턴테이블 반지름"),
     ("DISC_T", "턴테이블 두께"), ("TUBE_ID", "베어링 튜브 안지름"), ("TUBE_TOP", "베어링 튜브 위 높이"),
-    ("FIT_SHAFT", "6806 축 반지름 여유"), ("FIT_BORE", "6806 구멍 반지름 여유"), ("PILOT_CLR", "서보 보스 끼움 반지름 여유"),
+    ("FIT_SHAFT", "6806 축 반지름 여유"), ("FIT_BORE", "6806 구멍 반지름 여유"), ("SV_H", "서보 높이 (뒷면~축 면, 실측)"), ("SV_BOSS_H", "톱니 돌출 (실측 2~3)"),
     ("NUT_POCKET_AF", "너트 홈·슬롯 맞변"), ("NUT_POCKET_H", "너트 홈 깊이"), ("EAR_CLAMP", "케이지 귀 체결 두께"),
     ("FLEX_T", "플렉셔 판 두께"), ("FLEX_GAP", "플렉셔 틈"), ("FLEX_H2", "2단 판 높이"),
-    ("HUB_R", "강체 허브 반지름"), ("HORN_SCREW_R", "혼 나사 원 반지름"), ("SV_BOSS_D", "서보 출력 보스 지름"),
+    ("HUB_R", "강체 허브 반지름"), ("HORN_SCREW_R", "혼 나사 원 반지름"), ("ARM_T_SERVO", "Tilt 서보쪽 팔 판 두께"), ("HORN_HOLE_R", "팔 판 혼 U홈 반지름"),
     ("PUPIL_R", "눈 동공 반지름"), ("EYE_A", "눈 반폭"), ("EYE_B", "눈 반높이"),
     ("TILT_PIN_D", "Tilt 출력 핀 지름"), ("BUSH_PRELOAD", "Tilt 부싱 예압"), ("PAN_SOFT_LIMIT", "Pan 소프트 리밋 [deg]"),
 ]
@@ -89,7 +90,7 @@ def main():
                   fit_coupon=gp.fit_coupon())
     orient = dict(gp.ORIENT, pillar=[])
     colors = {n: v[1] for n, v in parts.items()}
-    colors.update(turntable=(0.20, 0.45, 0.85), arm_servo=(0.25, 0.50, 0.90), arm_idle=(0.25, 0.50, 0.90),
+    colors.update(tilt_servo_clamp=(0.25, 0.50, 0.90), turntable=(0.20, 0.45, 0.85), arm_servo=(0.25, 0.50, 0.90), arm_idle=(0.25, 0.50, 0.90),
                   pillar=(0.55, 0.57, 0.60))
 
     if os.path.exists(PKG):
@@ -163,9 +164,9 @@ def main():
         for row in [
             ("서보", "Feetech STS3215", 2, "Pan ID 1, Tilt ID 2 (혼·동봉 나사 포함)"),
             ("볼베어링", "6806-2RS 30×42×7", 1, "Pan 하중 지지"),
-            ("나사", "M3 × 10 (한 종류)", "25 (일체형 하판 21)", "마운트 4, 케이지 3, 혼→강체 허브 4, 플렉셔 허브 2, 팔 4, 기둥 8"),
-            ("너트", "M3 육각 맞변 5.5 × 2.4", "21 (일체형 하판 17)", "육각 홈 7 (상판 3, 마운트 4), 옆 슬롯 14 (기둥 8, 팔 4, 강체 허브 2)"),
-            ("서보 동봉 나사", "혼·케이스용", 8, "크래들→Tilt 혼 4, Tilt 서보→팔 4"),
+            ("나사", "M3 × 10 (한 종류)", "29 (일체형 하판 25)", "마운트 4, 케이지 3, 혼→강체 허브 4, 플렉셔 허브 2, 팔 4, Tilt 클램프 4, 기둥 8"),
+            ("너트", "M3 육각 맞변 5.5 × 2.4", "25 (일체형 하판 21)", "육각 홈 7 (상판 3, 마운트 4), 옆 슬롯 18 (기둥 8, 팔 4, 강체 허브 2, 클램프 바 4)"),
+            ("서보 동봉 나사", "혼용", 4, "크래들→Tilt 혼 4"),
             ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 500 mm", 1, "경로 약 380 mm"),
             ("서보 케이블", "5264-3P 900 mm", 1, "경로 약 360 mm"),
         ]:

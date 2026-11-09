@@ -45,27 +45,24 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
     arm_s = upper.intersect(g.box(-big, big, 0, big, z_top, big))
     arm_i = upper.intersect(g.box(-big, big, -big, 0, z_top, big))
     # bolt-down feet on the inner side of each arm, 2x M3 clearance; nuts in the turntable side slots
-    foot_t, foot_w = g.ARM_FOOT_T, g.ARM_FOOT_W   # 6 mm foot + 4 mm into the disc nut = M3x10
-    y_idle_out = y_idle_in - g.ARM_T_IDLE
-    feet = {"s": (y_srv_in - foot_w, y_srv_out), "i": (y_idle_out, y_idle_in + foot_w)}
-    bolts = []
+    foot_t = g.ARM_FOOT_T              # 6 mm foot + 4 mm into the disc nut = M3x10
+    feet = g.ARM_FEET()
+    bolts = g.ARM_BOLTS()
     for key, (y0, y1) in feet.items():
         f = g.box(-g.ARM_W / 2, g.ARM_W / 2, y0, y1, z_top, z_top + foot_t)
-        yb = (y_srv_in - foot_w / 2) if key == "s" else (y_idle_in + foot_w / 2)
-        for xb in (-9.0, 9.0):
-            f = f.cut(g.cyl_z(1.7, z_top - 1, z_top + foot_t + 1, xb, yb))
-            f = f.cut(g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 30, xb, yb))   # head clearance through gussets
-            bolts.append((xb, yb))
+        cut = None
+        for xb, yb in bolts:
+            if (yb > 0) != (key == "s"):
+                continue
+            c = g.cyl_z(1.7, z_top - 1, z_top + foot_t + 1, xb, yb).union(
+                g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 40, xb, yb))      # shank + head clearance through gussets
+            cut = c if cut is None else cut.union(c)
         if key == "s":
-            arm_s = arm_s.union(f).cut(g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 30, -9, yb)).cut(
-                g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 30, 9, yb))
+            arm_s = arm_s.union(f).clean().cut(cut).clean()
         else:
-            arm_i = arm_i.union(f).cut(g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 30, -9, yb)).cut(
-                g.cyl_z(3.1, z_top + foot_t - 0.01, z_top + 30, 9, yb))
-    assert sorted(bolts) == sorted(g.ARM_BOLTS(y_srv_in, y_idle_in))   # holes + nut slots are cut in turntable_yoke
-    for xb, yb in bolts:   # bolt holes again after the union: the gussets filled them (bug since v0.4)
-        hole = g.cyl_z(1.7, z_top - 1, z_top + foot_t + 1, xb, yb)
-        arm_s, arm_i = arm_s.cut(hole), arm_i.cut(hole)
+            arm_i = arm_i.union(f).clean().cut(cut).clean()
+    for a in (arm_s, arm_i):
+        assert a.val().Volume() > 1000, "arm boolean failed"
     return turntable, arm_s, arm_i
 
 
@@ -102,12 +99,9 @@ def fit_coupon():
 
 def check_coupon():
     """v0.5 fit checks before the big prints (about 4 g), left to right:
-    servo-boss pilot bores d9.2/9.3/9.4/9.5 (pick the one that slides on the boss without play),
     M3 nut pockets AF 5.6/5.8/6.0 (pick the one the nut presses into by hand),
     flexure slots 0.6/0.7/0.8 mm beside 1.2 mm blades (the blade must move freely after printing)."""
     base = g.box(0, 70, 0, 22, 0, 3)
-    for i, d in enumerate((9.2, 9.3, 9.4, 9.5)):
-        base = base.cut(g.cyl_z(d / 2, -1, 4, 7 + i * 11.5, 15))
     for i, af in enumerate((5.6, 5.8, 6.0)):
         base = base.cut(g.cyl_z(1.7, -1, 4, 7 + i * 11.5, 5)).cut(g.hex_z(af, 3 - 2.6, 4, 7 + i * 11.5, 5))
     # flexure slots: three blades 1.2 x 3 x 12 standing on a shared root, each with its own slot width
@@ -134,7 +128,8 @@ ORIENT = {
     "fit_coupon": [],
     "lower_deck_with_pillars": [],           # option: replaces lower_deck + pillars, deck bottom on the plate
     "eye_plate": [((0, 1, 0), -90)],
-    "check_coupon": [],         # back face on the plate, rim and engraving up
+    "check_coupon": [],
+    "tilt_servo_clamp": [((1, 0, 0), 90)],   # servo-contact face on the plate, nut slots open upward         # back face on the plate, rim and engraving up
 }
 
 

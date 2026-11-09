@@ -5,11 +5,11 @@
   "tilt_cradle x camera 11.3 mm3"
  ],
  "notes": [],
- "tilt_overlap_max_mm3": 4.13,
+ "tilt_overlap_max_mm3": 0.0,
  "pan_overlap_max_mm3": 0.0,
  "stop_deg": 168,
  "fov_self": {
-  "-30": 0.1491,
+  "-30": 0.1852,
   "0": 0.0,
   "30": 0.0
  },
@@ -28,11 +28,11 @@
  },
  "boresight_down_deg": -38,
  "volumes_cm3": {
-  "horn_coupler": 4.84,
-  "turntable_yoke": 46.0,
-  "bearing_mount": 28.87,
-  "pan_cage": 23.12,
-  "top_deck": 74.45,
+  "horn_coupler": 6.22,
+  "turntable_yoke": 54.68,
+  "bearing_mount": 27.86,
+  "pan_cage": 21.9,
+  "top_deck": 74.47,
   "eye_plate": 0.47
  }
 }

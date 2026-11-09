@@ -32,9 +32,12 @@ import cadquery as cq
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out_v03")
 
 # ----------------------------------------------------------------------------- purchased parts [mm]
-SV_L, SV_W, SV_H = 45.2, 24.7, 35.0      # STS3215 case [VERIFY: sources disagree]
+SV_L, SV_W = 45.2, 24.7                  # STS3215 case (user measured 45 x 24, 11-09)
+SV_H = 33.0                              # back face -> shaft face (user, 11-09: 33 at the face, 30 at the ledge)
+SV_CAP_H, SV_CAP_INSET = 3.0, 1.0        # shaft-face cap above the ledge; inset per side [VERIFY inset]
 SV_SHAFT_FROM_END = 11.2                 # shaft centre from the near end [VERIFY]
-SV_BOSS_H, SV_BOSS_D = 4.0, 9.0          # output boss [VERIFY]
+SV_BOSS_H, SV_BOSS_D = 2.5, 9.0          # spline above the shaft face (user, 11-09: 2-3 mm) [VERIFY d]
+HORN_GAP = 0.5                           # horn underside above the shaft face
 SV_CONN_W, SV_CONN_H, SV_CONN_D = 16.0, 7.0, 6.0   # two 5264-3P sockets side by side [VERIFY]
 SV_CONN_X = (SV_L - 2 * SV_SHAFT_FROM_END) / 2  # centre of the wide face opposite the horn (user, 11-02) [VERIFY]
 SV_PLUG = 14.0                                      # plug + cable bend room out of that face
@@ -68,7 +71,7 @@ BASE_GAP = 55.0                          # top-deck underside -> lower-deck top
 LOWER_TOP = -DECK_T - BASE_GAP
 
 SV_TOP = 0.0                             # pan servo case top flush with the deck surface (clears the channel floor)
-PAN_HORN_Z = SV_TOP + SV_BOSS_H          # 4
+PAN_HORN_Z = SV_TOP + HORN_GAP           # horn sits on the spline right above the case (v0.5.2)
 TUBE_ID, TUBE_TOP = 27.0, 21.0           # fixed bearing tube (horn d24 turns inside it)
 SHOULDER_R, SHOULDER_Z = 17.0, 14.0      # inner race seat
 WRAP_R_OUT, WRAP_WALL = 44.0, 3.0        # cable channel outer wall
@@ -88,11 +91,14 @@ HOLE_BUS = (128.0, 36.0)
 DECK_EXIT = (180.0, 35.0)                # where cables leave the channel downward
 
 H_TILT = 58.0
-ARM_W, ARM_T_SERVO, ARM_T_IDLE = 30.0, 4.0, 6.0
+ARM_W, ARM_T_SERVO, ARM_T_IDLE = 30.0, 3.5, 6.0
 SADDLE_H, SADDLE_CLR = 2.5, 0.2          # torque-reaction pocket around the tilt servo case
-SV_CASE_HOLES = ((-6.0, 8.0), (-6.0, -8.0), (26.0, 8.0), (26.0, -8.0))   # servo frame, on the boss face [VERIFY]
+SV_CASE_HOLES = ()                       # v0.5.2: servo held by two clamp bars instead (hole pattern unknown)
+HORN_HOLE_R = HORN_D / 2 + 1.0           # U-cut in the servo arm: the horn turns inside the arm plate
+CLAMP_BARS = ((-10.5, -1.5), (25.5, 34.5))   # servo-frame L ranges of the back clamp bars (connectors at 5.9-16.9)
+CLAMP_T, CLAMP_POST_T = 8.0, 3.0         # bar depth behind the servo, post (side wall) thickness
 CRADLE_HALF_Y, CRADLE_WALL = 16.0, 2.5               # camera 25 wide + 0.5 clearance each side
-Y_SRV_OUT = CRADLE_HALF_Y + HORN_T + 1.0 + ARM_T_SERVO   # tilt servo case face (outer face of the servo arm)
+Y_SRV_OUT = CRADLE_HALF_Y + HORN_T + HORN_GAP   # tilt servo shaft face = outer face of the servo arm (v0.5.2)
 CRADLE_X0, CRADLE_X1, CRADLE_HALF_Z = -13.0, 9.0, 18.0     # walls run 2 mm past the lens to hold the eye plate
 EYE = True                               # decorative eye plate in front of the camera (lens = pupil)
 EYE_X0, EYE_T = 6.0, 1.4                 # plate back face (lens front is at x=5.4) and thickness
@@ -120,7 +126,7 @@ NUT_AF, NUT_H = 5.5, 2.4                 # M3 nut across flats / height (ISO 403
 NUT_POCKET_AF, NUT_POCKET_H = 5.8, 2.6
 EAR_CLAMP = 5.0                          # ear material under the deck (5 + deck 5 = M3x10)
 CAGE_BOLTS = ((42.0, 11.0), (42.0, -11.0), (-20.0, 0.0))   # outside the mount floor / clear of the shoulder
-BOSS_PILOT = True                        # mount floor locates on the servo output boss -> 6806 coaxial with the shaft
+BOSS_PILOT = False                       # v0.5.2: horn sits 0.5 mm above the case (2.5 mm spline), no room                        # mount floor locates on the servo output boss -> 6806 coaxial with the shaft
 PILOT_CLR = 0.15                         # radius clearance on the boss [VERIFY boss d with a caliper]
 
 
@@ -227,7 +233,9 @@ def arc_slot(a_deg, r, tang, rad, z0, z1):
 # ----------------------------------------------------------------------------- purchased-part envelopes
 def servo_z_up():
     """Shaft on +Z at (0,0); case top face at z=0; L along +x; connectors on the bottom face (-Z, opposite the horn)."""
-    body = box(-SV_SHAFT_FROM_END, SV_L - SV_SHAFT_FROM_END, -SV_W / 2, SV_W / 2, -SV_H, 0).edges("|Z").fillet(2.0)
+    body = box(-SV_SHAFT_FROM_END, SV_L - SV_SHAFT_FROM_END, -SV_W / 2, SV_W / 2, -SV_H, -SV_CAP_H).edges("|Z").fillet(2.0)
+    i = SV_CAP_INSET
+    body = body.union(box(-SV_SHAFT_FROM_END + i, SV_L - SV_SHAFT_FROM_END - i, -SV_W / 2 + i, SV_W / 2 - i, -SV_CAP_H - 0.01, 0))
     boss = cyl_z(SV_BOSS_D / 2, 0, SV_BOSS_H)
     conn = box(SV_CONN_X - SV_CONN_H / 2, SV_CONN_X + SV_CONN_H / 2, -SV_CONN_W / 2, SV_CONN_W / 2, -SV_H - 2.0, -SV_H + 0.5)
     return body.union(boss).union(conn)
@@ -298,7 +306,7 @@ def top_deck():
         deck = deck.cut(hex_z(NUT_POCKET_AF, -NUT_POCKET_H, 1, sx, sy, math.degrees(math.atan2(sy, sx)) + 30))
     for a in MOUNT_TAB_ANGLES:     # bearing-mount through-bolts, head under the deck; d3.6 so the boss pilot governs
         x, y = polar(a, MOUNT_TAB_R)
-        deck = deck.cut(cyl_z(1.8, -DECK_T - 1, 1, x, y))
+        deck = deck.cut(cyl_z(1.8 if BOSS_PILOT else 1.7, -DECK_T - 1, 1, x, y))
     # open window over the Pi (user, 11-02): cooling air + room for more cables; rim kept clear of the
     # pillar holes, bearing-mount tabs, Stage-2 M4 holes and the FPC drop
     if PI_WINDOW:
@@ -411,7 +419,7 @@ def pan_cage():
 
 # ----------------------------------------------------------------------------- printed parts: rotating
 def horn_coupler():
-    """Rigid hub (v0.5): 4x M3x10 down into the horn (5 mm floor, tip ends 1 mm below the horn), 2x heat-set
+    """Rigid hub (v0.5): 4x M3x10 down into the horn (6 mm floor, tip ends at the horn underside), 2x heat-set
     nuts in side slots for the flexure hub. Only a 0.7 mm pad under the flexure hub touches the turntable."""
     z0, z1 = PAN_HORN_Z + HORN_T, DISC_Z0 - FLEX_GAP          # horn top .. under the flexure frame
     c = cyl_z(HUB_R, z0, z1)
@@ -419,7 +427,7 @@ def horn_coupler():
     c = c.union(box(-hx + 0.5, hx - 0.5, -hy + 0.5, hy - 0.5, z1 - 0.01, DISC_Z0))   # contact pad under the hub
     for a in range(4):
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
-        c = c.cut(cyl_z(1.7, z0 - 1, z1 + 1, x, y)).cut(cyl_z(3.1, z0 + 5.0, z1 + 1, x, y))
+        c = c.cut(cyl_z(1.7, z0 - 1, z1 + 1, x, y)).cut(cyl_z(3.1, z0 + 6.0, z1 + 1, x, y))
     c = c.cut(cyl_z(3.25, z0 - 1, z0 + 4.0))                 # horn spline-screw head
     for x, y in HUB_SCREWS:      # M3x10 from the flexure hub top (z+5) ends at DISC_Z0-5: nut sits just above
         c = c.cut(cyl_z(1.7, DISC_Z0 - 6.0, DISC_Z0 + 1, x, y))
@@ -454,8 +462,76 @@ def flexure_bodies(z0, z1):
 ARM_FOOT_T, ARM_FOOT_W = 6.0, 8.0
 
 
-def ARM_BOLTS(y_srv_in, y_idle_in):
-    return [(xb, y_srv_in - ARM_FOOT_W / 2) for xb in (-9.0, 9.0)] + [(xb, y_idle_in + ARM_FOOT_W / 2) for xb in (-9.0, 9.0)]
+def clamp_geom():
+    """Back clamp of the tilt servo (v0.5.2). Returns (x_in, x_out, y_back, bars) in assembly coords, bars as z ranges."""
+    x_in = SV_W / 2 + 0.25
+    x_out = x_in + CLAMP_POST_T
+    y_back = Y_SRV_OUT + SV_H
+    bars = [(H_TILT - l1, H_TILT - l0) for l0, l1 in CLAMP_BARS]
+    return x_in, x_out, y_back, bars
+
+
+def clamp_walls(z_floor):
+    """Side walls carrying the clamp bars, standing on the disc top so the arm still prints upright without
+    support; two windows with 45-degree peaked tops lighten them and let the bus cable leave sideways."""
+    x_in, x_out, y_back, bars = clamp_geom()
+    y0, y1 = Y_SRV_OUT - 0.1, y_back + CLAMP_T
+    z_top = max(z1 for _, z1 in bars)
+    (lo0, lo1), (hi0, hi1) = sorted(bars)
+    out = None
+    for sg in (1, -1):
+        xa, xb = sorted((sg * x_in, sg * x_out))
+        w = box(xa, xb, y0, y1, z_floor, z_top)
+        for zb, zt in ((z_floor + 3.0, lo0 - 3.0), (lo1 + 3.0, hi0 - 3.0)):
+            ya, yb = y0 + 5.0, y1 - 5.0
+            half = (yb - ya) / 2
+            z_side = zt - half
+            if z_side < zb + 2.0:              # window too low for a full peak: narrow it
+                half = (zt - zb - 2.0)
+                ya, yb = (ya + yb) / 2 - half, (ya + yb) / 2 + half
+                z_side = zt - half
+            pts = [(ya, zb), (yb, zb), (yb, z_side), ((ya + yb) / 2, zt), (ya, z_side)]
+            win = cq.Workplane("YZ").polyline(pts).close().extrude(xb - xa + 2).translate((xa - 1, 0, 0))
+            w = w.cut(win)
+        out = w if out is None else out.union(w)
+    return out
+
+
+def clamp_bolts():
+    """(x of the head seat, y, z) of each M3x10; heads outside the posts, shank pointing to the servo centre."""
+    x_in, x_out, y_back, bars = clamp_geom()
+    return [(sg * x_out, y_back + CLAMP_T / 2, (z0 + z1) / 2) for z0, z1 in bars for sg in (1, -1)]
+
+
+def tilt_servo_clamp():
+    """Two bars across the servo back face (separate print), each held by an M3x10 from each post into a nut
+    in a slot open to the back. Bars press the servo shaft face against the arm plate."""
+    x_in, x_out, y_back, bars = clamp_geom()
+    out = None
+    for z0, z1 in bars:
+        zc = (z0 + z1) / 2
+        b = box(-(x_in - 0.2), x_in - 0.2, y_back, y_back + CLAMP_T, z0, z1)
+        yb = y_back + CLAMP_T / 2
+        b = b.cut(cyl_x(1.7, -x_in, x_in, zc, yb))
+        tip = x_out - 10.0
+        for sg in (1, -1):
+            xa, xb = sorted((sg * (tip - 0.1), sg * (tip + NUT_POCKET_H - 0.1)))
+            b = b.cut(box(xa, xb, yb - NUT_AF / math.sqrt(3) - 0.1, y_back + CLAMP_T + 1, zc - NUT_POCKET_AF / 2, zc + NUT_POCKET_AF / 2))
+        out = b if out is None else out.union(b)
+    return out
+
+
+def ARM_FEET():
+    """y ranges of the bolt-down feet: servo foot kept clear of the flexure pocket (y > 9.3 + 0.7)."""
+    y_srv_out, y_idle_in = Y_SRV_OUT, -(CRADLE_HALF_Y + 2.0)
+    return {"s": (max(Y_SRV_OUT - ARM_T_SERVO - ARM_FOOT_W, 10.0), y_srv_out),
+            "i": (y_idle_in - ARM_T_IDLE, y_idle_in + ARM_FOOT_W)}
+
+
+def ARM_BOLTS(*_):
+    f = ARM_FEET()
+    ys, yi = (f["s"][0] + f["s"][1]) / 2, -(CRADLE_HALF_Y + 2.0) + ARM_FOOT_W / 2
+    return [(xb, ys) for xb in (-9.0, 9.0)] + [(xb, yi) for xb in (-9.0, 9.0)]
 
 
 def ARM_NUT_Z():
@@ -465,9 +541,9 @@ def ARM_NUT_Z():
 
 def turntable_yoke():
     """Turntable disc + bearing housing + arms. Returns (solid, y_srv_in, y_srv_out, y_idle_in)."""
-    y_srv_in = CRADLE_HALF_Y + HORN_T + 1.0
+    y_srv_out = Y_SRV_OUT
+    y_srv_in = y_srv_out - ARM_T_SERVO
     y_idle_in = -(CRADLE_HALF_Y + 2.0)
-    y_srv_out = y_srv_in + ARM_T_SERVO
     y_idle_out = y_idle_in - ARM_T_IDLE
     z_disc_top = DISC_Z0 + DISC_T
     disc = cyl_z(DISC_R, DISC_Z0, z_disc_top)
@@ -484,7 +560,7 @@ def turntable_yoke():
     for b in fb.values():
         y = y.union(b)
     # arm bolts (v0.5.1): M3x10 down through the arm foot into a nut in a radial side slot in the disc
-    for x, yb in ARM_BOLTS(y_srv_in, y_idle_in):
+    for x, yb in ARM_BOLTS():
         y = y.cut(cyl_z(1.7, DISC_Z0 - 0.01 + 1.0, z_disc_top + 1, x, yb))
         y = y.cut(nut_slot(x, yb, ARM_NUT_Z(), 90 if yb > 0 else 270, DISC_R))
     # arms
@@ -513,7 +589,14 @@ def turntable_yoke():
     saddle = saddle.cut(box(bx0 - SADDLE_CLR, bx1 + SADDLE_CLR, y_srv_out - 1, y_srv_out + SADDLE_H + 1,
                             -100, bz1 + SADDLE_CLR))                    # open at the bottom (cable side)
     y = y.union(saddle)
-    y = y.cut(cyl_y(SV_BOSS_D / 2 + 1.0, y_srv_in - 1, y_srv_out + 1, 0, H_TILT))
+    # v0.5.2: the spline stands only 2.5 mm proud, so the horn has to sit inside the arm plate: U-cut open upward
+    # (no overhang when the arm prints standing). The servo shaft face bears on the plate below the horn.
+    y = y.cut(cyl_y(HORN_HOLE_R, y_srv_in - 1, y_srv_out + 1, 0, H_TILT))
+    y = y.cut(box(-HORN_HOLE_R, HORN_HOLE_R, y_srv_in - 1, y_srv_out + 1, H_TILT, H_TILT + 50))
+    # back clamp: a post on each side of the servo per bar, the bar (separate print) is bolted across the back
+    y = y.union(clamp_walls(z_disc_top - 0.1))
+    for (xs, yb, zb) in clamp_bolts():
+        y = y.cut(cyl_x(1.7, xs - 6, xs + 6, zb, yb))
     # case screw pattern defined in the servo frame [VERIFY] and carried through the same transform as the body
     # (v0.4 fix: the old pattern was fixed in assembly coords for the "back" orientation, so with the body
     #  hanging down two holes fell outside the arm and only one side was screwed)
@@ -655,13 +738,20 @@ def fasteners():
     pan = None
     for a in range(4):                   # rigid hub -> horn: 5 mm floor + 4 mm horn, tip 1 mm below the horn
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
-        f = m3(x, y, PAN_HORN_Z + HORN_T + 5.0, up=False)
+        f = m3(x, y, PAN_HORN_Z + HORN_T + 6.0, up=False)
         pan = f if pan is None else pan.union(f)
     for x, y in HUB_SCREWS:              # flexure hub (DISC_T) -> nut in the rigid hub
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False, nut_z=DISC_Z0 + DISC_T - 10.0, nut_rot=0))
-    y_srv_in, y_idle_in = CRADLE_HALF_Y + HORN_T + 1.0, -(CRADLE_HALF_Y + 2.0)
-    for x, y in ARM_BOLTS(y_srv_in, y_idle_in):   # foot (6) + disc: nut in the disc slot
+    for x, y in ARM_BOLTS():   # foot (6) + disc: nut in the disc slot
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False, nut_z=ARM_NUT_Z(), nut_rot=90))
+    for xs, yb, zb in clamp_bolts():     # tilt-servo clamp bars: post (3) + bar (7), nut in the bar slot
+        sg = 1 if xs > 0 else -1
+        head = cyl_x(2.75, *sorted((xs, xs + sg * 3.0)), zb, yb)
+        shank = cyl_x(1.5, *sorted((xs, xs - sg * 10.0)), zb, yb)
+        tip = xs - sg * 10.0
+        nut = (cq.Workplane("YZ").polygon(6, NUT_AF / math.cos(math.pi / 6)).extrude(NUT_H)
+               .translate((min(tip, tip + sg * NUT_H), yb, zb)))   # corners along y (slot direction)
+        pan = pan.union(head).union(shank).union(nut)
     for x, y in PILLARS:                 # through each deck into the pillar-end nuts
         a = pillar_slot_dir(x, y)
         base = base.union(m3(x, y, 0.0, up=False, nut_z=-DECK_T - 5.0, nut_rot=a))
@@ -726,6 +816,7 @@ def build(export=True):
     if EYE:
         parts["eye_plate"] = (eye_plate(), (0.85, 0.20, 0.10), True, "tilt")
     parts["camera"] = (camera_module().translate((CAM_BACK_X, 0, H_TILT)), (0.10, 0.45, 0.25), False, "tilt")
+    parts["tilt_servo_clamp"] = (tilt_servo_clamp(), (0.25, 0.50, 0.90), True, "pan")
     fb, fp = fasteners()
     parts["fasteners_base"] = (fb, (0.85, 0.75, 0.30), False, "base")
     parts["fasteners_pan"] = (fp, (0.85, 0.75, 0.30), False, "pan")
