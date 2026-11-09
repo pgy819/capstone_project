@@ -1,6 +1,11 @@
 """RCWS Stage 1 upper mechanism - 2-axis Pan/Tilt gimbal, v0.3 design-space generator (parametric, CadQuery).
 
 configure(wrap_r=..., stop="rim"|"groove", tilt_orient="back"|"down"|"up") sets the variant; build() makes it.
+
+v0.5 (11-09, user): cage and bearing mount through-bolted to the deck (M3x10 + nuts in printed hex pockets,
+no inserts there); pan drive horn -> rigid hub -> two-stage parallelogram flexure in the turntable (replaces
+the pin-and-slot coupler and its creep-prone spring preload); mount floor pilots on the servo output boss so
+the 6806 and the servo shaft share one datum; eye pupil widened to r 8.4.
 v0.2 notes follow.
 
 Changes from v0.1
@@ -67,8 +72,15 @@ TUBE_ID, TUBE_TOP = 27.0, 21.0           # fixed bearing tube (horn d24 turns in
 SHOULDER_R, SHOULDER_Z = 17.0, 14.0      # inner race seat
 WRAP_R_OUT, WRAP_WALL = 44.0, 3.0        # cable channel outer wall
 DISC_Z0, DISC_T, DISC_R = 22.0, 4.0, 56.0
-COUPLER_PIN_R, COUPLER_PIN_D = 9.5, 3.0
-PRELOAD, SPRING_T, SPRING_L = 0.15, 1.2, 7.0     # pin-slot spring: interference, blade thickness, length [mm]
+# v0.5 (user, 11-09) pan drive: horn -> rigid hub (4x M3 into the horn) -> 2x M3 -> flexure hub in the turntable.
+# Two-stage parallelogram flexure (compliant Oldham): Y float in stage 1, X float in stage 2, both stiff in
+# torsion (blades loaded along their length). No sliding contact, no spring preload -> no backlash, no creep.
+FLEX_T, FLEX_GAP = 1.2, 0.7              # blade thickness (3 perimeters @0.4) / slot width (FDM-safe) [mm]
+FLEX_H2 = 3.0                            # stage-2 blade height at the disc top face (axial compliance) [mm]
+FLEX_HUB = (6.0, 4.5)                    # hub half-size x, y
+HUB_SCREWS = ((3.0, 0.0), (-3.0, 0.0))   # flexure hub -> rigid hub, M3x10 into heat-set inserts
+HUB_R = TUBE_ID / 2 - 1.0                # rigid hub radius inside the fixed tube
+HORN_SCREW_R = 8.0                       # disc horn hole circle [VERIFY]
 STOP_R, STOP_HALF_W = 52.0, 6.0          # hard stop at 180 deg (rear)
 HOLE_FPC = (180.0, 33.0)                 # turntable cable holes (angle deg, radius)
 HOLE_BUS = (128.0, 36.0)
@@ -83,7 +95,8 @@ Y_SRV_OUT = CRADLE_HALF_Y + HORN_T + 1.0 + ARM_T_SERVO   # tilt servo case face 
 CRADLE_X0, CRADLE_X1, CRADLE_HALF_Z = -13.0, 9.0, 18.0     # walls run 2 mm past the lens to hold the eye plate
 EYE = True                               # decorative eye plate in front of the camera (lens = pupil)
 EYE_X0, EYE_T = 6.0, 1.4                 # plate back face (lens front is at x=5.4) and thickness
-EYE_A, EYE_B = 13.0, 9.0                 # almond half-width / half-height [mm]
+EYE_A, EYE_B = 13.0, 11.0                # almond half-width (max between the cradle grooves) / half-height [mm]
+PUPIL_R = 8.4                            # pupil radius on the plate face (v0.4: 7.2; user 11-09 wider)
 ENTRANCE_PUPIL_X = 3.4                   # ~2 mm inside the lens barrel; FOV cone apex for clearance
 CAM_BACK_X = -7.0
 
@@ -97,7 +110,17 @@ FIT_SHAFT = -0.05                        # radius allowance on printed pins/tube
 FIT_BORE = 0.15                          # printed bores that take a bearing OD (radius allowance)
 PI_WINDOW = None                        # top-deck opening over the Pi (tried 11-02, user reverted: slots in the lower deck instead)
 PI_SLOT_W, PI_SLOT_HALF_L = 4.5, 46.0     # long narrow slots in the lower deck under the Pi: cooling + cable pass
-MOUNT_TAB_R = 43.0                       # bearing-mount fixing tabs outside the channel wall (M3 heat-set inserts)
+MOUNT_TAB_R = 43.0                       # bearing-mount fixing tabs outside the channel wall
+MOUNT_TAB_ANGLES = (45, 135, 225, 315)
+# v0.5 fasteners (user, 11-09): through-bolts, M3x10 only (one screw size kept) + M3 hex nuts in printed hex
+# pockets (captive: no wrench needed). Cage: head under the ear, nut flush in the deck top. Mount: head under
+# the deck, nut in the tab top.
+NUT_AF, NUT_H = 5.5, 2.4                 # M3 nut across flats / height (ISO 4032)
+NUT_POCKET_AF, NUT_POCKET_H = 5.8, 2.6
+EAR_CLAMP = 5.0                          # ear material under the deck (5 + deck 5 = M3x10)
+CAGE_BOLTS = ((42.0, 11.0), (42.0, -11.0), (-20.0, 0.0))   # outside the mount floor / clear of the shoulder
+BOSS_PILOT = True                        # mount floor locates on the servo output boss -> 6806 coaxial with the shaft
+PILOT_CLR = 0.15                         # radius clearance on the boss [VERIFY boss d with a caliper]
 
 
 def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
@@ -163,12 +186,22 @@ def cyl_y(r, y0, y1, x=0.0, z=0.0):
     return cq.Workplane("XZ").circle(r).extrude(-(y1 - y0)).translate((x, y0, z))
 
 
+def cyl_x(r, x0, x1, z=0.0, y=0.0):
+    return cq.Workplane("YZ").circle(r).extrude(x1 - x0).translate((x0, y, z))
+
+
 def cyl_z(r, z0, z1, x=0.0, y=0.0):
     return cq.Workplane("XY").circle(r).extrude(z1 - z0).translate((x, y, z0))
 
 
 def ring_z(r_in, r_out, z0, z1, x=0.0, y=0.0):
     return cyl_z(r_out, z0, z1, x, y).cut(cyl_z(r_in, z0 - 1, z1 + 1, x, y))
+
+
+def hex_z(af, z0, z1, x=0.0, y=0.0, rot=0.0):
+    """Hexagonal prism (across flats af) for nut pockets."""
+    return (cq.Workplane("XY").polygon(6, af / math.cos(math.pi / 6)).extrude(z1 - z0)
+            .rotate((0, 0, 0), (0, 0, 1), rot).translate((x, y, z0)))
 
 
 def polar(a_deg, r):
@@ -251,13 +284,12 @@ def top_deck():
     deck = deck.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -DECK_T - 1, 1))  # cable drop
     for x, y in PILLARS:
         deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, x, y))
-    c, t = 0.3, 3.0                 # pan-cage screws: M3 heat-set inserts from the deck underside
-    cx0, cx1 = -SV_SHAFT_FROM_END - c, SV_L - SV_SHAFT_FROM_END + c
-    for sx, sy in CAGE_SCREWS(cx0, cx1, -SV_W / 2 - c, SV_W / 2 + c, t):
-        deck = deck.cut(cyl_z(2.1, -DECK_T - 1, -DECK_T + 4.5, sx, sy))
-    for a in (45, 135, 225, 315):  # bearing-mount screws (M3) into inserts in the mount tabs
+    for sx, sy in CAGE_BOLTS:       # pan-cage through-bolts: nut pocket flush in the deck top (flats radial)
+        deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, sx, sy))
+        deck = deck.cut(hex_z(NUT_POCKET_AF, -NUT_POCKET_H, 1, sx, sy, math.degrees(math.atan2(sy, sx)) + 30))
+    for a in MOUNT_TAB_ANGLES:     # bearing-mount through-bolts, head under the deck; d3.6 so the boss pilot governs
         x, y = polar(a, MOUNT_TAB_R)
-        deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, x, y))
+        deck = deck.cut(cyl_z(1.8, -DECK_T - 1, 1, x, y))
     # open window over the Pi (user, 11-02): cooling air + room for more cables; rim kept clear of the
     # pillar holes, bearing-mount tabs, Stage-2 M4 holes and the FPC drop
     if PI_WINDOW:
@@ -282,10 +314,15 @@ def bearing_mount():
     # cable drop through the floor (matches the deck slot)
     ex, ey = polar(*DECK_EXIT)
     m = m.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -1, 3))
-    for a in (45, 135, 225, 315):   # fixing tabs outside the wall, M3 heat-set insert from below (screw up through the deck)
+    for a in MOUNT_TAB_ANGLES:      # fixing tabs outside the wall: M3x10 up through the deck, nut in a pocket on top
         tab = box(MOUNT_TAB_R - 5, MOUNT_TAB_R + 5, -5, 5, 0, 5.0).rotate((0, 0, 0), (0, 0, 1), a)
         x, y = polar(a, MOUNT_TAB_R)
-        m = m.union(tab).cut(cyl_z(2.1, -1, 4.5, x, y))
+        m = m.union(tab).cut(cyl_z(1.7, -1, 6, x, y)).cut(hex_z(NUT_POCKET_AF, 5.0 - NUT_POCKET_H, 6, x, y, a + 30))
+    if BOSS_PILOT:                  # floor closed down to the servo output boss: same datum as the shaft
+        m = m.union(ring_z(SV_BOSS_D / 2 + PILOT_CLR, TUBE_ID / 2 + 0.01, 0, 2.0))
+    for sx, sy in CAGE_BOLTS:       # clearance over a cage-bolt tip that lands under the floor
+        if math.hypot(sx, sy) < WRAP_R_OUT + WRAP_WALL + 3.5:
+            m = m.cut(cyl_z(2.0, -1, 2.05, sx, sy))
     if STOP == "rim":   # block outside the wall at 180 deg, hit by a pin hanging from the disc rim
         blk = box(STOP_R - 4, STOP_R + 4, -STOP_HALF_W, STOP_HALF_W, 0, 15).rotate((0, 0, 0), (0, 0, 1), 180)
         m = m.union(blk).union(box(-(STOP_R - 4), -(WRAP_R_OUT + WRAP_WALL) + 0.5, -STOP_HALF_W, STOP_HALF_W, 0, 6))
@@ -323,12 +360,14 @@ def lower_deck():
 
 
 def CAGE_EARS(x0, x1, y0, y1, t):
-    return [(x0 - t - 8, x0 - t + 0.1, -6.0, 6.0),                       # shaft end (-X)
-            (x1 - 12, x1 - 2, y1 + t - 0.1, y1 + t + 8), (x1 - 12, x1 - 2, y0 - t - 8, y0 - t + 0.1)]
-
-
-def CAGE_SCREWS(x0, x1, y0, y1, t):
-    return [(x0 - t - 4, 0.0), (x1 - 7, y1 + t + 4), (x1 - 7, y0 - t - 4)]
+    """Ear footprints around CAGE_BOLTS (4 mm of material around each bolt), merged into the cage walls."""
+    ears = []
+    for sx, sy in CAGE_BOLTS:
+        if sx > x1:      # connector end (+X): ear grows out of the end wall
+            ears.append((x1 + t - 0.1, sx + 4.0, sy - 4.0, sy + 4.0))
+        else:            # shaft end (-X)
+            ears.append((sx - 4.0, x0 - t + 0.1, sy - 5.0, sy + 5.0))
+    return ears
 
 
 def pan_cage():
@@ -337,11 +376,11 @@ def pan_cage():
     y0, y1 = -SV_W / 2 - c, SV_W / 2 + c
     z0, z1 = SV_TOP - SV_H - t, -DECK_T
     cage = box(x0 - t, x1 + t, y0 - t, y1 + t, z0, z1).cut(box(x0, x1, y0, y1, z0 + t, z1 + 1))
-    # three full-height ears away from the connector end; M3 screw from below through a counterbore
-    # into a heat-set insert in the deck underside (no overhang when printed floor-down)
+    # three full-height ears; M3x10 from below through a counterbore (EAR_CLAMP left under the deck), up through
+    # the deck into a nut pocket in the deck top (no overhang when printed floor-down)
     flange = None
-    for (xa, xb, ya, yb), (sx, sy) in zip(CAGE_EARS(x0, x1, y0, y1, t), CAGE_SCREWS(x0, x1, y0, y1, t)):
-        e = box(xa, xb, ya, yb, z0, z1).cut(cyl_z(1.7, z0 - 1, z1 + 1, sx, sy)).cut(cyl_z(3.1, z0 - 1, z1 - 6.0, sx, sy))
+    for (xa, xb, ya, yb), (sx, sy) in zip(CAGE_EARS(x0, x1, y0, y1, t), CAGE_BOLTS):
+        e = box(xa, xb, ya, yb, z0, z1).cut(cyl_z(1.7, z0 - 1, z1 + 1, sx, sy)).cut(cyl_z(3.1, z0 - 1, z1 - EAR_CLAMP, sx, sy))
         flange = e if flange is None else flange.union(e)
     # floor opening under the two bus connectors (bottom face of the servo)
     cage = cage.union(flange).cut(box(SV_CONN_X - SV_CONN_H / 2 - 2.5, SV_CONN_X + SV_CONN_H / 2 + 2.5,
@@ -351,17 +390,43 @@ def pan_cage():
 
 # ----------------------------------------------------------------------------- printed parts: rotating
 def horn_coupler():
-    """Screwed to the pan horn; two pins drive radial slots in the turntable (radial float, no tangential play)."""
-    z0, z1 = PAN_HORN_Z + HORN_T, TUBE_TOP - 1.0          # drive cup inside the fixed tube
-    c = cyl_z(HORN_D / 2 - 0.5, z0, z1).cut(cyl_z(HORN_D / 2 - 3.0, z0 + 3.0, z1 + 1))
-    for s in (-1, 1):
-        c = c.union(cyl_z(COUPLER_PIN_D / 2 + 1.5, z0, z1, s * COUPLER_PIN_R, 0))      # full-height boss: no overhang
-        c = c.union(cyl_z(COUPLER_PIN_D / 2, z1, DISC_Z0 + 3.0, s * COUPLER_PIN_R, 0))
+    """Rigid hub (v0.5): 4x M3x10 down into the horn (5 mm floor, tip ends 1 mm below the horn), 2x heat-set
+    inserts on top for the flexure hub. Only a 0.7 mm pad under the flexure hub touches the turntable."""
+    z0, z1 = PAN_HORN_Z + HORN_T, DISC_Z0 - FLEX_GAP          # horn top .. under the flexure frame
+    c = cyl_z(HUB_R, z0, z1)
+    hx, hy = FLEX_HUB
+    c = c.union(box(-hx + 0.5, hx - 0.5, -hy + 0.5, hy - 0.5, z1 - 0.01, DISC_Z0))   # contact pad under the hub
     for a in range(4):
-        x, y = polar(45 + 90 * a, 8.0)
-        c = c.cut(cyl_z(1.7, z0 - 1, z0 + 4, x, y))
-    c = c.cut(cyl_z(3.0, z0 - 1, z1 + 1))                 # horn centre screw access
+        x, y = polar(45 + 90 * a, HORN_SCREW_R)
+        c = c.cut(cyl_z(1.7, z0 - 1, z1 + 1, x, y)).cut(cyl_z(3.1, z0 + 5.0, z1 + 1, x, y))
+    c = c.cut(cyl_z(3.25, z0 - 1, z0 + 4.0))                 # horn spline-screw head
+    for x, y in HUB_SCREWS:
+        c = c.cut(cyl_z(2.1, DISC_Z0 - 5.5, DISC_Z0 + 1, x, y))   # M3 heat-set insert d4.2 x 5.5
     return c
+
+
+def flexure_bodies(z0, z1):
+    """Two-stage parallelogram flexure in the disc plane. Returns (pocket, bodies) in turntable coords.
+    hub H (screwed to the rigid hub) -[stage 1: 2 blades along X, float in Y]- frame M -[stage 2: 2 blades
+    along Y, float in X]- disc. Stage-2 blades are FLEX_H2 tall at the top face (on the bed when printed)."""
+    g, t = FLEX_GAP, FLEX_T
+    hx, hy = FLEX_HUB
+    yb0, yb1 = hy + g, hy + g + t                        # stage-1 blade band
+    my = yb1 + g + 1.5                                   # frame half-height
+    mx0, mx1 = -hx - 1.5 - g - 1.5, hx + g + 1.5         # frame x extent
+    px0, px1, py = mx0 - 2 * g - t, mx1 + 2 * g + t, my + g
+    pocket = box(px0, px1, -py, py, z0 - 1, z1 + 1)
+    hub = box(-hx, hx, -hy, hy, z0, z1).union(box(-hx - 1.5, -hx + 0.01, -yb1, yb1, z0, z1))
+    for x, y in HUB_SCREWS:
+        hub = hub.cut(cyl_z(1.7, z0 - 1, z1 + 1, x, y))
+    b1 = box(-hx - 0.01, hx + g + 0.01, yb0, yb1, z0, z1).union(box(-hx - 0.01, hx + g + 0.01, -yb1, -yb0, z0, z1))
+    frame = (box(hx + g, mx1, -my, my, z0, z1)                     # right bar (stage-1 blade ends)
+             .union(box(mx0, mx1, my - 1.5, my, z0, z1)).union(box(mx0, mx1, -my, -my + 1.5, z0, z1))
+             .union(box(mx0, mx0 + 1.5, -my, my, z0, z1))
+             .union(box(px0 + g, px1 - g, -my, -my + 1.5, z0, z1)))    # bottom bar runs out under the stage-2 blades
+    b2 = (box(px0 + g, px0 + g + t, -my, py + 0.01, z1 - FLEX_H2, z1)
+          .union(box(px1 - g - t, px1 - g, -my, py + 0.01, z1 - FLEX_H2, z1)))
+    return pocket, {"hub": hub, "stage1": b1, "frame": frame, "stage2": b2}
 
 
 def turntable_yoke():
@@ -379,23 +444,11 @@ def turntable_yoke():
     y = disc.union(housing).union(lip)
     # centre: relief over the tube/inner race, two radial slots for the coupler pins
     y = y.cut(cyl_z(idr / 2 + 3.4, TUBE_TOP - 0.01, DISC_Z0))
-    # Zero-backlash pin slots (printed, no extra parts): each slot has one rigid wall at the pin radius and
-    # one cantilever spring wall pushed PRELOAD into the slot. The rigid walls face opposite rotational
-    # senses on the two pins, so torque either way is carried by a rigid contact; radial float stays free.
-    rp = COUPLER_PIN_D / 2
-    zc0, zc1 = DISC_Z0 - 1, z_disc_top + 1                 # through slots: the spring blade is free over its height
-    for s in (-1, 1):
-        xc = s * COUPLER_PIN_R
-        x_free = xc - s * 2.5
-        x_fix = x_free + s * SPRING_L
-        yb = -rp + PRELOAD                                 # spring blade face (pin side)
-        lo, hi = sorted((x_free - s * 0.6, xc + s * 2.0))
-        y = y.cut(box(lo, hi, yb, rp, zc0, zc1))           # pin space; rigid wall at +rp
-        rlo, rhi = sorted((x_free - s * 0.6, x_fix))
-        y = y.cut(box(rlo, rhi, yb - SPRING_T - 0.6, yb - SPRING_T, zc0, zc1))     # relief behind the blade
-        glo, ghi = sorted((x_free - s * 0.6, x_free))
-        y = y.cut(box(glo, ghi, yb - SPRING_T - 0.6, yb, zc0, zc1))                 # free-end gap
-    y = y.cut(cyl_z(4.5, DISC_Z0 + 3.1, z_disc_top + 1))  # screwdriver access to the horn screw
+    # v0.5 flexure hub in place of the pin slots (bolted torque path, radial + axial float, no backlash)
+    pocket, fb = flexure_bodies(DISC_Z0, z_disc_top)
+    y = y.cut(pocket)
+    for b in fb.values():
+        y = y.union(b)
     # arms
     arm_s = box(-ARM_W / 2, ARM_W / 2, y_srv_in, y_srv_out, z_disc_top - 0.1, H_TILT).union(
         cyl_y(ARM_W / 2, y_srv_in, y_srv_out, 0, H_TILT))
@@ -517,24 +570,57 @@ def eye_plate():
     plate = plate.union(box(x0, x1, -(CRADLE_HALF_Y - CRADLE_WALL + 0.7), CRADLE_HALF_Y - CRADLE_WALL + 0.7, zc - 3.0, zc + 3.0))
     rim = almond(EYE_A, EYE_B, x1 - 0.01, x1 + 0.8, zc).cut(almond(EYE_A - 1.6, EYE_B - 1.2, x1 - 1, x1 + 2, zc))
     plate = plate.union(rim)
-    # pupil: cone with apex at the entrance pupil, half-angle 61 deg (FOV diagonal 60 deg + margin)
+    # pupil (v0.5 wider): PUPIL_R on the plate face, 61 deg flare toward the lens, straight through the rim zone.
+    # Must stay outside the FOV cone from the entrance pupil (half-angle 61 deg = diagonal 54.5 deg + margin).
     t = math.tan(math.radians(61))
-    r_back, r_front = (x0 - ENTRANCE_PUPIL_X) * t, (x1 + 0.8 - ENTRANCE_PUPIL_X) * t
-    cone = cq.Workplane("XY").add(cq.Solid.makeCone(max(r_back, CAM_LENS_D / 2 + 0.3), r_front, EYE_T + 0.8 + 0.02,
-                                                       cq.Vector(x0 - 0.01, 0, zc), cq.Vector(1, 0, 0)))
-    plate = plate.cut(cone)
+    r_back = PUPIL_R - EYE_T * t
+    assert r_back >= max((x0 - ENTRANCE_PUPIL_X) * t, CAM_LENS_D / 2 + 0.3), "pupil enters the field of view"
+    assert PUPIL_R >= (x1 + 0.8 - ENTRANCE_PUPIL_X) * math.tan(math.radians(56)), "rim zone enters the field of view"
+    cone = cq.Workplane("XY").add(cq.Solid.makeCone(r_back, PUPIL_R, EYE_T + 0.01, cq.Vector(x0 - 0.005, 0, zc), cq.Vector(1, 0, 0)))
+    plate = plate.cut(cone).cut(cyl_x(PUPIL_R, x1 - 0.01, x1 + 1.0, zc))
     # iris: engraved ring + 8 aperture marks, all recessed (cannot reach into the view)
-    ri = r_front + 0.5
-    plate = plate.cut(cq.Workplane("YZ").circle(ri + 0.5).circle(ri).extrude(0.5).translate((x1 - 0.5, 0, zc)))
+    ri = PUPIL_R + 0.5
     inner = almond(EYE_A - 2.2, EYE_B - 1.8, x1 - 1, x1 + 1, zc)
+    plate = plate.cut(cq.Workplane("YZ").circle(ri + 0.5).circle(ri).extrude(0.5).translate((x1 - 0.5, 0, zc)).intersect(inner))
     for k in range(8):
         a = math.radians(22.5 + 45 * k)
         mark = (box(ri + 1.0, ri + 3.2, -0.3, 0.3, 0, 0.5).rotate((0, 0, 0), (1, 0, 0), 0)
                 .translate((0, 0, 0)))
-        mark = (cq.Workplane("YZ").rect(2.2, 0.6).extrude(0.5).translate((x1 - 0.5, 0, 0))
-                .translate((0, 0, ri + 2.1)).rotate((0, 0, 0), (1, 0, 0), math.degrees(a)).translate((0, 0, zc)))
+        mark = (cq.Workplane("YZ").rect(1.4, 0.6).extrude(0.5).translate((x1 - 0.5, 0, 0))
+                .translate((0, 0, ri + 1.6)).rotate((0, 0, 0), (1, 0, 0), math.degrees(a)).translate((0, 0, zc)))
         plate = plate.cut(mark.intersect(inner))
     return plate
+
+
+# ----------------------------------------------------------------------------- fasteners (bought, for checks/BOM)
+def m3(x, y, z_head, up=True, nut_z=None, length=10.0):
+    """M3 socket-head screw (head d5.5 x 3) with its seat at z_head, shank `length` toward +Z (up) or -Z."""
+    sgn = 1 if up else -1
+    head = cyl_z(2.75, z_head - 3.0, z_head) if up else cyl_z(2.75, z_head, z_head + 3.0)
+    shank = cyl_z(1.5, *sorted((z_head, z_head + sgn * length)), x=0, y=0)
+    out = head.union(shank).translate((x, y, 0))
+    if nut_z is not None:
+        out = out.union(hex_z(NUT_AF, nut_z, nut_z + NUT_H, x, y, math.degrees(math.atan2(y, x)) + 30))
+    return out
+
+
+def fasteners():
+    """Returns (base, pan): every M3x10 + nut of the v0.5 stacks (screws into inserts carry no nut)."""
+    base = None
+    for sx, sy in CAGE_BOLTS:            # ear (5) + deck (5); nut seated at the pocket floor
+        f = m3(sx, sy, -DECK_T - EAR_CLAMP, nut_z=-NUT_POCKET_H)
+        base = f if base is None else base.union(f)
+    for a in MOUNT_TAB_ANGLES:           # deck (5) + tab (5); nut in the tab pocket
+        x, y = polar(a, MOUNT_TAB_R)
+        base = base.union(m3(x, y, -DECK_T, nut_z=5.0 - NUT_POCKET_H))
+    pan = None
+    for a in range(4):                   # rigid hub -> horn: 5 mm floor + 4 mm horn, tip 1 mm below the horn
+        x, y = polar(45 + 90 * a, HORN_SCREW_R)
+        f = m3(x, y, PAN_HORN_Z + HORN_T + 5.0, up=False)
+        pan = f if pan is None else pan.union(f)
+    for x, y in HUB_SCREWS:              # flexure hub (DISC_T) -> insert in the rigid hub
+        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
+    return base, pan
 
 
 # ----------------------------------------------------------------------------- cable routes (polylines, for length and display)
@@ -594,6 +680,9 @@ def build(export=True):
     if EYE:
         parts["eye_plate"] = (eye_plate(), (0.85, 0.20, 0.10), True, "tilt")
     parts["camera"] = (camera_module().translate((CAM_BACK_X, 0, H_TILT)), (0.10, 0.45, 0.25), False, "tilt")
+    fb, fp = fasteners()
+    parts["fasteners_base"] = (fb, (0.85, 0.75, 0.30), False, "base")
+    parts["fasteners_pan"] = (fp, (0.85, 0.75, 0.30), False, "pan")
 
     keepouts = {f"keepout {k}": v for k, v in pi_keepouts().items()}
     keepouts["keepout pan servo plugs"] = servo_conn_keepout_z_up().translate((0, 0, SV_TOP))

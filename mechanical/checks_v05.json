@@ -1,0 +1,38 @@
+{
+ "static": [
+  "lower_deck x pi5_stack 57.9 mm3",
+  "turntable_yoke x tilt_cradle 4.1 mm3",
+  "tilt_cradle x camera 11.3 mm3"
+ ],
+ "notes": [],
+ "tilt_overlap_max_mm3": 4.13,
+ "pan_overlap_max_mm3": 0.0,
+ "stop_deg": 168,
+ "fov_self": {
+  "-30": 0.1491,
+  "0": 0.0,
+  "30": 0.0
+ },
+ "fov_base": {
+  "0,-30": 0.0623,
+  "0,0": 0.0,
+  "90,-30": 0.1111,
+  "90,0": 0.0,
+  "180,-30": 0.1924,
+  "180,0": 0.0
+ },
+ "fov_tilt_group": {
+  "-30": 0.0,
+  "0": 0.0,
+  "30": 0.0
+ },
+ "boresight_down_deg": -38,
+ "volumes_cm3": {
+  "horn_coupler": 5.11,
+  "turntable_yoke": 47.61,
+  "bearing_mount": 28.87,
+  "pan_cage": 23.12,
+  "top_deck": 74.45,
+  "eye_plate": 0.47
+ }
+}

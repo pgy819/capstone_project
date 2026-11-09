@@ -22,7 +22,7 @@ import trimesh
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "print_v04")
+OUT = os.path.join(HERE, "print_v05")
 BED = (220.0, 220.0, 250.0)          # typical FDM bed [VERIFY your printer]
 VARIANT = dict(wrap_r=36.0, stop="groove", tilt_orient="down")
 H_TILT_KEEP = 79.0
@@ -95,6 +95,25 @@ def fit_coupon():
     return out
 
 
+def check_coupon():
+    """v0.5 fit checks before the big prints (about 4 g), left to right:
+    servo-boss pilot bores d9.2/9.3/9.4/9.5 (pick the one that slides on the boss without play),
+    M3 nut pockets AF 5.6/5.8/6.0 (pick the one the nut presses into by hand),
+    flexure slots 0.6/0.7/0.8 mm beside 1.2 mm blades (the blade must move freely after printing)."""
+    base = g.box(0, 70, 0, 22, 0, 3)
+    for i, d in enumerate((9.2, 9.3, 9.4, 9.5)):
+        base = base.cut(g.cyl_z(d / 2, -1, 4, 7 + i * 11.5, 15))
+    for i, af in enumerate((5.6, 5.8, 6.0)):
+        base = base.cut(g.cyl_z(1.7, -1, 4, 7 + i * 11.5, 5)).cut(g.hex_z(af, 3 - 2.6, 4, 7 + i * 11.5, 5))
+    # flexure slots: three blades 1.2 x 3 x 12 standing on a shared root, each with its own slot width
+    fl = g.box(40, 70, 0, 10, 0, 5)
+    x = 41.5
+    for gap in (0.6, 0.7, 0.8):
+        fl = fl.cut(g.box(x, x + gap, 0, 8.5, -1, 6)).cut(g.box(x + gap + 1.2, x + 2 * gap + 1.2, 0, 8.5, -1, 6))
+        x += 2 * gap + 1.2 + 6.0
+    return base.cut(g.box(40, 70, 0, 10, -1, 4)).union(fl)
+
+
 # build-plate orientation per part: (axis, angle) rotations applied in order
 ORIENT = {
     "top_deck": [],
@@ -109,7 +128,8 @@ ORIENT = {
     "tilt_cradle": [((0, 1, 0), -90)],       # back plate on the plate, camera standoffs up
     "fit_coupon": [],
     "lower_deck_with_pillars": [],           # option: replaces lower_deck + pillars, deck bottom on the plate
-    "eye_plate": [((0, 1, 0), -90)],         # back face on the plate, rim and engraving up
+    "eye_plate": [((0, 1, 0), -90)],
+    "check_coupon": [],         # back face on the plate, rim and engraving up
 }
 
 
@@ -141,7 +161,7 @@ def main():
         os.makedirs(os.path.join(OUT, d), exist_ok=True)
     tmp = tempfile.mkdtemp()
     report = {}
-    assy = cq.Assembly(name="RCWS_gimbal_v04")
+    assy = cq.Assembly(name="gimbal_v05")
     colors = {n: v[1] for n, v in parts.items()}
     colors["lower_deck_with_pillars"] = (0.80, 0.82, 0.85)
     colors.update(turntable=(0.20, 0.45, 0.85), arm_servo=(0.25, 0.50, 0.90), arm_idle=(0.25, 0.50, 0.90))
@@ -162,13 +182,19 @@ def main():
     for name, shape in bought.items():
         cq.exporters.export(shape, os.path.join(OUT, "step_reference", f"{name}.step"))
         assy.add(shape, name=name, color=cq.Color(*colors[name]))
-    assy.export(os.path.join(OUT, "RCWS_gimbal_v04_assembly.step"))
+    assy.export(os.path.join(OUT, "gimbal_v05_assembly.step"))
     c = fit_coupon()
     cq.exporters.export(c, os.path.join(OUT, "step", "fit_coupon.step"))
     m = to_mesh(c, tmp, "fit_coupon")
     m.apply_translation(-m.bounds[0])
     m.export(os.path.join(OUT, "stl", "fit_coupon_print.stl"))
     report["fit_coupon"] = {**printability(m), "volume_cm3": round(c.val().Volume() / 1000, 1)}
+    c = check_coupon()
+    cq.exporters.export(c, os.path.join(OUT, "step", "check_coupon.step"))
+    m = to_mesh(c, tmp, "check_coupon")
+    m.apply_translation(-m.bounds[0])
+    m.export(os.path.join(OUT, "stl", "check_coupon_print.stl"))
+    report["check_coupon"] = {**printability(m), "volume_cm3": round(c.val().Volume() / 1000, 1)}
     json.dump({"variant": VARIANT, "H_TILT": g.H_TILT, "FIT_SHAFT": g.FIT_SHAFT, "FIT_BORE": g.FIT_BORE,
                "bed": BED, "parts": report}, open(os.path.join(OUT, "print_report.json"), "w"), indent=1)
     for k, v in report.items():
