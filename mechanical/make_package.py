@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.6):
+"""Build the hand-off package of the current gimbal geometry (v0.6.1):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,14 +25,14 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v060"
+VER = "v061"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
 # part number, source name, Korean name, group, qty, print orientation, settings, order
 PRINTED = [
     ("C01", "check_coupon", "확인 쿠폰 (M3 안내 구멍 지름)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
-    ("P01", "top_deck", "상판", "BASE", 1, "조립 방향 그대로", "충전 25 %, 벽 3", 2),
+    ("P01", "top_deck", "상판 (아래 사각 돌기 4개)", "BASE", 1, "윗면이 바닥(뒤집어서), 돌기가 위로", "충전 25 %, 벽 3", 2),
     ("P02", "lower_deck", "하판 + 기둥 일체형", "BASE", 1, "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4, 리트랙션 켬", 2),
     ("P05", "pan_cage", "Pan 서보 케이지 (얇은 귀 + 옆 보강살)", "BASE", 1, "바닥이 바닥", "충전 40 %, 벽 3", 3),
     ("P06", "bearing_mount", "케이블 채널 + 스토퍼", "BASE", 1, "조립 방향 그대로", "충전 40 %, 벽 4", 3),
@@ -151,7 +151,7 @@ def main():
         w.writerow(["품목", "규격", "수량", "쓰임"])
         for row in [
             ("서보", "Feetech STS3215", 2, "Pan ID 1, Tilt ID 2 (혼·동봉 나사 포함)"),
-            ("나사", "M3 × 10", 19, "채널 4, 케이지 3, 턴테이블→Pan 혼 4, 팔 4, 상판→기둥 4 (모두 안내 구멍에 바로)"),
+            ("나사", "M3 × 10", 19, "채널 4, 케이지 3, 턴테이블→Pan 혼 4, 팔 4, 기둥 옆→상판 돌기 4 (모두 안내 구멍에 바로)"),
             ("케이블 타이", "폭 4.8 이하, 길이 200 이상", 1, "Tilt 서보 들림 방지"),
             ("나사 (Pi)", "M2.5 × 5", 4, "Pi 위에서 하판 안내 구멍에 바로"),
             ("나사 (카메라)", "M2 × 5", 4, "카메라 기판 앞에서 크래들 가운데 판에 바로"),

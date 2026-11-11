@@ -56,6 +56,11 @@ PI_STANDOFF = 0.5                        # v0.6 (user, 11-12): Pi bosses stand 0
 PI_RECESS = 1.0                          # pocket under the Pi footprint for underside parts (boss + 1.0 clearance) [VERIFY]
 LOWER_T = 3.2                            # v0.5.5 (user): lower deck as thin as strength allows (was 5)
 PILLAR_PILOT_R, PILLAR_PILOT_L = 1.3, 8.0  # M3x10 from the top deck self-taps into the pillar top (no nut)
+# v0.6.1 (user, 11-12): the top deck carries square pegs that drop into sockets in the pillar tops; one M3x10
+# goes in sideways through the pillar wall and the peg (self-tapping into the peg). Glue on the pegs is optional
+# once nothing needs to be opened again.
+PEG_A, PEG_L, PEG_CLR = 6.0, 8.0, 0.1    # square peg side / length below the deck, socket clearance per side
+CROSS_DZ = 4.0                           # cross bolt axis this far below the deck underside
 PILOT_R = 1.3                            # M3 self-tapping pilot (d2.6) used wherever a nut was hard to place (v0.5.6)
 M2_PILOT_R = 0.8                         # M2 self-tapping pilot (d1.6)
 # v0.5.3 fastener sizes (user, 11-09): M3 structure, M2.5 Raspberry Pi, M2 camera
@@ -80,7 +85,7 @@ BRG_PAN = (42.0, 30.0, 7.0)              # 6806 (61806) OD, ID, W
 DECK_T = 5.0
 DECK_X0, DECK_X1, DECK_Y = -100.0, 50.0, 110.0
 PILLARS = [(-94.0, 49.0), (44.0, 49.0), (44.0, -49.0), (-30.0, -49.0)]   # kept off the port zones
-PILLAR_R = 5.0                           # v0.5.1: d10 so a side nut slot fits (v0.4: d8)
+PILLAR_R = 5.6                           # v0.6.1: d11.2 around the square socket (stays inside the r6 deck-corner fillet)
 BASE_GAP = 55.0                          # top-deck underside -> lower-deck top
 LOWER_TOP = -DECK_T - BASE_GAP
 
@@ -324,8 +329,12 @@ def top_deck():
     deck = deck.cut(box(-SV_SHAFT_FROM_END - c, SV_L - SV_SHAFT_FROM_END + c, -SV_W / 2 - c, SV_W / 2 + c, -DECK_T - 1, 1))
     ex, ey = polar(*DECK_EXIT)
     deck = deck.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -DECK_T - 1, 1))  # cable drop
-    for x, y in PILLARS:
-        deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, x, y))
+    for x, y in PILLARS:   # v0.6.1: square peg under the deck, cross pilot hole facing the bolt entry side
+        a = pillar_slot_dir(x, y)
+        peg = box(x - PEG_A / 2, x + PEG_A / 2, y - PEG_A / 2, y + PEG_A / 2, -DECK_T - PEG_L, -DECK_T + 0.01)
+        peg = peg.edges("|Z and <Z").chamfer(0.6) if False else peg
+        hole = cyl_x(PILOT_R, -PEG_A, PEG_A, 0.0, 0.0).rotate((0, 0, 0), (0, 0, 1), a).translate((x, y, -DECK_T - CROSS_DZ))
+        deck = deck.union(peg).cut(hole)
     for sx, sy in CAGE_BOLTS:       # v0.5.6: cage bolts self-tap 5 mm into the deck (no nut); tip ends at the deck top
         deck = deck.cut(cyl_z(PILOT_R, -DECK_T - 1, 1, sx, sy))
     for a in MOUNT_TAB_ANGLES:     # bearing-mount through-bolts, head under the deck; d3.6 so the boss pilot governs
@@ -428,10 +437,19 @@ def lower_deck():
     # pillars: grow out of the deck top with a 3 mm root cone, pilot hole at the top for the M3x10
     for x, y in PILLARS:
         col = cyl_z(PILLAR_R, LOWER_TOP - 0.01, -DECK_T, x, y)
-        root = (cq.Workplane("XY").workplane(offset=LOWER_TOP).center(x, y).circle(PILLAR_R + 0.8)
+        root = (cq.Workplane("XY").workplane(offset=LOWER_TOP).center(x, y).circle(PILLAR_R + 0.3)
                 .workplane(offset=3.0).circle(PILLAR_R).loft())
         deck = deck.union(col).union(root)
-        deck = deck.cut(cyl_z(PILLAR_PILOT_R, -DECK_T - PILLAR_PILOT_L, 0, x, y))
+        # v0.6.1: square socket for the top-deck peg, cross hole for the side bolt (clearance on the entry side,
+        # pilot on the far side), small flat on the entry side for the screw head
+        sa = PEG_A / 2 + PEG_CLR
+        deck = deck.cut(box(x - sa, x + sa, y - sa, y + sa, -DECK_T - PEG_L - 0.5, 0))
+        a = pillar_slot_dir(x, y)
+        zc = -DECK_T - CROSS_DZ
+        loc = lambda sh: sh.rotate((0, 0, 0), (0, 0, 1), a).translate((x, y, zc))
+        deck = deck.cut(loc(cyl_x(1.7, 0.0, PILLAR_R + 1)))                     # entry side (+ local x)
+        deck = deck.cut(loc(cyl_x(PILOT_R, -PILLAR_R - 1, 0.0)))                  # far side
+        deck = deck.cut(loc(box(PILLAR_R - 0.6, PILLAR_R + 2, -3.5, 3.5, -3.5, 3.5)))   # head seat flat
     return deck
 
 
@@ -778,8 +796,11 @@ def fasteners():
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
     for x, y in ARM_BOLTS():   # foot (6) + disc: nut in the disc slot
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False))
-    for x, y in PILLARS:                 # top deck -> pillar top, self-tapping into the pilot hole
-        base = base.union(m3(x, y, 0.0, up=False))
+    for x, y in PILLARS:                 # v0.6.1: side bolt through pillar wall + peg (head on the outer flat)
+        a = pillar_slot_dir(x, y)
+        xh = PILLAR_R - 0.6
+        b = cyl_x(2.75, xh, xh + 3.0).union(cyl_x(1.5, xh - 10.0, xh))
+        base = base.union(b.rotate((0, 0, 0), (0, 0, 1), a).translate((x, y, -DECK_T - CROSS_DZ)))
     for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
         zt = LOWER_TOP + PI_STANDOFF + PI_PCB

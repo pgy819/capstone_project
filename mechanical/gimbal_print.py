@@ -96,7 +96,7 @@ def check_coupon():
 
 # build-plate orientation per part: (axis, angle) rotations applied in order
 ORIENT = {
-    "top_deck": [],
+    "top_deck": [((1, 0, 0), 180)],          # v0.6.1: top face on the plate, pillar pegs standing up
     "lower_deck": [],                        # deck bottom on the plate, pillars standing (one piece, v0.5.5)
     "pan_cage": [],                          # floor on the plate; thin ears carried by 45-degree side ribs
     "bearing_mount": [],
