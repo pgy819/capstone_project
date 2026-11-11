@@ -24,13 +24,15 @@
   "0": 0.0,
   "30": 0.0
  },
+ "cradle_in_60deg_cone": 0.0,
  "boresight_down_deg": -38,
  "volumes_cm3": {
   "horn_coupler": 6.22,
   "turntable_yoke": 54.96,
   "bearing_mount": 27.86,
-  "pan_cage": 21.9,
+  "pan_cage": 18.66,
   "top_deck": 74.47,
-  "eye_plate": 0.47
+  "lower_deck": 59.86,
+  "tilt_cradle": 5.46
  }
 }

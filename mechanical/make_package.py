@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.5.4):
+"""Build the hand-off package of the current gimbal geometry (v0.5.5):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,7 +25,7 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v054"
+VER = "v055"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
@@ -34,18 +34,17 @@ PRINTED = [
     ("C01", "check_coupon", "확인 쿠폰 (너트 홈·플렉셔 틈)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
     ("C02", "fit_coupon", "공차 쿠폰 (6806 축·구멍)", "-", 1, "그대로", "PLA 30 %, 층 0.2", 1),
     ("P01", "top_deck", "상판", "BASE", 1, "조립 방향 그대로", "충전 25 %, 벽 3", 2),
-    ("P02", "lower_deck", "하판", "BASE", 1, "조립 방향 그대로", "충전 25 %, 벽 3", 2),
-    ("P03", "pillar", "기둥 (같은 파일 4개 출력)", "BASE", 4, "세워서", "충전 100 %", 2),
-    ("P04", "lower_deck_with_pillars", "(선택) 하판+기둥 일체형: P02+P03 대신", "BASE", 0, "하판 바닥이 바닥", "충전 25 %, 벽 4, 리트랙션 켬", 2),
-    ("P05", "pan_cage", "Pan 서보 케이지", "BASE", 1, "바닥이 바닥", "충전 40 %, 벽 3", 3),
+    ("P02", "lower_deck", "하판 + 기둥 일체형", "BASE", 1, "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4, 리트랙션 켬", 2),
+    ("P05", "pan_cage", "Pan 서보 케이지 (얇은 귀 + 옆 보강살)", "BASE", 1, "바닥이 바닥", "충전 40 %, 벽 3", 3),
     ("P06", "bearing_mount", "베어링 마운트 + 케이블 채널", "BASE", 1, "조립 방향 그대로", "충전 40 %, 벽 4", 3),
     ("P07", "horn_coupler", "강체 허브 (Pan 혼 위)", "PAN", 1, "혼 쪽이 바닥", "충전 100 %", 3),
     ("P08", "turntable", "턴테이블 (플렉셔 허브 일체)", "PAN", 1, "윗면이 바닥(뒤집어서)", "충전 60 %, 벽 4 (플렉셔는 벽만)", 3),
     ("P09", "arm_servo", "서보쪽 팔 (서보 채널·받침판)", "PAN", 1, "발이 바닥(세워서), 브림", "충전 60 %, 벽 4, 받침판 아래 25 mm 브리지", 4),
     ("P10", "arm_idle", "부싱쪽 팔", "PAN", 1, "바깥면이 바닥(눕혀서)", "충전 60 %, 벽 4", 4),
-    ("P11", "tilt_cradle", "Tilt 크래들", "TILT", 1, "뒷판이 바닥", "충전 60 %, 벽 4", 4),
-    ("P12", "eye_plate", "눈 장식판", "TILT", 1, "뒷면이 바닥", "충전 100 %, 층 0.12 권장", 4),
+    ("P11", "tilt_cradle", "Tilt 크래들 (H형)", "TILT", 1, "위쪽 끝이 바닥(뒤집어서)", "충전 60 %, 벽 4", 4),
 ]
+if g.EYE:
+    PRINTED.append(("P12", "eye_plate", "눈 장식판", "TILT", 1, "뒷면이 바닥", "충전 100 %, 층 0.12 권장", 4))
 BOUGHT = [
     ("B01", "pan_servo", "Feetech STS3215 (Pan, ID 1)", "BASE"),
     ("B02", "tilt_servo", "Feetech STS3215 (Tilt, ID 2)", "PAN"),
@@ -65,8 +64,8 @@ PARAMS = [  # (name, description) -> value read from the generator
     ("FIT_SHAFT", "6806 축 반지름 여유"), ("FIT_BORE", "6806 구멍 반지름 여유"), ("SV_H", "서보 높이 (뒷면~축 면, 실측)"), ("SV_BOSS_H", "톱니 돌출 (실측 2~3)"),
     ("NUT_POCKET_AF", "너트 홈·슬롯 맞변"), ("NUT_POCKET_H", "너트 홈 깊이"), ("EAR_CLAMP", "케이지 귀 체결 두께"),
     ("FLEX_T", "플렉셔 판 두께"), ("FLEX_GAP", "플렉셔 틈"), ("FLEX_H2", "2단 판 높이"),
-    ("HUB_R", "강체 허브 반지름"), ("HORN_SCREW_R", "혼 나사 원 반지름"), ("ARM_T_SERVO", "Tilt 서보쪽 팔 판 두께"), ("CH_SHELF", "Tilt 서보 받침판 두께"), ("EYE_GROOVE_FLOOR", "눈 장식판 홈 끝 (크래들 바닥 위)"), ("HORN_HOLE_R", "팔 판 혼 U홈 반지름"),
-    ("PUPIL_R", "눈 동공 반지름"), ("EYE_A", "눈 반폭"), ("EYE_B", "눈 반높이"),
+    ("HUB_R", "강체 허브 반지름"), ("HORN_SCREW_R", "혼 나사 원 반지름"), ("ARM_T_SERVO", "Tilt 서보쪽 팔 판 두께"), ("LOWER_T", "하판 두께"), ("PI_STANDOFF", "Pi 받침 돌출"), ("CAM_BOSS", "카메라 받침 돌출"), ("CH_SHELF", "Tilt 서보 받침판 두께"), ("HORN_HOLE_R", "팔 판 혼 U홈 반지름"),
+    
     ("TILT_PIN_D", "Tilt 출력 핀 지름"), ("BUSH_PRELOAD", "Tilt 부싱 예압"), ("PAN_SOFT_LIMIT", "Pan 소프트 리밋 [deg]"),
 ]
 
@@ -83,12 +82,9 @@ def main():
     yoke, a, b, c = g.turntable_yoke()
     tt, arm_s, arm_i = gp.split_yoke(yoke, a, b, c)
     shapes = {n: v[0] for n, v in parts.items()}
-    one_pillar = g.pillars().intersect(g.box(g.PILLARS[0][0] - 20, g.PILLARS[0][0] + 20,
-                                             g.PILLARS[0][1] - 20, g.PILLARS[0][1] + 20, -500, 500))
-    shapes.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, pillar=one_pillar,
-                  lower_deck_with_pillars=gp.lower_deck_with_pillars(), check_coupon=gp.check_coupon(),
+    shapes.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, check_coupon=gp.check_coupon(),
                   fit_coupon=gp.fit_coupon())
-    orient = dict(gp.ORIENT, pillar=[])
+    orient = dict(gp.ORIENT)
     colors = {n: v[1] for n, v in parts.items()}
     colors.update(turntable=(0.20, 0.45, 0.85), arm_servo=(0.25, 0.50, 0.90), arm_idle=(0.25, 0.50, 0.90),
                   pillar=(0.55, 0.57, 0.60))
@@ -109,11 +105,8 @@ def main():
         back = cq.importers.importStep(f)
         ok = back.val().isValid() and abs(back.val().Volume() - sh.val().Volume()) < 1e-3 * sh.val().Volume() + 1e-3
         report.append({"file": f"01_CATIA/parts/{pn}_{src}.step", "valid": bool(ok), "volume_cm3": round(sh.val().Volume() / 1000, 2)})
-        if grp in groups and src not in ("lower_deck_with_pillars",) and qty:
-            if src == "pillar":
-                groups[grp].add(shapes["pillars"], name=f"{pn}_pillars_x4", color=cq.Color(*colors["pillar"]))
-            else:
-                groups[grp].add(sh, name=f"{pn}_{src}", color=cq.Color(*colors.get(src, (0.7, 0.7, 0.7))))
+        if grp in groups and qty:
+            groups[grp].add(sh, name=f"{pn}_{src}", color=cq.Color(*colors.get(src, (0.7, 0.7, 0.7))))
     for pn, src, ko, grp in BOUGHT:
         f = os.path.join(d_cat, "reference", f"{pn}_{src}.step")
         cq.exporters.export(shapes[src], f)
@@ -164,11 +157,11 @@ def main():
         for row in [
             ("서보", "Feetech STS3215", 2, "Pan ID 1, Tilt ID 2 (혼·동봉 나사 포함)"),
             ("볼베어링", "6806-2RS 30×42×7", 1, "Pan 하중 지지"),
-            ("나사", "M3 × 10 (한 종류)", "25 (일체형 하판 21)", "마운트 4, 케이지 3, 혼→강체 허브 4, 플렉셔 허브 2, 팔 4, 기둥 8"),
-            ("너트", "M3 육각 맞변 5.5 × 2.4", "21 (일체형 하판 17)", "육각 홈 7 (상판 3, 마운트 4), 옆 슬롯 14 (기둥 8, 팔 4, 강체 허브 2)"),
+            ("나사", "M3 × 10", 21, "마운트 4, 케이지 3, 혼→강체 허브 4, 플렉셔 허브 2, 팔 4, 상판→기둥 4(셀프태핑)"),
+            ("너트", "M3 육각 맞변 5.5 × 2.4", 13, "육각 홈 7 (상판 3, 마운트 4), 옆 슬롯 6 (팔 4, 강체 허브 2)"),
             ("케이블 타이", "폭 4.8 이하, 길이 200 이상", 1, "Tilt 서보 들림 방지"),
-            ("나사 (Pi)", "M2.5 × 12", 4, "하판 아래에서 AI HAT+ 스페이서에 체결 (스페이서 없으면 M2.5 너트 4)"),
-            ("나사 + 너트 (카메라)", "M2 × 10 + M2 너트", "4 + 4", "크래들 뒷판 뒤 → 카메라 기판 앞 너트"),
+            ("나사 + 너트 (Pi)", "M2.5 × 5 + M2.5 너트 (맞변 5.0)", "4 + 4", "Pi 위에서 하판 아래 육각 홈의 너트로 (AI HAT+ 스페이서 수나사도 이 너트에)"),
+            ("나사 + 너트 (카메라)", "M2 × 6 + M2 너트", "4 + 4", "크래들 가운데 판 뒤 → 카메라 기판 앞 너트"),
             ("서보 동봉 나사", "혼용", 4, "크래들→Tilt 혼 4"),
             ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 500 mm", 1, "경로 약 380 mm"),
             ("서보 케이블", "5264-3P 900 mm", 1, "경로 약 360 mm"),

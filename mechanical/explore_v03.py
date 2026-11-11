@@ -25,7 +25,7 @@ TMP = tempfile.mkdtemp()
 MASS = {"tilt_servo": 55.0, "camera": 5.0, "bearing_625": 5.0, "tilt_horn": 5.0}
 PAN_GROUP = ["turntable_yoke", "horn_coupler", "tilt_servo", "bearing_625", "tilt_horn", "tilt_cradle", "camera"]
 TILT_GROUP = ["tilt_horn", "tilt_cradle", "camera"]
-BASE = ["top_deck", "bearing_mount", "pillars", "pan_cage", "pan_servo"]
+BASE = ["top_deck", "bearing_mount", "lower_deck", "pan_cage", "pan_servo"]
 
 
 def mesh(name, shape):
@@ -104,7 +104,7 @@ def evaluate(wrap_r, stop, orient, h_extra=0.0):
     # pan sweep and stop
     mp = trimesh.boolean.union([M[n] for n in ["turntable_yoke", "tilt_servo", "tilt_cradle", "camera", "horn_coupler"]]
                                + [K["keepout tilt servo plugs"]])
-    mb = trimesh.boolean.union([M[n] for n in ["top_deck", "bearing_mount", "pillars"]] + [K[k] for k in K if "tilt" not in k])
+    mb = trimesh.boolean.union([M[n] for n in ["top_deck", "bearing_mount", "lower_deck"]] + [K[k] for k in K if "tilt" not in k])
     pmax = max(overlap(rot(mp, s * deg, [0, 0, 1], [0, 0, 0]), mb) for deg in (20, 60, 100, 140, 155) for s in (-1, 1))
     res["pan_overlap_max"] = round(pmax, 1)
     if pmax > 1.0:

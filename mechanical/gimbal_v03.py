@@ -52,13 +52,18 @@ FPC_W = 16.0                             # camera-end FPC width (15-pin)
 PI_L, PI_W, PI_PCB = 85.0, 56.0, 1.6
 PI_HOLES = [(3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5)]  # local (x along 85, y along 56) from PCIe-end corner
 PI_STACK_H = 30.0                        # PCB bottom -> AI HAT+ top [VERIFY]
-PI_STANDOFF = 5.0
+PI_STANDOFF = 0.3                        # v0.5.5 (user): Pi bosses stand only 0.3 mm proud
+PI_RECESS = 1.0                          # pocket under the Pi footprint for underside parts (0.3 + 1.0 clearance) [VERIFY]
+LOWER_T = 3.2                            # v0.5.5 (user): lower deck as thin as strength allows (was 5)
+PILLAR_PILOT_R, PILLAR_PILOT_L = 1.3, 8.0  # M3x10 from the top deck self-taps into the pillar top (no nut)
 # v0.5.3 fastener sizes (user, 11-09): M3 structure, M2.5 Raspberry Pi, M2 camera
 M25_CLR, M25_HEAD_D, M25_HEAD_H = 1.4, 4.5, 2.5   # clearance radius, socket head
-PI_SCREW_L = 12.0                        # M2.5 x 12 from under the lower deck: 2.4 deck + 5 boss + 1.6 PCB + 3 into the HAT spacer
+PI_SCREW_L = 5.0                         # M2.5 x 5 down through the Pi (1.6) + boss (0.3) + deck (3.2) into a nut under the deck
+M25_NUT_AF, M25_NUT_H, M25_POCKET_AF, M25_POCKET_H = 5.0, 2.0, 5.3, 2.2
 M2_CLR, M2_HEAD_D, M2_HEAD_H = 1.1, 3.8, 2.0
 M2_NUT_AF, M2_NUT_H, M2_POCKET_AF, M2_POCKET_H = 4.0, 1.6, 4.3, 1.8
-CAM_SCREW_L = 10.0                       # head behind the back plate: plate 2.5 + standoff 3.5 + PCB 1 + nut 1.6 = 8.6
+CAM_BOSS = 0.1                           # v0.5.5 (user): camera screw bosses stand only 0.1 mm proud of the web
+CAM_SCREW_L = 6.0                        # head behind the web: web 2.5 + boss 0.1 + PCB 1 + nut 1.6 = 5.2
 PI_PORTS = {                             # local x of port centres on the long edge y=0 [VERIFY]
     "USB-C": 11.2, "HDMI0": 25.8, "HDMI1": 39.2}
 PI_GPIO_X = (7.0, 58.0)                  # 40-pin header span along the y=56 edge [VERIFY]
@@ -107,14 +112,21 @@ CH_CLR = 0.25                            # servo body clearance in the channel
 TIE_W, TIE_H = 5.0, 2.0                  # cable-tie slot (one tie over the servo top end and under the plate)
 CRADLE_HALF_Y, CRADLE_WALL = 16.0, 2.5               # camera 25 wide + 0.5 clearance each side
 Y_SRV_OUT = CRADLE_HALF_Y + HORN_T + HORN_GAP   # tilt servo shaft face = outer face of the servo arm (v0.5.2)
-CRADLE_X0, CRADLE_X1, CRADLE_HALF_Z = -13.0, 9.0, 18.0     # walls run 2 mm past the lens to hold the eye plate
-EYE = True                               # decorative eye plate in front of the camera (lens = pupil)
+CRADLE_HALF_Z = 18.0
+# v0.5.5 (user): H section seen from above: the camera web sits in the middle of the side walls, which run
+# the same length behind and in front of it and end at the tilt axis (only the horn hub / pivot boss go further)
+CRADLE_X0, CRADLE_X1 = None, 0.0         # set below from the camera position
+HUB_DISC_R = 10.8                        # cradle hub disc on the tilt horn: just covers the 4 screw heads (keeps out of the corner rays)
+EYE = False                              # eye plate left out for now (user, 11-12); geometry kept in eye_plate()
 EYE_X0, EYE_T = 6.0, 1.4                 # plate back face (lens front is at x=5.4) and thickness
 EYE_GROOVE_FLOOR = 3.0                   # groove ends this far above the cradle bottom (v0.5.4: plate can move down ~12 mm)
 EYE_A, EYE_B = 13.0, 11.0                # almond half-width (max between the cradle grooves) / half-height [mm]
 PUPIL_R = 8.4                            # pupil radius on the plate face (v0.4: 7.2; user 11-09 wider)
 ENTRANCE_PUPIL_X = 3.4                   # ~2 mm inside the lens barrel; FOV cone apex for clearance
 CAM_BACK_X = -7.0
+WEB_X1 = CAM_BACK_X - CAM_BOSS           # web front face
+WEB_X0 = WEB_X1 - 2.5                    # web back face (CRADLE_WALL)
+CRADLE_X0 = 2 * (WEB_X0 + WEB_X1) / 2 - CRADLE_X1     # symmetric about the web
 
 PAN_SOFT_LIMIT = 150.0
 HOUSING_R = 24.0                          # outer-race housing outer radius (rotating) - channel inner boundary
@@ -378,24 +390,44 @@ def pillars(top=True, bottom=True):
 
 
 def lower_deck():
-    deck = box(DECK_X0, DECK_X1, -DECK_Y / 2, DECK_Y / 2, LOWER_TOP - DECK_T, LOWER_TOP).edges("|Z").fillet(6.0)
-    for x, y in PILLARS:
-        deck = deck.cut(cyl_z(1.7, LOWER_TOP - DECK_T - 1, LOWER_TOP + 1, x, y))
+    """v0.5.5 (user, 11-12): lower deck and the four pillars as one print (deck bottom on the plate). The top deck
+    is held by one M3x10 per pillar, driven from above into a pilot hole (self-tapping, no nut). Deck LOWER_T thick.
+    Raspberry Pi on 0.3 mm bosses: M2.5x5 down through the Pi into a nut in a pocket under the deck (or the AI HAT+
+    spacer's male thread into that nut); a 1 mm recess under the board clears its underside parts, the GPIO
+    header pins pass through a window."""
+    zb = LOWER_TOP - LOWER_T
+    deck = box(DECK_X0, DECK_X1, -DECK_Y / 2, DECK_Y / 2, zb, LOWER_TOP).edges("|Z").fillet(6.0)
+    # Pi: recess under the footprint (bosses keep a ring of full deck), GPIO pin window, slots
+    corners = [pi_to_deck(lx, ly) for lx, ly in ((0, 0), (PI_L, PI_W))]
+    (xa, xb), (ya, yb) = sorted((corners[0][0], corners[1][0])), sorted((corners[0][1], corners[1][1]))
+    rec = box(xa + 1.5, xb - 1.5, ya + 1.5, yb - 1.5, LOWER_TOP - PI_RECESS, LOWER_TOP + 1)
     for lx, ly in PI_HOLES:
         x, y = pi_to_deck(lx, ly)
-        deck = deck.union(cyl_z(3.0, LOWER_TOP, LOWER_TOP + PI_STANDOFF, x, y))
-    for lx, ly in PI_HOLES:   # v0.5.3: M2.5 x 12 up from under the deck into the AI HAT+ spacer (head recessed)
-        x, y = pi_to_deck(lx, ly)
-        deck = deck.cut(cyl_z(M25_CLR, LOWER_TOP - DECK_T - 1, LOWER_TOP + PI_STANDOFF + 1, x, y))
-        deck = deck.cut(cyl_z(M25_HEAD_D / 2 + 0.3, LOWER_TOP - DECK_T - 1, LOWER_TOP - DECK_T + M25_HEAD_H + 0.1, x, y))
+        rec = rec.cut(cyl_z(4.5, zb - 1, LOWER_TOP + 2, x, y))
+    deck = deck.cut(rec)
+    g0, g1 = pi_to_deck(PI_GPIO_X[0] - 1.0, PI_W - 7.5), pi_to_deck(PI_GPIO_X[1] + 1.0, PI_W - 0.5)
+    deck = deck.cut(box(min(g0[0], g1[0]), max(g0[0], g1[0]), min(g0[1], g1[1]), max(g0[1], g1[1]), zb - 1, LOWER_TOP + 1))
     ox, oy = pi_origin()
     for i in range(5):  # long narrow slots under the Pi (user, 11-02): air in from below + cables through
         xc = ox + 12 + i * 8
         deck = deck.cut(box(xc - PI_SLOT_W / 2, xc + PI_SLOT_W / 2, -PI_SLOT_HALF_L, PI_SLOT_HALF_L,
-                            LOWER_TOP - DECK_T - 1, LOWER_TOP + 1).edges("|Z").fillet(PI_SLOT_W / 2 - 0.01))
+                            zb - 1, LOWER_TOP + 1).edges("|Z").fillet(PI_SLOT_W / 2 - 0.01))
+    for lx, ly in PI_HOLES:
+        x, y = pi_to_deck(lx, ly)
+        deck = deck.union(cyl_z(3.0, LOWER_TOP - 0.01, LOWER_TOP + PI_STANDOFF, x, y))
+        deck = deck.cut(cyl_z(M25_CLR, zb - 1, LOWER_TOP + PI_STANDOFF + 1, x, y))
+        deck = deck.cut(cq.Workplane("XY").polygon(6, M25_POCKET_AF / math.cos(math.pi / 6))
+                        .extrude(M25_POCKET_H + 1).translate((x, y, zb - 1)))
     # cable tie slots along the +X edge (servo bus / UART to the STM32 off-board)
     for y in (-20, 0, 20):
-        deck = deck.cut(box(DECK_X1 - 10, DECK_X1 - 7, y - 2, y + 2, LOWER_TOP - DECK_T - 1, LOWER_TOP + 1))
+        deck = deck.cut(box(DECK_X1 - 10, DECK_X1 - 7, y - 2, y + 2, zb - 1, LOWER_TOP + 1))
+    # pillars: grow out of the deck top with a 3 mm root cone, pilot hole at the top for the M3x10
+    for x, y in PILLARS:
+        col = cyl_z(PILLAR_R, LOWER_TOP - 0.01, -DECK_T, x, y)
+        root = (cq.Workplane("XY").workplane(offset=LOWER_TOP).center(x, y).circle(PILLAR_R + 0.8)
+                .workplane(offset=3.0).circle(PILLAR_R).loft())
+        deck = deck.union(col).union(root)
+        deck = deck.cut(cyl_z(PILLAR_PILOT_R, -DECK_T - PILLAR_PILOT_L, 0, x, y))
     return deck
 
 
@@ -404,7 +436,7 @@ def CAGE_EARS(x0, x1, y0, y1, t):
     ears = []
     for sx, sy in CAGE_BOLTS:
         if sx > x1:      # connector end (+X): ear grows out of the end wall
-            ears.append((x1 + t - 0.1, sx + 4.0, sy - 4.0, sy + 4.0))
+            ears.append((x1 + t - 0.1, sx + 4.0, sy - 4.75, sy + 4.75))   # head 2.75 + 0.5 + rib 1.5
         else:            # shaft end (-X)
             ears.append((sx - 4.0, x0 - t + 0.1, sy - 5.0, sy + 5.0))
     return ears
@@ -416,11 +448,19 @@ def pan_cage():
     y0, y1 = -SV_W / 2 - c, SV_W / 2 + c
     z0, z1 = SV_TOP - SV_H - t, -DECK_T
     cage = box(x0 - t, x1 + t, y0 - t, y1 + t, z0, z1).cut(box(x0, x1, y0, y1, z0 + t, z1 + 1))
-    # three full-height ears; M3x10 from below through a counterbore (EAR_CLAMP left under the deck), up through
-    # the deck into a nut pocket in the deck top (no overhang when printed floor-down)
+    # v0.5.5 (user): ears are thin flanges right under the deck (EAR_CLAMP thick), so the bolt head is reached
+    # from below with a plain screwdriver; the cage now prints upside down (deck face on the plate) without support
     flange = None
     for (xa, xb, ya, yb), (sx, sy) in zip(CAGE_EARS(x0, x1, y0, y1, t), CAGE_BOLTS):
-        e = box(xa, xb, ya, yb, z0, z1).cut(cyl_z(1.7, z0 - 1, z1 + 1, sx, sy)).cut(cyl_z(3.1, z0 - 1, z1 - EAR_CLAMP, sx, sy))
+        e = box(xa, xb, ya, yb, z1 - EAR_CLAMP, z1)
+        # two 1.5 mm ribs at the ear's sides carry the flange at 45 degrees; the head goes in between them
+        wall_x = x1 + t if sx > x1 else x0 - t
+        ln = abs((xb if sx > x1 else xa) - wall_x)
+        for yr in (ya, yb - 1.5):
+            pts = [(wall_x, z1 - EAR_CLAMP), ((xb if sx > x1 else xa), z1 - EAR_CLAMP), (wall_x, z1 - EAR_CLAMP - ln)]
+            rib = cq.Workplane("XZ").polyline(pts).close().extrude(-1.5).translate((0, yr, 0))
+            e = e.union(rib)
+        e = e.cut(cyl_z(1.7, z0 - 1, z1 + 1, sx, sy))
         flange = e if flange is None else flange.union(e)
     # floor opening under the two bus connectors (bottom face of the servo)
     cage = cage.union(flange).cut(box(SV_CONN_X - SV_CONN_H / 2 - 2.5, SV_CONN_X + SV_CONN_H / 2 + 2.5,
@@ -629,32 +669,31 @@ def tilt_bushing_cut(y0, y1):
 
 
 def tilt_cradle():
+    """v0.5.5 (user, 11-12): H section seen from above. The camera sits on a web in the middle of two side walls,
+    which run equally behind and in front of it and stop at the tilt axis, so nothing stands beside the lens.
+    The horn hub (servo side) and the pivot boss (other side) are discs around the axis. Camera screws M2x6 from
+    behind the web, nuts on the camera front corners; bosses stand 0.1 mm proud of the web."""
     zc, w = H_TILT, CRADLE_WALL
-    back = box(CRADLE_X0, CRADLE_X0 + w, -CRADLE_HALF_Y, CRADLE_HALF_Y, zc - CRADLE_HALF_Z, zc + CRADLE_HALF_Z)
-    side_p = box(CRADLE_X0, CRADLE_X1, CRADLE_HALF_Y - w, CRADLE_HALF_Y, zc - CRADLE_HALF_Z, zc + CRADLE_HALF_Z)
-    side_n = box(CRADLE_X0, CRADLE_X1, -CRADLE_HALF_Y, -CRADLE_HALF_Y + w, zc - CRADLE_HALF_Z, zc + CRADLE_HALF_Z)
-    cr = back.union(side_p).union(side_n)
-    cr = cr.union(cyl_y(HORN_D / 2, CRADLE_HALF_Y - w, CRADLE_HALF_Y, 0, zc))
+    z0, z1 = zc - CRADLE_HALF_Z, zc + CRADLE_HALF_Z
+    web = box(WEB_X0, WEB_X1, -CRADLE_HALF_Y, CRADLE_HALF_Y, z0, z1)
+    side_p = box(CRADLE_X0, CRADLE_X1, CRADLE_HALF_Y - w, CRADLE_HALF_Y, z0, z1)
+    side_n = box(CRADLE_X0, CRADLE_X1, -CRADLE_HALF_Y, -CRADLE_HALF_Y + w, z0, z1)
+    cr = web.union(side_p).union(side_n)
+    cr = cr.union(cyl_y(HUB_DISC_R, CRADLE_HALF_Y - w, CRADLE_HALF_Y, 0, zc))            # horn hub (horn screws r8 + head)
     for a in range(4):
         x, z = polar(45 + 90 * a, 8.0)
         cr = cr.cut(cyl_y(1.7, CRADLE_HALF_Y - w - 1, CRADLE_HALF_Y + 1, x, zc + z))
+    cr = cr.union(cyl_y(7.0, -CRADLE_HALF_Y, -CRADLE_HALF_Y + w, 0, zc))                  # pivot boss
     cr = cr.union(cyl_y(TILT_PIN_D / 2, -(CRADLE_HALF_Y + 2.0 + ARM_T_IDLE + 1.0), -CRADLE_HALF_Y, 0, zc))  # pivot pin
     cr = cr.union(cyl_y(TILT_PIN_D / 2 + 2.0, -(CRADLE_HALF_Y + 1.9), -CRADLE_HALF_Y, 0, zc))              # thrust collar
     top = zc + CAM_LENS_FROM_TOP
+    # relief in the web front for the parts on the camera back, window for its FPC connector
+    cr = cr.cut(box(WEB_X1 - 1.0, WEB_X1 + 1, -8.5, 8.5, top - CAM_H + 7.0, top - 1.0))
+    cr = cr.cut(box(WEB_X0 - 1, WEB_X1 + 1, -11.0, 11.0, z0 - 1, top - CAM_H + 7.0))
     for hy, hz in CAM_HOLES:
         z = top + hz
-        cr = cr.union(cq.Workplane("YZ").circle(2.2).extrude(CAM_BACK_X - (CRADLE_X0 + w)).translate((CRADLE_X0 + w, hy, z)))
-        # v0.5.3: M2 x 10 from behind the back plate (head outside) through the standoff and the PCB, nut on the
-        # PCB front corner (no boss on the back: the cradle still prints back-plate-down without support)
-        cr = cr.cut(cyl_x(M2_CLR, CRADLE_X0 - 1, CAM_BACK_X + 0.1, z, hy))
-    # FPC leaves the camera bottom edge and goes straight back through the back plate
-    cr = cr.cut(box(CRADLE_X0 - 1, CRADLE_X0 + w + 1, -(FPC_W + 2) / 2, (FPC_W + 2) / 2, zc - CRADLE_HALF_Z - 1, top - CAM_H + 4))
-    if EYE:   # slide-in grooves for the eye plate tongues, open at the top; v0.5.4: run down to 3 mm above the
-              # cradle bottom so the plate can follow the camera down (fixed with glue where it ends up)
-        for sg in (1, -1):
-            yi = sg * (CRADLE_HALF_Y - w)
-            cr = cr.cut(box(EYE_X0 - 0.05, EYE_X0 + EYE_T + 0.1, min(yi, yi + sg * 0.8), max(yi, yi + sg * 0.8),
-                            zc - CRADLE_HALF_Z + EYE_GROOVE_FLOOR, zc + CRADLE_HALF_Z + 1))
+        cr = cr.union(cyl_x(2.2, WEB_X1 - 1.01, WEB_X1 + CAM_BOSS, z, hy))
+        cr = cr.cut(cyl_x(M2_CLR, WEB_X0 - 1, WEB_X1 + 1, z, hy))
     return cr
 
 
@@ -729,23 +768,23 @@ def fasteners():
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False, nut_z=DISC_Z0 + DISC_T - 10.0, nut_rot=0))
     for x, y in ARM_BOLTS():   # foot (6) + disc: nut in the disc slot
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False, nut_z=ARM_NUT_Z(), nut_rot=90))
-    for x, y in PILLARS:                 # through each deck into the pillar-end nuts
-        a = pillar_slot_dir(x, y)
-        base = base.union(m3(x, y, 0.0, up=False, nut_z=-DECK_T - 5.0, nut_rot=a))
-        base = base.union(m3(x, y, LOWER_TOP - DECK_T, nut_z=LOWER_TOP + 5.0 - NUT_H, nut_rot=a))
-    for lx, ly in PI_HOLES:              # M2.5 x 12 from under the lower deck
+    for x, y in PILLARS:                 # top deck -> pillar top, self-tapping into the pilot hole
+        base = base.union(m3(x, y, 0.0, up=False))
+    for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
-        z0 = LOWER_TOP - DECK_T + M25_HEAD_H
-        f = cyl_z(M25_HEAD_D / 2, z0 - M25_HEAD_H, z0, x, y).union(cyl_z(1.25, z0, z0 + PI_SCREW_L, x, y))
+        zt = LOWER_TOP + PI_STANDOFF + PI_PCB
+        f = cyl_z(M25_HEAD_D / 2, zt, zt + M25_HEAD_H, x, y).union(cyl_z(1.25, zt - PI_SCREW_L, zt, x, y))
+        zb = LOWER_TOP - LOWER_T + 0.2
+        f = f.union(cq.Workplane("XY").polygon(6, M25_NUT_AF / math.cos(math.pi / 6)).extrude(M25_NUT_H).translate((x, y, zb)))
         base = base.union(f)
     return base, pan
 
 
 def fasteners_tilt():
-    """M2 x 10 + M2 nuts holding the camera (head behind the cradle back plate, nut on the PCB front corner)."""
+    """M2 x 6 + M2 nuts holding the camera (head behind the web, nut on the PCB front corner)."""
     out = None
     top = H_TILT + CAM_LENS_FROM_TOP
-    x_head = CRADLE_X0
+    x_head = WEB_X0
     for hy, hz in CAM_HOLES:
         z = top + hz
         f = cyl_x(M2_HEAD_D / 2, x_head - M2_HEAD_H, x_head, z, hy).union(cyl_x(1.0, x_head, x_head + CAM_SCREW_L, z, hy))
@@ -796,7 +835,6 @@ def build(export=True):
     parts["top_deck"] = (top_deck(), (0.80, 0.82, 0.85), True, "base")
     parts["bearing_mount"] = (bearing_mount(), (0.55, 0.57, 0.60), True, "base")
     parts["lower_deck"] = (lower_deck(), (0.80, 0.82, 0.85), True, "base")
-    parts["pillars"] = (pillars(), (0.55, 0.57, 0.60), True, "base")
     parts["pan_cage"] = (pan_cage(), (0.55, 0.57, 0.60), True, "base")
     parts["pan_servo"] = (servo_z_up().translate((0, 0, SV_TOP)), (0.12, 0.12, 0.13), False, "base")
     parts["pi5_stack"] = (pi_stack(), (0.15, 0.55, 0.30), False, "base")

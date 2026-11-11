@@ -14,7 +14,7 @@ import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # pairs that touch by design (screw in a threaded/insert hole or a horn modelled as a solid disc)
-EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("camera", "fasteners_tilt"),
+EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("lower_deck", "fasteners_base"), ("camera", "fasteners_tilt"),
             ("turntable_yoke", "fasteners_pan")}   # unsplit yoke has no arm-foot holes; checked on the split parts below
 
 
@@ -35,7 +35,7 @@ def main():
             res["static"].append(f"{a} x {b} {v:.1f} mm3")
     yoke, a, b, c = g.turntable_yoke()
     tt, arm_s, arm_i = gp.split_yoke(yoke, a, b, c)
-    for n, sh in (("turntable", tt), ("arm_servo", arm_s), ("arm_idle", arm_i), ("lower_deck_with_pillars", None)):
+    for n, sh in (("turntable", tt), ("arm_servo", arm_s), ("arm_idle", arm_i)):
         if sh is None:   # one-piece option has no bottom pillar bolts: check against the top bolts only
             top = None
             for x, y in g.PILLARS:
@@ -48,14 +48,14 @@ def main():
         v = e.overlap(e.mesh(n, sh), M["fasteners_pan"])
         if v > 0.5:
             res["static"].append(f"{n} x fasteners_pan {v:.1f} mm3")
-    mt = trimesh.boolean.union([M[n] for n in ["tilt_horn", "tilt_cradle", "camera", "eye_plate", "fasteners_tilt"]])
+    mt = trimesh.boolean.union([M[n] for n in ["tilt_horn", "tilt_cradle", "camera", "fasteners_tilt"] + (["eye_plate"] if "eye_plate" in M else [])])
     fixed = trimesh.boolean.union([M["turntable_yoke"], M["tilt_servo"], K["keepout tilt servo plugs"]])
     # baseline at 0 deg = spline inside the horn (by design); report what rotation adds on top of it
     base0 = e.overlap(mt, fixed)
     res["tilt_overlap_max_mm3"] = round(max(e.overlap(e.rot(mt, d, [0, 1, 0], [0, 0, g.H_TILT]), fixed) for d in range(-90, 91, 10)) - base0, 2)
     mp = trimesh.boolean.union([M[n] for n in ["turntable_yoke", "tilt_servo", "tilt_cradle", "camera", "horn_coupler",
-                                               "fasteners_pan", "eye_plate"]] + [K["keepout tilt servo plugs"]])
-    mb = trimesh.boolean.union([M[n] for n in ["top_deck", "bearing_mount", "pillars", "fasteners_base", "pan_cage"]]
+                                               "fasteners_pan", "fasteners_tilt"] if n in M] + [K["keepout tilt servo plugs"]])
+    mb = trimesh.boolean.union([M[n] for n in ["top_deck", "bearing_mount", "lower_deck", "fasteners_base", "pan_cage"]]
                                + [K[k] for k in K if "tilt" not in k])
     res["pan_overlap_max_mm3"] = round(max(e.overlap(e.rot(mp, s * d, [0, 0, 1], [0, 0, 0]), mb)
                                            for d in (15, 45, 90, 135, 155) for s in (-1, 1)), 2)
@@ -73,11 +73,16 @@ def main():
     res["fov_self"] = {t: round(e.fov_blocked(selfm, t), 4) for t in (-30, 0, 30)}
     res["fov_base"] = {f"{p},{t}": round(e.fov_blocked(basem, t, p), 4) for p in (0, 90, 180) for t in (-30, 0)}
     # parts that tilt with the camera (eye plate, cradle), posed at the same tilt as the rays
-    tg = trimesh.util.concatenate([M["eye_plate"], M["tilt_cradle"]])
+    tg = trimesh.util.concatenate([M[n] for n in ("eye_plate", "tilt_cradle") if n in M])
     res["fov_tilt_group"] = {t: round(e.fov_blocked(e.rot(tg, -t, [0, 1, 0], [0, 0, g.H_TILT]), t), 4) for t in (-30, 0, 30)}
+    # v0.5.5: the Wide module's real diagonal is about 120 deg; check the tilting parts against a 60 deg cone too
+    o = np.array([g.ENTRANCE_PUPIL_X, 0, g.H_TILT])
+    th, ph = np.meshgrid(np.radians(np.linspace(0, 60, 50)), np.radians(np.linspace(0, 360, 160)))
+    dirs = np.stack([np.cos(th), np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph)], -1).reshape(-1, 3)
+    res["cradle_in_60deg_cone"] = round(float(tg.ray.intersects_any(np.repeat(o[None], len(dirs), 0), dirs).mean()), 4)
     import metrics_v04
     res["boresight_down_deg"] = metrics_v04.boresight_limit(selfm, basem)
-    vols = {n: round(M[n].volume / 1000, 2) for n in ("horn_coupler", "turntable_yoke", "bearing_mount", "pan_cage", "top_deck", "eye_plate")}
+    vols = {n: round(M[n].volume / 1000, 2) for n in ("horn_coupler", "turntable_yoke", "bearing_mount", "pan_cage", "top_deck", "lower_deck", "tilt_cradle") if n in M}
     res["volumes_cm3"] = vols
     json.dump(res, open(os.path.join(HERE, "checks_v05.json"), "w"), indent=1)
     for k, v in res.items():

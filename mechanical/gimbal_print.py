@@ -67,20 +67,8 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
 
 
 def lower_deck_with_pillars():
-    """Option (user, 11-02): lower deck and the four pillars as one print. Pillars grow out of the deck top
-    with a 3 mm cone at the root; the bottom screws are dropped (4 fewer M3x10 + nuts), the top keeps the
-    v0.5.1 side nut slot for the M3x10 that comes down through the top deck."""
-    out = g.lower_deck()
-    for x, y in g.PILLARS:
-        out = out.cut(g.cyl_z(1.8, g.LOWER_TOP - g.DECK_T - 1, g.LOWER_TOP + 1, x, y))      # old through hole
-        col = g.cyl_z(g.PILLAR_R, g.LOWER_TOP - g.DECK_T, -g.DECK_T, x, y)
-        root = (cq.Workplane("XY").workplane(offset=g.LOWER_TOP).center(x, y).circle(g.PILLAR_R + 0.8)
-                .workplane(offset=3.0).circle(g.PILLAR_R).loft())
-        out = out.union(col).union(root)
-    out = out.cut(g.pillars(top=False, bottom=False).cut(g.pillars(top=True, bottom=False)))   # slots only
-    for x, y in g.PILLARS:
-        out = out.cut(g.cyl_z(1.7, -g.DECK_T - 14.0, 1, x, y))
-    return out
+    """v0.5.5: the one-piece deck is now the standard lower deck (kept as an alias for older scripts)."""
+    return g.lower_deck()
 
 
 def fit_coupon():
@@ -116,17 +104,15 @@ def check_coupon():
 # build-plate orientation per part: (axis, angle) rotations applied in order
 ORIENT = {
     "top_deck": [],
-    "lower_deck": [],
-    "pillars": [],
-    "pan_cage": [],                          # floor on the plate, ears full height
+    "lower_deck": [],                        # deck bottom on the plate, pillars standing (one piece, v0.5.5)
+    "pan_cage": [],                          # floor on the plate; thin ears carried by 45-degree side ribs
     "bearing_mount": [],
     "horn_coupler": [],
     "turntable": [((1, 0, 0), 180)],         # top face on the plate: housing, lip and groove face up
     "arm_servo": [],                         # standing on its foot: saddle walls vertical, no support (brim)
     "arm_idle": [((1, 0, 0), 90)],           # outer (-Y) face on the plate
-    "tilt_cradle": [((0, 1, 0), -90)],       # back plate on the plate, camera standoffs up
+    "tilt_cradle": [((1, 0, 0), 180)],        # v0.5.5 H section: top edge on the plate, walls and web vertical
     "fit_coupon": [],
-    "lower_deck_with_pillars": [],           # option: replaces lower_deck + pillars, deck bottom on the plate
     "eye_plate": [((0, 1, 0), -90)],          # back face on the plate, rim and engraving up
     "check_coupon": [],
 }
@@ -153,7 +139,7 @@ def main():
     yoke, y_srv_in, y_srv_out, y_idle_in = g.turntable_yoke()
     tt, arm_s, arm_i = split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in)
     printed = {n: v[0] for n, v in parts.items() if v[2] and n != "turntable_yoke"}
-    printed.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, lower_deck_with_pillars=lower_deck_with_pillars())
+    printed.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i)
     bought = {n: v[0] for n, v in parts.items() if not v[2]}
 
     for d in ("step", "stl", "step_reference"):
@@ -162,12 +148,11 @@ def main():
     report = {}
     assy = cq.Assembly(name="gimbal_v05")
     colors = {n: v[1] for n, v in parts.items()}
-    colors["lower_deck_with_pillars"] = (0.80, 0.82, 0.85)
     colors.update(turntable=(0.20, 0.45, 0.85), arm_servo=(0.25, 0.50, 0.90), arm_idle=(0.25, 0.50, 0.90))
     for name, shape in printed.items():
         assert shape.val().isValid(), name
         cq.exporters.export(shape, os.path.join(OUT, "step", f"{name}.step"))
-        if name != "lower_deck_with_pillars":
+        if True:
             assy.add(shape, name=name, color=cq.Color(*colors.get(name, (0.7, 0.7, 0.7))))
         s = shape
         for axis, ang in ORIENT[name]:
