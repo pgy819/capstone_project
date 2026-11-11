@@ -86,19 +86,12 @@ def fit_coupon():
 
 
 def check_coupon():
-    """v0.5 fit checks before the big prints (about 4 g), left to right:
-    M3 pilot holes d2.4/2.6/2.8, 7.5 deep (pick the one an M3x10 drives into firmly by hand: PILOT_R = d/2),
-    flexure slots 0.6/0.7/0.8 mm beside 1.2 mm blades (the blade must move freely after printing)."""
-    base = g.box(0, 70, 0, 22, 0, 3)
-    for i, d in enumerate((2.4, 2.6, 2.8)):      # v0.5.6: M3 self-tapping pilot holes (no nuts any more)
-        base = base.union(g.cyl_z(4.0, 0, 8, 7 + i * 11.5, 5)).cut(g.cyl_z(d / 2, 0.5, 9, 7 + i * 11.5, 5))
-    # flexure slots: three blades 1.2 x 3 x 12 standing on a shared root, each with its own slot width
-    fl = g.box(40, 70, 0, 10, 0, 5)
-    x = 41.5
-    for gap in (0.6, 0.7, 0.8):
-        fl = fl.cut(g.box(x, x + gap, 0, 8.5, -1, 6)).cut(g.box(x + gap + 1.2, x + 2 * gap + 1.2, 0, 8.5, -1, 6))
-        x += 2 * gap + 1.2 + 6.0
-    return base.cut(g.box(40, 70, 0, 10, -1, 4)).union(fl)
+    """v0.6 fit check before the big prints (about 2 g): three M3 pilot holes d2.4/2.6/2.8, 7.5 deep, left to
+    right. Pick the one an M3x10 drives into firmly by hand and set PILOT_R = d/2."""
+    base = g.box(0, 36, 0, 10, 0, 3)
+    for i, d in enumerate((2.4, 2.6, 2.8)):
+        base = base.union(g.cyl_z(4.0, 0, 8, 6 + i * 12, 5)).cut(g.cyl_z(d / 2, 0.5, 9, 6 + i * 12, 5))
+    return base
 
 
 # build-plate orientation per part: (axis, angle) rotations applied in order

@@ -52,8 +52,8 @@ FPC_W = 16.0                             # camera-end FPC width (15-pin)
 PI_L, PI_W, PI_PCB = 85.0, 56.0, 1.6
 PI_HOLES = [(3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5)]  # local (x along 85, y along 56) from PCIe-end corner
 PI_STACK_H = 30.0                        # PCB bottom -> AI HAT+ top [VERIFY]
-PI_STANDOFF = 0.3                        # v0.5.5 (user): Pi bosses stand only 0.3 mm proud
-PI_RECESS = 1.0                          # pocket under the Pi footprint for underside parts (0.3 + 1.0 clearance) [VERIFY]
+PI_STANDOFF = 0.5                        # v0.6 (user, 11-12): Pi bosses stand 0.5 mm proud (was 0.3)
+PI_RECESS = 1.0                          # pocket under the Pi footprint for underside parts (boss + 1.0 clearance) [VERIFY]
 LOWER_T = 3.2                            # v0.5.5 (user): lower deck as thin as strength allows (was 5)
 PILLAR_PILOT_R, PILLAR_PILOT_L = 1.3, 8.0  # M3x10 from the top deck self-taps into the pillar top (no nut)
 PILOT_R = 1.3                            # M3 self-tapping pilot (d2.6) used wherever a nut was hard to place (v0.5.6)
@@ -65,7 +65,7 @@ M25_NUT_AF, M25_NUT_H, M25_POCKET_AF, M25_POCKET_H = 5.0, 2.0, 5.3, 2.2   # (not
 M25_PILOT_R = 1.05                       # M2.5 self-tapping pilot (d2.1) through the 0.3 boss + 3.2 deck
 M2_CLR, M2_HEAD_D, M2_HEAD_H = 1.1, 3.8, 2.0
 M2_NUT_AF, M2_NUT_H, M2_POCKET_AF, M2_POCKET_H = 4.0, 1.6, 4.3, 1.8
-CAM_BOSS = 0.1                           # v0.5.5 (user): camera screw bosses stand only 0.1 mm proud of the web
+CAM_BOSS = 0.3                           # v0.6 (user, 11-12): camera screw bosses stand 0.3 mm proud of the web (was 0.1)
 CAM_SCREW_L = 5.0                        # v0.5.6: M2x5 from the camera front (PCB 1 + boss 0.1) self-taps through the 2.5 web
 PI_PORTS = {                             # local x of port centres on the long edge y=0 [VERIFY]
     "USB-C": 11.2, "HDMI0": 25.8, "HDMI1": 39.2}
@@ -150,6 +150,7 @@ NUT_AF, NUT_H = 5.5, 2.4                 # M3 nut across flats / height (ISO 403
 NUT_POCKET_AF, NUT_POCKET_H = 5.8, 2.6
 EAR_CLAMP = 5.0                          # ear material under the deck (5 + deck 5 = M3x10)
 CAGE_BOLTS = ((42.0, 11.0), (42.0, -11.0), (-20.0, 0.0))   # outside the mount floor / clear of the shoulder
+PAN_BEARING = False                      # v0.6 (user, 11-12): no 6806; the turntable sits on the servo horn directly
 BOSS_PILOT = False                       # v0.5.2: horn sits 0.5 mm above the case (2.5 mm spline), no room                        # mount floor locates on the servo output boss -> 6806 coaxial with the shaft
 PILOT_CLR = 0.15                         # radius clearance on the boss [VERIFY boss d with a caliper]
 
@@ -345,12 +346,15 @@ def top_deck():
 
 
 def bearing_mount():
-    """Fixed: tube carrying the 6806 inner race + outer wall of the cable channel + hard-stop block."""
-    tube = ring_z(TUBE_ID / 2, BRG_PAN[1] / 2 + FIT_SHAFT, 0, TUBE_TOP)            # inner-race fit d30
-    shoulder = ring_z(TUBE_ID / 2, SHOULDER_R, 0, SHOULDER_Z)                       # inner-race seat
+    """Fixed: outer wall of the cable channel + hard-stop block (+ the 6806 tube when PAN_BEARING).
+    v0.6: without the bearing this is just the cable channel: floor ring, wall, stop block, 4 fixing tabs."""
     floor = ring_z(TUBE_ID / 2, WRAP_R_OUT + WRAP_WALL, 0, 2.0)
     wall = ring_z(WRAP_R_OUT, WRAP_R_OUT + WRAP_WALL, 0, TUBE_TOP)
-    m = tube.union(shoulder).union(floor).union(wall)
+    m = floor.union(wall)
+    if PAN_BEARING:
+        tube = ring_z(TUBE_ID / 2, BRG_PAN[1] / 2 + FIT_SHAFT, 0, TUBE_TOP)            # inner-race fit d30
+        shoulder = ring_z(TUBE_ID / 2, SHOULDER_R, 0, SHOULDER_Z)                       # inner-race seat
+        m = m.union(tube).union(shoulder)
     # cable drop through the floor (matches the deck slot)
     ex, ey = polar(*DECK_EXIT)
     m = m.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -1, 3))
@@ -394,7 +398,7 @@ def pillars(top=True, bottom=True):
 def lower_deck():
     """v0.5.5 (user, 11-12): lower deck and the four pillars as one print (deck bottom on the plate). The top deck
     is held by one M3x10 per pillar, driven from above into a pilot hole (self-tapping, no nut). Deck LOWER_T thick.
-    Raspberry Pi on 0.3 mm bosses: M2.5x5 down through the Pi into a nut in a pocket under the deck (or the AI HAT+
+    Raspberry Pi on PI_STANDOFF bosses: M2.5x5 down through the Pi self-taps into the deck (AI HAT+ spacers stand on the Pi; the
     spacer's male thread into that nut); a 1 mm recess under the board clears its underside parts, the GPIO
     header pins pass through a window."""
     zb = LOWER_TOP - LOWER_T
@@ -571,18 +575,27 @@ def turntable_yoke():
     y_idle_out = y_idle_in - ARM_T_IDLE
     z_disc_top = DISC_Z0 + DISC_T
     disc = cyl_z(DISC_R, DISC_Z0, z_disc_top)
-    # outer-race housing hanging below the disc: d42 bore, lip on top of the outer race only
-    od, idr, w = BRG_PAN
-    housing = ring_z(od / 2 + FIT_BORE, od / 2 + 3.0, TUBE_TOP - w, DISC_Z0)
-    lip = ring_z(idr / 2 + 3.5, od / 2 + 0.1, TUBE_TOP, DISC_Z0)  # touches outer race (r>18.5) only
-    y = disc.union(housing).union(lip)
-    # centre: relief over the tube/inner race, two radial slots for the coupler pins
-    y = y.cut(cyl_z(idr / 2 + 3.4, TUBE_TOP - 0.01, DISC_Z0))
-    # v0.5 flexure hub in place of the pin slots (bolted torque path, radial + axial float, no backlash)
-    pocket, fb = flexure_bodies(DISC_Z0, z_disc_top)
-    y = y.cut(pocket)
-    for b in fb.values():
-        y = y.union(b)
+    if PAN_BEARING:
+        # outer-race housing hanging below the disc: d42 bore, lip on top of the outer race only
+        od, idr, w = BRG_PAN
+        housing = ring_z(od / 2 + FIT_BORE, od / 2 + 3.0, TUBE_TOP - w, DISC_Z0)
+        lip = ring_z(idr / 2 + 3.5, od / 2 + 0.1, TUBE_TOP, DISC_Z0)  # touches outer race (r>18.5) only
+        y = disc.union(housing).union(lip)
+        y = y.cut(cyl_z(idr / 2 + 3.4, TUBE_TOP - 0.01, DISC_Z0))
+        pocket, fb = flexure_bodies(DISC_Z0, z_disc_top)   # v0.5 flexure hub (needed only with the bearing)
+        y = y.cut(pocket)
+        for b in fb.values():
+            y = y.union(b)
+    else:
+        # v0.6 (user): no bearing, no flexure, no separate hub. A post grows down from the disc onto the servo horn
+        # and is held by the 4 horn screws (M3x10 in counterbores from the disc top, 6 mm floor on the horn).
+        z0 = PAN_HORN_Z + HORN_T
+        y = disc.union(cyl_z(HUB_R, z0, DISC_Z0 + 0.01))
+        for a in range(4):
+            x, yy = polar(45 + 90 * a, HORN_SCREW_R)
+            y = y.cut(cyl_z(1.7, z0 - 1, z_disc_top + 1, x, yy)).cut(cyl_z(3.1, z0 + 6.0, z_disc_top + 1, x, yy))
+        y = y.cut(cyl_z(3.25, z0 - 1, z0 + 4.0))                 # horn spline-screw head
+        y = y.cut(cyl_z(3.0, z0 + 6.0, z_disc_top + 1))          # look-through to the spline screw
     # arm bolts (v0.5.6, user: nut slots too hard): M3x10 down through the foot self-taps 4 mm into a blind
     # pilot hole in the disc (bottom skin stays closed)
     for x, yb in ARM_BOLTS():
@@ -668,8 +681,8 @@ def tilt_bushing_cut(y0, y1):
 def tilt_cradle():
     """v0.5.5 (user, 11-12): H section seen from above. The camera sits on a web in the middle of two side walls,
     which run equally behind and in front of it and stop at the tilt axis, so nothing stands beside the lens.
-    The horn hub (servo side) and the pivot boss (other side) are discs around the axis. Camera screws M2x6 from
-    behind the web, nuts on the camera front corners; bosses stand 0.1 mm proud of the web."""
+    The horn hub (servo side) and the pivot boss (other side) are discs around the axis. Camera screws M2x5 from the
+    front self-tap into the web (no nuts); bosses stand CAM_BOSS proud of the web."""
     zc, w = H_TILT, CRADLE_WALL
     z0, z1 = zc - CRADLE_HALF_Z, zc + CRADLE_HALF_Z
     web = box(WEB_X0, WEB_X1, -CRADLE_HALF_Y, CRADLE_HALF_Y, z0, z1)
@@ -761,7 +774,7 @@ def fasteners():
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
         f = m3(x, y, PAN_HORN_Z + HORN_T + 6.0, up=False)
         pan = f if pan is None else pan.union(f)
-    for x, y in HUB_SCREWS:              # flexure hub (DISC_T) -> nut in the rigid hub
+    for x, y in (HUB_SCREWS if PAN_BEARING else ()):   # flexure hub (DISC_T) -> rigid hub
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
     for x, y in ARM_BOLTS():   # foot (6) + disc: nut in the disc slot
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False))
@@ -831,9 +844,11 @@ def build(export=True):
     parts["pan_servo"] = (servo_z_up().translate((0, 0, SV_TOP)), (0.12, 0.12, 0.13), False, "base")
     parts["pi5_stack"] = (pi_stack(), (0.15, 0.55, 0.30), False, "base")
     od, idr, w = BRG_PAN
-    parts["bearing_6806"] = (ring_z(idr / 2, od / 2, TUBE_TOP - w, TUBE_TOP), (0.75, 0.75, 0.78), False, "base")
+    if PAN_BEARING:
+        parts["bearing_6806"] = (ring_z(idr / 2, od / 2, TUBE_TOP - w, TUBE_TOP), (0.75, 0.75, 0.78), False, "base")
     parts["pan_horn"] = (cyl_z(HORN_D / 2, PAN_HORN_Z, PAN_HORN_Z + HORN_T), (0.70, 0.70, 0.72), False, "pan")
-    parts["horn_coupler"] = (horn_coupler(), (0.95, 0.75, 0.20), True, "pan")
+    if PAN_BEARING:
+        parts["horn_coupler"] = (horn_coupler(), (0.95, 0.75, 0.20), True, "pan")
     parts["turntable_yoke"] = (yoke, (0.20, 0.45, 0.85), True, "pan")
     # tilt servo: shaft -Y at (0, H_TILT); case outside the +Y arm; body points backward (-X)
     ts = tilt_rot(servo_z_up())

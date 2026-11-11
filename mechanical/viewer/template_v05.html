@@ -1,4 +1,4 @@
-<title>2축 짐벌 v0.5.6</title>
+<title>2축 짐벌 v0.6</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -72,7 +72,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
   </div>
   <aside>
     <section>
-      <h1>상단부 2축 짐벌 v0.5.6</h1>
+      <h1>상단부 2축 짐벌 v0.6</h1>
       <p class="sub" id="lead"></p>
     </section>
     <section aria-labelledby="h-pose">
@@ -105,11 +105,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
         <tr><td>v0.5.5~6</td><td>하판+기둥 일체, H형 카메라 거치부, 너트 0개, 위에서 끼우는 Tilt 축</td></tr>
         <tr><td>Pi · 카메라</td><td>M2.5 × 5 (Pi), M2 × 5 (카메라), 안내 구멍에 바로</td></tr>
         <tr><td>Tilt 서보 장착</td><td>위에서 채널에 끼워 아래 받침판에 얹고 케이블 타이 1개 (v0.5.4)</td></tr>
-        <tr><td>Pan 구동</td><td>혼 → 강체 허브(M3 4개) → 플렉셔 허브(M3 2개) → 턴테이블</td></tr>
-        <tr><td>축 정렬</td><td>마운트 바닥이 서보 출력 보스에 끼워져 6806과 서보 축이 같은 기준</td></tr>
-        <tr><td>눈 동공</td><td>Ø 14.4 → Ø 16.8 mm, 화각 가림 0 %</td></tr>
+        <tr><td>Pan 구동</td><td>베어링 없이 턴테이블 가운데 기둥을 혼에 직결 (혼 나사 4개, v0.6)</td></tr>
+                <tr><td>눈 동공</td><td>Ø 14.4 → Ø 16.8 mm, 화각 가림 0 %</td></tr>
       </table>
-      <p class="sub" style="margin-top:8px">플렉셔는 판스프링 두 쌍(1단 Y, 2단 X)으로 축 어긋남만 흡수하고 비틀림은 판의 길이 방향 인장·압축으로 받습니다. 미끄럼 접촉과 스프링 예압이 없어 PLA 크리프로 유격이 다시 생기지 않습니다. 부품 목록의 <b>체결 부품</b>을 켜면 볼트·너트 위치가 보입니다.</p>
     </section>
     <section aria-labelledby="h-dims">
       <h2 id="h-dims">주요 치수와 추정치</h2>
@@ -130,11 +128,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
         <li><b>STS3215 외형과 커넥터 면</b>: 몸체 치수, 출력축 위치, 5264 커넥터 두 개가 축 반대쪽 끝면에 있는지</li>
         <li><b>Pi 5 CAM/DISP 커넥터 위치</b>: FPC 하강 지점과 길이가 여기에 달림</li>
         <li><b>AI HAT+ 아래 FPC 통과</b>: HAT 가장자리로 FPC를 빼낼 틈이 있는지</li>
-        <li><b>6806 끼워맞춤</b>: 공차 쿠폰으로 FIT_SHAFT / FIT_BORE를 정한 뒤 출력</li>
+        <li><b>M3 안내 구멍</b>: 확인 쿠폰으로 지름(PILOT_R)을 정한 뒤 출력</li>
         <li><b>스토퍼 강도</b>: 서보가 스토퍼에 걸린 채 최대 토크(약 1.9 N·m)를 내면 수십 N이 걸림. 소프트 리밋이 1차 방어</li>
         <li><b>서보 출력 보스 지름 9 mm</b>: 베어링 마운트가 여기에 끼워져 정렬됨. 확인 쿠폰(Ø 9.2~9.5)으로 맞춤</li>
-        <li><b>혼 나사 원 반지름 8 mm, 혼 위면 높이</b>: 강체 허브와 플렉셔 허브 사이 틈이 0이 되게 맞춤(종이 한 장이 끼면 정상)</li>
-        <li><b>플렉셔 틈 0.7 mm</b>: 확인 쿠폰의 판스프링이 손가락으로 튕겨 움직이면 그 틈으로 출력</li>
         <li><b>Tilt 축 자리</b>: 핀을 위에서 눌러 끼우면 딸깍 하고 들어가야 정상. 헐거우면 손가락 틈을 좁혀 다시 출력</li>
         <li><b>카메라 홀·렌즈 위치, Pi 스택 높이 30 mm</b>: v0.1과 동일한 가정</li>
       </ul>
@@ -152,7 +148,7 @@ const EYE_X = __EYEX__;
 const PARTS = [
   // name, label, colour, group (base | pan | tilt), purchased?
   ["top_deck", "상판", "#c9ced4", "base", 0],
-  ["bearing_mount", "베어링 마운트 + 케이블 채널", "#8d959e", "base", 0],
+  ["bearing_mount", "케이블 채널 + 스토퍼", "#8d959e", "base", 0],
   ["lower_deck", "하판 + 기둥 (일체형)", "#c9ced4", "base", 0],
   ["pan_cage", "Pan 서보 케이지", "#8d959e", "base", 0],
   ["pan_servo", "Pan 서보 STS3215", "#2a2d31", "base", 1],
@@ -280,7 +276,7 @@ const fmtE = v => v.toExponential(2).replace("e-", "×10⁻").replace(/⁻(\d)/,
 const pct = v => (v * 100).toFixed(0) + " %";
 function fillTables() {
   const b = BEST, fb = Math.max(...Object.entries(b.fov_base).filter(([k]) => k.endsWith(",0")).map(([, v]) => v));
-  document.getElementById("lead").textContent = `하판+기둥 일체형, H형 카메라 거치부, 위에서 끼우는 Tilt 서보 채널, 판스프링 Pan 구동 버전입니다(베어링 6806 하나, 나사 M3·M2.5·M2). 케이블 채널 반경 ${b.wrap_r} mm, 스토퍼 ${STOPK[b.stop]}, Tilt 서보 몸체 ${ORIENT[b.orient]} 방향.`;
+  document.getElementById("lead").textContent = `하판+기둥 일체형, H형 카메라 거치부, 위에서 끼우는 Tilt 서보 채널, 혼 직결 Pan 구동 버전입니다(베어링·너트 없음, 나사 M3·M2.5·M2). 케이블 채널 반경 ${b.wrap_r} mm, 스토퍼 ${STOPK[b.stop]}, Tilt 서보 몸체 ${ORIENT[b.orient]} 방향.`;
   const rows = [
     ["Tilt축 높이 (상판 윗면 기준)", b.H_TILT.toFixed(0) + " mm"],
     ["턴테이블 지름", b.disc_d.toFixed(0) + " mm"],

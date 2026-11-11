@@ -14,7 +14,7 @@ import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # pairs that touch by design (screw in a threaded/insert hole or a horn modelled as a solid disc)
-EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("lower_deck", "fasteners_base"), ("top_deck", "fasteners_base"),
+EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("turntable_yoke", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("lower_deck", "fasteners_base"), ("top_deck", "fasteners_base"),
             ("bearing_mount", "fasteners_base"), ("horn_coupler", "fasteners_pan"), ("tilt_cradle", "fasteners_tilt"),
             ("turntable_yoke", "tilt_cradle"), ("camera", "fasteners_tilt"),   # self-tapping threads / snap-pivot grip (by design)
             ("turntable_yoke", "fasteners_pan")}   # unsplit yoke has no arm-foot holes; checked on the split parts below
@@ -65,13 +65,13 @@ def main():
                                            for d in (15, 45, 90, 135, 155) for s in (-1, 1)), 2)
     y, bm = M["turntable_yoke"], M["bearing_mount"]
     res["stop_deg"] = next((d for d in range(156, 181, 2) if e.overlap(e.rot(y, d, [0, 0, 1], [0, 0, 0]), bm) > 0.05), None)
-    # radial float of the flexure: rigid hub offset 0.4 mm in x and y must not touch anything fixed
-    hub = M["horn_coupler"]
-    for dx, dy in ((0.4, 0), (-0.4, 0), (0, 0.4), (0, -0.4)):
-        h = hub.copy(); h.apply_translation([dx, dy, 0])
-        v = e.overlap(h, trimesh.boolean.union([M["bearing_mount"], M["bearing_6806"]]))
-        if v > 0.05:
-            res["notes"].append(f"rigid hub offset {dx},{dy}: touches mount/bearing {v:.2f} mm3")
+    if "horn_coupler" in M:   # radial float of the flexure (bearing version only)
+        hub = M["horn_coupler"]
+        for dx, dy in ((0.4, 0), (-0.4, 0), (0, 0.4), (0, -0.4)):
+            h = hub.copy(); h.apply_translation([dx, dy, 0])
+            v = e.overlap(h, trimesh.boolean.union([M["bearing_mount"], M["bearing_6806"]]))
+            if v > 0.05:
+                res["notes"].append(f"rigid hub offset {dx},{dy}: touches mount/bearing {v:.2f} mm3")
     selfm = trimesh.util.concatenate([M[n] for n in ["turntable_yoke", "tilt_servo", "fasteners_pan"]])
     basem = trimesh.util.concatenate([M[n] for n in e.BASE + ["pi5_stack", "lower_deck"]])
     res["fov_self"] = {t: round(e.fov_blocked(selfm, t), 4) for t in (-30, 0, 30)}
