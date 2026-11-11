@@ -160,6 +160,10 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
   stats_.det_batches++;
   if (log_) log_->write_det(b, now_seq);
   last_batch_ = b;
+  if (capture_) {
+    for (auto it = inputs_.begin(); it != inputs_.end(); ++it)
+      if (it->seq == b.frame_seq && it->kind == b.kind) { shown_input_ = *it; inputs_.erase(it); break; }
+  }
   const auto& tc = cfg_.det;
 
   // collect persons for context search (Sec 3.13.1)
@@ -404,11 +408,6 @@ bool Perception::submit_main_crop(const FrameView& f, cv::Rect r, DetKind kind) 
   auto plane_path = [&](int w, int h, const uint8_t* u, const uint8_t* v) {
     return cfg_.det.preproc_i420 && u && v && (w > in.width || h > in.height);
   };
-  auto submit = [&](DetRequest&& req) {
-    const bool ok = det_->submit(std::move(req));
-    ok ? stats_.det_submitted++ : stats_.det_rejected++;
-    return ok;
-  };
   // Regions larger than the model input are downscaled anyway; cutting them from lores
   // (2.4x smaller) avoids a full-resolution YUV->RGB conversion. Targets this large keep
   // >= 40 px in lores. Field run 2: 864 px ROIs from main cost ~10 ms per frame on Pi 5.
@@ -423,21 +422,35 @@ bool Perception::submit_main_crop(const FrameView& f, cv::Rect r, DetKind kind) 
     const float to_main = float(f.main_w) / float(f.lo_w);
     if (plane_path(lr.width, lr.height, f.lo_u, f.lo_v)) {
       const I420View v{f.lo_y, f.lo_u, f.lo_v, f.lo_w, f.lo_h, f.lo_stride, f.lo_uv_stride};
-      return submit(make_request_i420(v, lr, in, to_main, f.seq, f.t_sof_ns, kind, cfg_.det.linear_mild_downscale));
+      return submit_req(make_request_i420(v, lr, in, to_main, f.seq, f.t_sof_ns, kind, cfg_.det.linear_mild_downscale),
+                        "lores plane");
     }
     cv::Mat rgb = i420_crop_to_rgb(f.lo_y, f.lo_u, f.lo_v, f.lo_w, f.lo_h, f.lo_stride, f.lo_uv_stride, lr);
     DetRequest req = make_request(rgb, cv::Rect(0, 0, rgb.cols, rgb.rows), in, to_main, f.seq, f.t_sof_ns, kind);
     req.map.crop = {lr.x * to_main, lr.y * to_main, lr.width * to_main, lr.height * to_main};
-    return submit(std::move(req));
+    return submit_req(std::move(req), "lores rgb");
   }
   if (plane_path(r.width, r.height, f.main_u, f.main_v)) {
     const I420View v{f.main_y, f.main_u, f.main_v, f.main_w, f.main_h, f.main_stride, f.main_uv_stride};
-    return submit(make_request_i420(v, r, in, 1.f, f.seq, f.t_sof_ns, kind, cfg_.det.linear_mild_downscale));
+    return submit_req(make_request_i420(v, r, in, 1.f, f.seq, f.t_sof_ns, kind, cfg_.det.linear_mild_downscale),
+                      "main plane");
   }
   cv::Mat rgb = yuv420_crop_to_rgb(f, r);
   DetRequest req = make_request(rgb, cv::Rect(0, 0, rgb.cols, rgb.rows), in, 1.f, f.seq, f.t_sof_ns, kind);
   req.map.crop = {float(r.x), float(r.y), float(r.width), float(r.height)};
-  return submit(std::move(req));
+  return submit_req(std::move(req), "main rgb");
+}
+
+bool Perception::submit_req(DetRequest&& req, const char* path) {
+  DetInputSnap snap;
+  if (capture_) snap = {req.frame_seq, req.kind, req.map, req.rgb, path};  // shares the buffer
+  const bool ok = det_->submit(std::move(req));
+  ok ? stats_.det_submitted++ : stats_.det_rejected++;
+  if (ok && capture_) {
+    inputs_.push_back(std::move(snap));
+    while (inputs_.size() > 8) inputs_.pop_front();   // results lost or never consumed
+  }
+  return ok;
 }
 
 bool Perception::submit_global(const FrameView& f) {
@@ -446,9 +459,7 @@ bool Perception::submit_global(const FrameView& f) {
     cv::Mat rgb = lores_to_rgb(f);
     DetRequest req = make_request(rgb, cv::Rect(0, 0, rgb.cols, rgb.rows), det_->input_size(),
                                   float(f.main_w) / float(f.lo_w), f.seq, f.t_sof_ns, DetKind::Global);
-    const bool ok = det_->submit(std::move(req));
-    ok ? stats_.det_submitted++ : stats_.det_rejected++;
-    return ok;
+    return submit_req(std::move(req), "lores full");
   }
   return submit_main_crop(f, cv::Rect(0, 0, f.main_w, f.main_h), DetKind::Global);
 }

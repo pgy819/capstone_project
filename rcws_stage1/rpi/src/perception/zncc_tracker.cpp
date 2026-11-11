@@ -71,6 +71,7 @@ void ZnccTracker::refresh(const cv::Mat& y, const RectF& box) {
 
 NccResult ZnccTracker::match(const cv::Mat& y, cv::Point2d pred, double radius, uint32_t frame_id) const {
   NccResult r;
+  if (debug_) { dbg_.valid = false; dbg_.frame_id = frame_id; }
   if (tmpl_.empty()) return r;
   const int side = tmpl_.cols;
   const int side_px = side * s_;
@@ -117,10 +118,11 @@ NccResult ZnccTracker::match(const cv::Mat& y, cv::Point2d pred, double radius, 
   // second-best peak outside the main lobe (look-alike / repeated texture)
   const int lobe = std::clamp(side / 6, 2, 8);
   double v2 = -2;
+  cv::Point p2(-1, -1);
   if (res.cols > 2 * lobe + 1 || res.rows > 2 * lobe + 1) {
     cv::Mat masked = res.clone();
     cv::rectangle(masked, cv::Rect(pmax.x - lobe, pmax.y - lobe, 2 * lobe + 1, 2 * lobe + 1), cv::Scalar(-2), cv::FILLED);
-    cv::minMaxLoc(masked, nullptr, &v2);
+    cv::minMaxLoc(masked, nullptr, &v2, nullptr, &p2);
   }
   // template centre at matching scale = top-left + (side-1)/2
   const double jc = pmax.x + dx + 0.5 * (side - 1), ic = pmax.y + dy + 0.5 * (side - 1);
@@ -132,6 +134,20 @@ NccResult ZnccTracker::match(const cv::Mat& y, cv::Point2d pred, double radius, 
   r.scale = s_;
   const bool margin_ok = r.second <= -1.5f || (r.rho - r.second) >= cfg_.peak_margin;
   r.ok = r.rho >= cfg_.rho_min && margin_ok;
+  if (debug_) {  // header copies only: search and res were allocated by this call
+    dbg_.valid = true;
+    dbg_.tmpl = tmpl_;
+    dbg_.search = search;
+    dbg_.res = res;
+    dbg_.peak = pmax;
+    dbg_.peak2 = v2 > -1.5 ? p2 : cv::Point(-1, -1);
+    dbg_.rho = r.rho;
+    dbg_.second = r.second;
+    dbg_.scale = s_;
+    dbg_.ok = r.ok;
+    dbg_.rho_min = cfg_.rho_min;
+    dbg_.margin_min = cfg_.peak_margin;
+  }
   return r;
 }
 

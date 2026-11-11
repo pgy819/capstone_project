@@ -36,6 +36,19 @@ class IDetector {
   virtual std::optional<DetectionBatch> poll() = 0;   // completed results, in completion order
 };
 
+// Live-preview copy of a submitted request (the RGB buffer is shared, not copied: requests
+// own a fresh buffer that nobody writes after submission).
+struct DetInputSnap {
+  uint32_t seq = 0;
+  DetKind kind = DetKind::Global;
+  InputMap map;
+  cv::Mat rgb;              // model input, RGB
+  const char* path = "";    // preprocessing path that produced it
+};
+
+// Inverse of map_back for one point: main-stream pixels -> model input pixels.
+cv::Point2f map_to_input(const InputMap& m, float x_main, float y_main);
+
 // Resize/letterbox a source region into the detector input. src is RGB (CV_8UC3).
 DetRequest make_request(const cv::Mat& src_rgb, const cv::Rect& src_roi, cv::Size input, float src_to_main,
                         uint32_t seq, int64_t t_sof, DetKind kind);

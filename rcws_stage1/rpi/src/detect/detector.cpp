@@ -85,6 +85,11 @@ DetRequest make_request_i420(const I420View& src, cv::Rect roi, cv::Size input, 
   return r;
 }
 
+cv::Point2f map_to_input(const InputMap& m, float x, float y) {
+  const float k = m.scale / m.src_to_main;
+  return {(x - m.crop.x) * k + m.pad_x, (y - m.crop.y) * k + m.pad_y};
+}
+
 Detection map_back(const InputMap& m, float x0, float y0, float x1, float y1, float score, ObjClass cls) {
   const float k = m.src_to_main / m.scale;
   Detection d;

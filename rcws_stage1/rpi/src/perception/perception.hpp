@@ -40,6 +40,12 @@ class Perception {
   std::optional<RectF> target_box() const;
   // Latest detector output (for the live preview only)
   const DetectionBatch& last_detections() const { return last_batch_; }
+  // Live preview "stack" view: keep the model input of each request and the last NCC
+  // correlation map. Off by default; when off nothing is retained (v3.1 behaviour).
+  void set_preview_capture(bool on) { capture_ = on; ncc_.set_debug(on); }
+  // Model input that produced last_detections() (empty until the first matching batch)
+  const DetInputSnap& det_input() const { return shown_input_; }
+  const NccDebug& ncc_debug() const { return ncc_.debug(); }
 
  private:
   struct HistFrame {
@@ -70,6 +76,7 @@ class Perception {
   VisionMeas det_meas(const Detection& d, const DetectionBatch& b) const;
   bool submit_main_crop(const FrameView& f, cv::Rect r, DetKind kind);
   bool submit_global(const FrameView& f);
+  bool submit_req(DetRequest&& req, const char* path);
   void log_meas(const VisionMeas& m, bool accepted, double d2);
   void log_est(int64_t t);
 
@@ -102,6 +109,9 @@ class Perception {
   uint32_t cur_seq_ = 0;
   PerceptionStats stats_;
   DetectionBatch last_batch_;
+  bool capture_ = false;
+  std::deque<DetInputSnap> inputs_;   // submitted, awaiting results (preview only)
+  DetInputSnap shown_input_;
 };
 
 }  // namespace rcws

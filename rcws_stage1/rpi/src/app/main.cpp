@@ -46,6 +46,7 @@ struct Args {
   int preview_port = 0;    // 0 = off
   bool window = false;     // on-screen popup on the Pi desktop
   int preview_fps = 10;
+  std::string preview_view = "plain";  // plain | stack
 };
 
 void usage() {
@@ -53,7 +54,8 @@ void usage() {
                "                   [--detector hailo|oracle|none|replay:RLOG] [--log out.rlog]\n"
                "                   [--frames N] [--clip-seconds S] [--print-every N]\n"
                "                   [--preview PORT] [--preview-fps N]   (live view: http://<pi>:PORT/)\n"
-               "                   [--window]                           (popup window on the Pi desktop)\n";
+               "                   [--window]                           (popup window on the Pi desktop)\n"
+               "                   [--preview-view plain|stack]         (stack: + detector input + NCC map)\n";
 }
 
 bool parse(int argc, char** argv, Args* a) {
@@ -71,6 +73,10 @@ bool parse(int argc, char** argv, Args* a) {
     if (k == "--preview" && val(&v)) { a->preview_port = std::stoi(v); continue; }
     if (k == "--preview-fps" && val(&v)) { a->preview_fps = std::stoi(v); continue; }
     if (k == "--window") { a->window = true; continue; }
+    if (k == "--preview-view" && val(&a->preview_view)) {
+      if (a->preview_view != "plain" && a->preview_view != "stack") return false;
+      continue;
+    }
     return false;
   }
   return true;
@@ -157,6 +163,9 @@ int main(int argc, char** argv) {
       std::cerr << "--window: no desktop session (DISPLAY unset). Over SSH run with: DISPLAY=:0 ./build/rcws_vision ...\n";
       args.window = false;
     }
+    const bool stack = args.preview_view == "stack";
+    preview.set_stack(stack);
+    per.set_preview_capture(stack);
     if (preview.start(args.preview_port, args.window, cfg.rt.logger_cpu, &err)) {
       if (args.preview_port > 0) std::cerr << "preview: open http://<pi-address>:" << args.preview_port << "/ in a browser\n";
       if (args.window) std::cerr << "preview: popup window 'RCWS Stage 1' on the Pi desktop\n";
@@ -217,6 +226,12 @@ int main(int argc, char** argv) {
         ov.fps = last_fps;
         ov.proc_ms = last_proc;
         ov.seq = fr.view.seq;
+        if (args.preview_view == "stack") {   // buffer headers only; the template is small and cloned
+          ov.det_seq = lb.frame_seq;
+          ov.det_in = per.det_input();
+          ov.ncc = per.ncc_debug();
+          ov.ncc.tmpl = ov.ncc.tmpl.clone();
+        }
         const EstState e = per.estimate(fr.view.t_sof_ns);
         if (e.valid) {
           ov.est_valid = true;

@@ -88,7 +88,9 @@ void PreviewServer::publish(const cv::Mat& gray, const PreviewOverlay& ov) {
   has_pending_ = true;
 }
 
-cv::Mat PreviewServer::render(const cv::Mat& gray, const PreviewOverlay& ov) const {
+namespace {
+
+cv::Mat render_frame(const cv::Mat& gray, const PreviewOverlay& ov, int clients) {
   cv::Mat img;
   cv::cvtColor(gray, img, cv::COLOR_GRAY2BGR);
   const float s = ov.scale;
@@ -118,7 +120,7 @@ cv::Mat PreviewServer::render(const cv::Mat& gray, const PreviewOverlay& ov) con
   cv::rectangle(img, cv::Rect(0, 0, img.cols, 34), {0, 0, 0}, cv::FILLED);
   char l1[160], l2[160];
   std::snprintf(l1, sizeof l1, "%-7s  #%u  %.1f fps  proc %.2f ms  clients %d", to_string(ov.state), ov.seq, ov.fps,
-                ov.proc_ms, n_clients_.load());
+                ov.proc_ms, clients);
   if (ov.est_valid)
     std::snprintf(l2, sizeof l2, "psi %+7.2f  theta %+7.2f deg   rate %+6.1f %+6.1f deg/s   R %.1f m", ov.psi_deg,
                   ov.theta_deg, ov.rate_psi, ov.rate_theta, ov.range_m);
@@ -127,6 +129,133 @@ cv::Mat PreviewServer::render(const cv::Mat& gray, const PreviewOverlay& ov) con
   cv::putText(img, l1, {6, 14}, cv::FONT_HERSHEY_SIMPLEX, 0.42, state_color(ov.state), 1);
   cv::putText(img, l2, {6, 29}, cv::FONT_HERSHEY_SIMPLEX, 0.42, {255, 255, 255}, 1);
   return img;
+}
+
+void title(cv::Mat& p, const std::string& t, cv::Scalar col = {230, 230, 230}) {
+  cv::rectangle(p, cv::Rect(0, 0, p.cols, 18), {0, 0, 0}, cv::FILLED);
+  cv::putText(p, t, {5, 13}, cv::FONT_HERSHEY_SIMPLEX, 0.38, col, 1);
+}
+
+void note(cv::Mat& p, const std::string& t, int y) {
+  cv::putText(p, t, {6, y}, cv::FONT_HERSHEY_SIMPLEX, 0.38, {170, 170, 170}, 1);
+}
+
+// Fit src into dst (letterboxed, centred). Returns the scale used and the top-left offset.
+double fit_into(const cv::Mat& src, cv::Mat dst, int interp, cv::Point* off) {
+  const double k = std::min(double(dst.cols) / src.cols, double(dst.rows) / src.rows);
+  const int w = std::max(1, int(src.cols * k)), h = std::max(1, int(src.rows * k));
+  *off = {(dst.cols - w) / 2, (dst.rows - h) / 2};
+  cv::resize(src, dst(cv::Rect(*off, cv::Size(w, h))), cv::Size(w, h), 0, 0, interp);
+  return k;
+}
+
+const char* kind_name(DetKind k) {
+  return k == DetKind::Roi ? "ROI" : k == DetKind::Tile ? "TILE" : "GLOBAL";
+}
+
+// A: what the detector saw, with the returned boxes drawn in model-input pixels.
+cv::Mat det_panel(const PreviewOverlay& ov, int H) {
+  cv::Mat p(H, H, CV_8UC3, cv::Scalar(28, 28, 28));
+  const DetInputSnap& d = ov.det_in;
+  if (d.rgb.empty()) { title(p, "DETECTOR INPUT"); note(p, "no batch yet", 40); return p; }
+  cv::Mat in;
+  cv::cvtColor(d.rgb, in, cv::COLOR_RGB2BGR);
+  for (const auto& det : ov.dets) {   // dets belong to the same batch (ov.det_seq == d.seq)
+    if (ov.det_seq != d.seq) break;
+    const cv::Point2f a = map_to_input(d.map, det.box.x, det.box.y);
+    const cv::Point2f b = map_to_input(d.map, det.box.x + det.box.w, det.box.y + det.box.h);
+    const cv::Scalar col = det.cls == ObjClass::Phone ? cv::Scalar(0, 255, 255) : cv::Scalar(255, 160, 0);
+    cv::rectangle(in, a, b, col, 2);
+    char t[24];
+    std::snprintf(t, sizeof t, "%.2f", det.score);
+    cv::putText(in, t, cv::Point(int(a.x), std::max(14, int(a.y) - 4)), cv::FONT_HERSHEY_SIMPLEX, 0.6, col, 2);
+  }
+  if (ov.has_target) {  // tracker's box for reference, in the same pixels
+    const cv::Point2f a = map_to_input(d.map, ov.target.x, ov.target.y);
+    const cv::Point2f b = map_to_input(d.map, ov.target.x + ov.target.w, ov.target.y + ov.target.h);
+    cv::rectangle(in, a, b, state_color(ov.state), 1);
+  }
+  cv::Point off;
+  fit_into(in, p(cv::Rect(0, 18, H, H - 18)), cv::INTER_AREA, &off);
+  // crop size in source pixels and the resampling factor seen by the model
+  const float src_px = d.map.crop.w / d.map.src_to_main;
+  char t[96];
+  std::snprintf(t, sizeof t, "DET IN %s #%u  %s %.0fpx x%.2f", kind_name(d.kind), d.seq, d.path, src_px, d.map.scale);
+  title(p, t, d.seq == ov.det_seq ? cv::Scalar(0, 255, 255) : cv::Scalar(150, 150, 150));
+  return p;
+}
+
+cv::Mat gray8(const cv::Mat& f32) {  // luma stored as float 0..255
+  cv::Mat g;
+  f32.convertTo(g, CV_8U);
+  cv::cvtColor(g, g, cv::COLOR_GRAY2BGR);
+  return g;
+}
+
+// C: template, search window with the matched position, and the ZNCC map.
+cv::Mat ncc_panel(const PreviewOverlay& ov, int H) {
+  const int W = int(std::lround(0.78 * H));
+  cv::Mat p(H, W, CV_8UC3, cv::Scalar(28, 28, 28));
+  const NccDebug& n = ov.ncc;
+  const bool stale = ov.seq - n.frame_id > 2;
+  if (!n.valid) {
+    title(p, "NCC");
+    note(p, n.frame_id == 0 ? "no template yet" : "no map (window off image)", 40);
+    note(p, "runs in TRACK / COAST only", 58);
+    return p;
+  }
+  char t[96];
+  std::snprintf(t, sizeof t, "NCC #%u %s rho %.2f 2nd %.2f s%d%s", n.frame_id, n.ok ? "OK" : "FAIL", n.rho,
+                n.second, n.scale, stale ? " stale" : "");
+  title(p, t, stale ? cv::Scalar(150, 150, 150) : n.ok ? cv::Scalar(0, 220, 0) : cv::Scalar(0, 90, 255));
+
+  // row 1: template | search window
+  const int box = (W - 15) / 2, y1 = 22;
+  cv::Point o1, o2;
+  const cv::Mat tb = p(cv::Rect(5, y1, box, box)), sb = p(cv::Rect(10 + box, y1, box, box));
+  fit_into(gray8(n.tmpl), tb, cv::INTER_NEAREST, &o1);
+  const double ks = fit_into(gray8(n.search), sb, cv::INTER_NEAREST, &o2);
+  const cv::Rect m(int(n.peak.x * ks), int(n.peak.y * ks), int(n.tmpl.cols * ks), int(n.tmpl.rows * ks));
+  cv::Mat sbv = sb;
+  cv::rectangle(sbv, m + o2, n.ok ? cv::Scalar(0, 220, 0) : cv::Scalar(0, 90, 255), 1);
+  note(p, "template", y1 + box + 12);
+  cv::putText(p, "search", {15 + box, y1 + box + 12}, cv::FONT_HERSHEY_SIMPLEX, 0.38, {170, 170, 170}, 1);
+
+  // row 2: correlation map, -1 (blue) .. +1 (red), peak white, second peak magenta
+  const int y2 = y1 + box + 18, hh = H - y2 - 20;
+  if (hh > 20 && !n.res.empty()) {
+    cv::Mat u8, heat;
+    n.res.convertTo(u8, CV_8U, 127.5, 127.5);
+    cv::applyColorMap(u8, heat, cv::COLORMAP_JET);
+    cv::Point o3;
+    const cv::Mat hb = p(cv::Rect(5, y2, W - 10, hh));
+    const double kh = fit_into(heat, hb, cv::INTER_NEAREST, &o3);
+    auto at = [&](cv::Point q) { return cv::Point(int((q.x + 0.5) * kh), int((q.y + 0.5) * kh)) + o3; };
+    cv::Mat hbv = hb;
+    cv::drawMarker(hbv, at(n.peak), {255, 255, 255}, cv::MARKER_CROSS, 12, 2);
+    if (n.peak2.x >= 0) cv::drawMarker(hbv, at(n.peak2), {255, 0, 255}, cv::MARKER_TILTED_CROSS, 10, 2);
+    char l[96];
+    if (n.second > -1.5f)
+      std::snprintf(l, sizeof l, "need rho>=%.2f margin>=%.2f (now %.2f)", n.rho_min, n.margin_min, n.rho - n.second);
+    else
+      std::snprintf(l, sizeof l, "need rho>=%.2f  (blue -1 .. red +1)", n.rho_min);
+    note(p, l, H - 6);
+  }
+  if (stale) {  // dim: NCC did not run on recent frames
+    cv::Mat r = p(cv::Rect(0, 18, W, H - 18));
+    r *= 0.45;
+  }
+  return p;
+}
+
+}  // namespace
+
+cv::Mat render_preview(const cv::Mat& gray, const PreviewOverlay& ov, bool stack, int clients) {
+  cv::Mat left = render_frame(gray, ov, clients);
+  if (!stack) return left;
+  cv::Mat out;
+  cv::hconcat(std::vector<cv::Mat>{left, det_panel(ov, left.rows), ncc_panel(ov, left.rows)}, out);
+  return out;
 }
 
 void PreviewServer::run(int cpu) {
@@ -159,7 +288,7 @@ void PreviewServer::run(int cpu) {
       has_pending_ = false;
     }
     if (clients.empty() && !window_) continue;
-    const cv::Mat img = render(gray, ov);
+    const cv::Mat img = render_preview(gray, ov, stack_, n_clients_.load());
 #ifdef RCWS_HAVE_HIGHGUI
     if (window_) {
       cv::imshow("RCWS Stage 1", img);

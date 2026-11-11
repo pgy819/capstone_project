@@ -21,6 +21,20 @@ struct NccResult {
   int scale = 1;         // matching scale factor (1, 2, 4, ...)
 };
 
+// Last match, kept for the live preview only (set_debug(true)). Mat members share the
+// buffers created by that match call; the template is shared too, so clone it before
+// handing it to another thread (refresh() blends into it in place).
+struct NccDebug {
+  bool valid = false;        // a correlation map exists for frame_id
+  uint32_t frame_id = 0;
+  cv::Mat tmpl, search, res; // CV_32F at the matching scale; res = ZNCC in [-1, 1]
+  cv::Point peak, peak2{-1, -1};
+  float rho = 0, second = -2;
+  int scale = 1;
+  bool ok = false;
+  float rho_min = 0, margin_min = 0;
+};
+
 class ZnccTracker {
  public:
   explicit ZnccTracker(const NccCfg& c) : cfg_(c) {}
@@ -35,6 +49,9 @@ class ZnccTracker {
   // Search around pred within +-radius px (main-stream pixels).
   // frame_id identifies the frame so the reduced image is computed once per frame and scale.
   NccResult match(const cv::Mat& y, cv::Point2d pred, double radius, uint32_t frame_id) const;
+
+  void set_debug(bool on) { debug_ = on; }
+  const NccDebug& debug() const { return dbg_; }
 
   int side() const { return tmpl_.cols; }
   int scale() const { return s_; }
@@ -52,6 +69,8 @@ class ZnccTracker {
   mutable cv::Mat small_;          // whole frame reduced by s_ (cache)
   mutable uint32_t small_id_ = ~0u;
   mutable int small_s_ = 0;
+  bool debug_ = false;
+  mutable NccDebug dbg_;
 };
 
 }  // namespace rcws
