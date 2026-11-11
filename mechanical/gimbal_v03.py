@@ -56,14 +56,17 @@ PI_STANDOFF = 0.3                        # v0.5.5 (user): Pi bosses stand only 0
 PI_RECESS = 1.0                          # pocket under the Pi footprint for underside parts (0.3 + 1.0 clearance) [VERIFY]
 LOWER_T = 3.2                            # v0.5.5 (user): lower deck as thin as strength allows (was 5)
 PILLAR_PILOT_R, PILLAR_PILOT_L = 1.3, 8.0  # M3x10 from the top deck self-taps into the pillar top (no nut)
+PILOT_R = 1.3                            # M3 self-tapping pilot (d2.6) used wherever a nut was hard to place (v0.5.6)
+M2_PILOT_R = 0.8                         # M2 self-tapping pilot (d1.6)
 # v0.5.3 fastener sizes (user, 11-09): M3 structure, M2.5 Raspberry Pi, M2 camera
 M25_CLR, M25_HEAD_D, M25_HEAD_H = 1.4, 4.5, 2.5   # clearance radius, socket head
-PI_SCREW_L = 5.0                         # M2.5 x 5 down through the Pi (1.6) + boss (0.3) + deck (3.2) into a nut under the deck
-M25_NUT_AF, M25_NUT_H, M25_POCKET_AF, M25_POCKET_H = 5.0, 2.0, 5.3, 2.2
+PI_SCREW_L = 5.0                         # M2.5 x 5 down through the Pi (1.6) self-taps into boss (0.3) + deck (3.2)
+M25_NUT_AF, M25_NUT_H, M25_POCKET_AF, M25_POCKET_H = 5.0, 2.0, 5.3, 2.2   # (not used since v0.5.6)
+M25_PILOT_R = 1.05                       # M2.5 self-tapping pilot (d2.1) through the 0.3 boss + 3.2 deck
 M2_CLR, M2_HEAD_D, M2_HEAD_H = 1.1, 3.8, 2.0
 M2_NUT_AF, M2_NUT_H, M2_POCKET_AF, M2_POCKET_H = 4.0, 1.6, 4.3, 1.8
 CAM_BOSS = 0.1                           # v0.5.5 (user): camera screw bosses stand only 0.1 mm proud of the web
-CAM_SCREW_L = 6.0                        # head behind the web: web 2.5 + boss 0.1 + PCB 1 + nut 1.6 = 5.2
+CAM_SCREW_L = 5.0                        # v0.5.6: M2x5 from the camera front (PCB 1 + boss 0.1) self-taps through the 2.5 web
 PI_PORTS = {                             # local x of port centres on the long edge y=0 [VERIFY]
     "USB-C": 11.2, "HDMI0": 25.8, "HDMI1": 39.2}
 PI_GPIO_X = (7.0, 58.0)                  # 40-pin header span along the y=56 edge [VERIFY]
@@ -322,9 +325,8 @@ def top_deck():
     deck = deck.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -DECK_T - 1, 1))  # cable drop
     for x, y in PILLARS:
         deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, x, y))
-    for sx, sy in CAGE_BOLTS:       # pan-cage through-bolts: nut pocket flush in the deck top (flats radial)
-        deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, sx, sy))
-        deck = deck.cut(hex_z(NUT_POCKET_AF, -NUT_POCKET_H, 1, sx, sy, math.degrees(math.atan2(sy, sx)) + 30))
+    for sx, sy in CAGE_BOLTS:       # v0.5.6: cage bolts self-tap 5 mm into the deck (no nut); tip ends at the deck top
+        deck = deck.cut(cyl_z(PILOT_R, -DECK_T - 1, 1, sx, sy))
     for a in MOUNT_TAB_ANGLES:     # bearing-mount through-bolts, head under the deck; d3.6 so the boss pilot governs
         x, y = polar(a, MOUNT_TAB_R)
         deck = deck.cut(cyl_z(1.8 if BOSS_PILOT else 1.7, -DECK_T - 1, 1, x, y))
@@ -355,7 +357,7 @@ def bearing_mount():
     for a in MOUNT_TAB_ANGLES:      # fixing tabs outside the wall: M3x10 up through the deck, nut in a pocket on top
         tab = box(MOUNT_TAB_R - 5, MOUNT_TAB_R + 5, -5, 5, 0, 5.0).rotate((0, 0, 0), (0, 0, 1), a)
         x, y = polar(a, MOUNT_TAB_R)
-        m = m.union(tab).cut(cyl_z(1.7, -1, 6, x, y)).cut(hex_z(NUT_POCKET_AF, 5.0 - NUT_POCKET_H, 6, x, y, a + 30))
+        m = m.union(tab).cut(cyl_z(PILOT_R, -1, 6, x, y))      # v0.5.6: M3x10 up through the deck self-taps into the tab
     if BOSS_PILOT:                  # floor closed down to the servo output boss: same datum as the shaft
         m = m.union(ring_z(SV_BOSS_D / 2 + PILOT_CLR, TUBE_ID / 2 + 0.01, 0, 2.0))
     for sx, sy in CAGE_BOLTS:       # clearance over a cage-bolt tip that lands under the floor
@@ -415,9 +417,7 @@ def lower_deck():
     for lx, ly in PI_HOLES:
         x, y = pi_to_deck(lx, ly)
         deck = deck.union(cyl_z(3.0, LOWER_TOP - 0.01, LOWER_TOP + PI_STANDOFF, x, y))
-        deck = deck.cut(cyl_z(M25_CLR, zb - 1, LOWER_TOP + PI_STANDOFF + 1, x, y))
-        deck = deck.cut(cq.Workplane("XY").polygon(6, M25_POCKET_AF / math.cos(math.pi / 6))
-                        .extrude(M25_POCKET_H + 1).translate((x, y, zb - 1)))
+        deck = deck.cut(cyl_z(M25_PILOT_R, zb - 1, LOWER_TOP + PI_STANDOFF + 1, x, y))   # v0.5.6: M2.5 self-taps
     # cable tie slots along the +X edge (servo bus / UART to the STM32 off-board)
     for y in (-20, 0, 20):
         deck = deck.cut(box(DECK_X1 - 10, DECK_X1 - 7, y - 2, y + 2, zb - 1, LOWER_TOP + 1))
@@ -480,9 +480,8 @@ def horn_coupler():
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
         c = c.cut(cyl_z(1.7, z0 - 1, z1 + 1, x, y)).cut(cyl_z(3.1, z0 + 6.0, z1 + 1, x, y))
     c = c.cut(cyl_z(3.25, z0 - 1, z0 + 4.0))                 # horn spline-screw head
-    for x, y in HUB_SCREWS:      # M3x10 from the flexure hub top (z+5) ends at DISC_Z0-5: nut sits just above
-        c = c.cut(cyl_z(1.7, DISC_Z0 - 6.0, DISC_Z0 + 1, x, y))
-        c = c.cut(nut_slot(x, y, DISC_Z0 + DISC_T - 10.0, 0 if x > 0 else 180, HUB_R))
+    for x, y in HUB_SCREWS:      # v0.5.6: M3x10 from the flexure hub top self-taps 5 mm into the solid hub (no nut)
+        c = c.cut(cyl_z(PILOT_R, DISC_Z0 - 6.0, DISC_Z0 + 1, x, y))
     return c
 
 
@@ -584,10 +583,10 @@ def turntable_yoke():
     y = y.cut(pocket)
     for b in fb.values():
         y = y.union(b)
-    # arm bolts (v0.5.1): M3x10 down through the arm foot into a nut in a radial side slot in the disc
+    # arm bolts (v0.5.6, user: nut slots too hard): M3x10 down through the foot self-taps 4 mm into a blind
+    # pilot hole in the disc (bottom skin stays closed)
     for x, yb in ARM_BOLTS():
-        y = y.cut(cyl_z(1.7, DISC_Z0 - 0.01 + 1.0, z_disc_top + 1, x, yb))
-        y = y.cut(nut_slot(x, yb, ARM_NUT_Z(), 90 if yb > 0 else 270, DISC_R))
+        y = y.cut(cyl_z(PILOT_R, z_disc_top - 4.5, z_disc_top + 1, x, yb))
     # arms
     arm_s = box(-ARM_W / 2, ARM_W / 2, y_srv_in, y_srv_out, z_disc_top - 0.1, H_TILT).union(
         cyl_y(ARM_W / 2, y_srv_in, y_srv_out, 0, H_TILT))
@@ -652,19 +651,17 @@ def turntable_yoke():
 
 
 def tilt_bushing_cut(y0, y1):
-    """Cut for the printed tilt bushing in the idle arm: d(pin)+0.2 bore with a cantilever tongue on top
-    that presses the pin BUSH_PRELOAD down onto the rigid lower wall (zero play, no bearing)."""
-    L = y1 - y0
-    def ws(r, a0, a1):   # sector in the XZ plane about the tilt axis, angles from +X toward +Z
-        am = 0.5 * (a0 + a1)
-        return (cq.Workplane("XZ").moveTo(0, 0).lineTo(*polar(a0, r)).threePointArc(polar(am, r), polar(a1, r)).close()
-                .extrude(-L).translate((0, y0, H_TILT)))
+    """v0.5.6 (user: hard to assemble): snap-in pivot. The bore is open to the top through a 4.8 mm throat, so the
+    cradle pin is simply pushed down into it from above. Two relief slots turn the throat walls into springy
+    fingers (about 16 mm long) that open 0.6 mm each to let the d6 pin pass, then close over it; the bore is
+    0.05 mm under the pin radius, so the fingers keep a light grip (no play). The weight sits on solid material
+    below the bore."""
     rp = TILT_PIN_D / 2
-    rt = rp - BUSH_PRELOAD                 # tongue face
-    cut = cyl_y(rt, y0, y1, 0, H_TILT)
-    cut = cut.union(cyl_y(rp + 0.1, y0, y1, 0, H_TILT).cut(ws(rp + 0.5, 45, 135)))      # clearance outside the tongue
-    cut = cut.union(ws(rt + BUSH_T + 0.6, 30, 150).cut(ws(rt + BUSH_T, 25, 155)))        # relief behind the tongue
-    cut = cut.union(ws(rt + BUSH_T + 0.6, 30, 37).cut(cyl_y(0.01, y0, y1, 0, H_TILT)))  # free-end gap (tongue fixed at 150 deg)
+    cut = cyl_y(rp - 0.05, y0, y1, 0, H_TILT)
+    cut = cut.union(box(-(rp - 0.6), rp - 0.6, y0, y1, H_TILT, H_TILT + 40))                # throat
+    for sg in (1, -1):                                                                       # finger relief slots
+        xa, xb = sorted((sg * (rp + 1.8), sg * (rp + 2.8)))
+        cut = cut.union(box(xa, xb, y0, y1, H_TILT - 1.0, H_TILT + 40))
     return cut
 
 
@@ -693,7 +690,7 @@ def tilt_cradle():
     for hy, hz in CAM_HOLES:
         z = top + hz
         cr = cr.union(cyl_x(2.2, WEB_X1 - 1.01, WEB_X1 + CAM_BOSS, z, hy))
-        cr = cr.cut(cyl_x(M2_CLR, WEB_X0 - 1, WEB_X1 + 1, z, hy))
+        cr = cr.cut(cyl_x(M2_PILOT_R, WEB_X0 - 1, WEB_X1 + 1, z, hy))   # M2x5 from the camera front self-taps into the web
     return cr
 
 
@@ -754,43 +751,38 @@ def fasteners():
     """Returns (base, pan): every M3x10 + nut of the v0.5 stacks (screws into inserts carry no nut)."""
     base = None
     for sx, sy in CAGE_BOLTS:            # ear (5) + deck (5); nut seated at the pocket floor
-        f = m3(sx, sy, -DECK_T - EAR_CLAMP, nut_z=-NUT_POCKET_H)
+        f = m3(sx, sy, -DECK_T - EAR_CLAMP)
         base = f if base is None else base.union(f)
     for a in MOUNT_TAB_ANGLES:           # deck (5) + tab (5); nut in the tab pocket
         x, y = polar(a, MOUNT_TAB_R)
-        base = base.union(m3(x, y, -DECK_T, nut_z=5.0 - NUT_POCKET_H))
+        base = base.union(m3(x, y, -DECK_T))
     pan = None
     for a in range(4):                   # rigid hub -> horn: 5 mm floor + 4 mm horn, tip 1 mm below the horn
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
         f = m3(x, y, PAN_HORN_Z + HORN_T + 6.0, up=False)
         pan = f if pan is None else pan.union(f)
     for x, y in HUB_SCREWS:              # flexure hub (DISC_T) -> nut in the rigid hub
-        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False, nut_z=DISC_Z0 + DISC_T - 10.0, nut_rot=0))
+        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
     for x, y in ARM_BOLTS():   # foot (6) + disc: nut in the disc slot
-        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False, nut_z=ARM_NUT_Z(), nut_rot=90))
+        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False))
     for x, y in PILLARS:                 # top deck -> pillar top, self-tapping into the pilot hole
         base = base.union(m3(x, y, 0.0, up=False))
     for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
         zt = LOWER_TOP + PI_STANDOFF + PI_PCB
         f = cyl_z(M25_HEAD_D / 2, zt, zt + M25_HEAD_H, x, y).union(cyl_z(1.25, zt - PI_SCREW_L, zt, x, y))
-        zb = LOWER_TOP - LOWER_T + 0.2
-        f = f.union(cq.Workplane("XY").polygon(6, M25_NUT_AF / math.cos(math.pi / 6)).extrude(M25_NUT_H).translate((x, y, zb)))
         base = base.union(f)
     return base, pan
 
 
 def fasteners_tilt():
-    """M2 x 6 + M2 nuts holding the camera (head behind the web, nut on the PCB front corner)."""
+    """M2 x 5 holding the camera: head on the PCB front corner, self-tapping into the cradle web (no nut)."""
     out = None
     top = H_TILT + CAM_LENS_FROM_TOP
-    x_head = WEB_X0
+    x_head = CAM_BACK_X + CAM_PCB
     for hy, hz in CAM_HOLES:
         z = top + hz
-        f = cyl_x(M2_HEAD_D / 2, x_head - M2_HEAD_H, x_head, z, hy).union(cyl_x(1.0, x_head, x_head + CAM_SCREW_L, z, hy))
-        nut = (cq.Workplane("YZ").polygon(6, M2_NUT_AF / math.cos(math.pi / 6)).extrude(M2_NUT_H)
-               .translate((CAM_BACK_X + CAM_PCB, hy, z)))
-        f = f.union(nut)
+        f = cyl_x(M2_HEAD_D / 2, x_head, x_head + M2_HEAD_H, z, hy).union(cyl_x(1.0, x_head - CAM_SCREW_L, x_head, z, hy))
         out = f if out is None else out.union(f)
     return out
 

@@ -14,7 +14,9 @@ import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # pairs that touch by design (screw in a threaded/insert hole or a horn modelled as a solid disc)
-EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("lower_deck", "fasteners_base"), ("camera", "fasteners_tilt"),
+EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("lower_deck", "fasteners_base"), ("top_deck", "fasteners_base"),
+            ("bearing_mount", "fasteners_base"), ("horn_coupler", "fasteners_pan"), ("tilt_cradle", "fasteners_tilt"),
+            ("turntable_yoke", "tilt_cradle"), ("camera", "fasteners_tilt"),   # self-tapping threads / snap-pivot grip (by design)
             ("turntable_yoke", "fasteners_pan")}   # unsplit yoke has no arm-foot holes; checked on the split parts below
 
 
@@ -46,6 +48,8 @@ def main():
                 res["static"].append(f"{n} x top pillar bolts {v:.1f} mm3")
             continue
         v = e.overlap(e.mesh(n, sh), M["fasteners_pan"])
+        if n == "turntable":   # 4 self-tapping M3 in d2.6 pilots: 4 x 4 mm x pi(1.5^2-1.3^2) expected
+            v -= 4 * 4.0 * math.pi * (1.5 ** 2 - g.PILOT_R ** 2)
         if v > 0.5:
             res["static"].append(f"{n} x fasteners_pan {v:.1f} mm3")
     mt = trimesh.boolean.union([M[n] for n in ["tilt_horn", "tilt_cradle", "camera", "fasteners_tilt"] + (["eye_plate"] if "eye_plate" in M else [])])

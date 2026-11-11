@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.5.5):
+"""Build the hand-off package of the current gimbal geometry (v0.5.6):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,13 +25,13 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v055"
+VER = "v056"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
 # part number, source name, Korean name, group, qty, print orientation, settings, order
 PRINTED = [
-    ("C01", "check_coupon", "확인 쿠폰 (너트 홈·플렉셔 틈)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
+    ("C01", "check_coupon", "확인 쿠폰 (M3 안내 구멍·플렉셔 틈)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
     ("C02", "fit_coupon", "공차 쿠폰 (6806 축·구멍)", "-", 1, "그대로", "PLA 30 %, 층 0.2", 1),
     ("P01", "top_deck", "상판", "BASE", 1, "조립 방향 그대로", "충전 25 %, 벽 3", 2),
     ("P02", "lower_deck", "하판 + 기둥 일체형", "BASE", 1, "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4, 리트랙션 켬", 2),
@@ -40,7 +40,7 @@ PRINTED = [
     ("P07", "horn_coupler", "강체 허브 (Pan 혼 위)", "PAN", 1, "혼 쪽이 바닥", "충전 100 %", 3),
     ("P08", "turntable", "턴테이블 (플렉셔 허브 일체)", "PAN", 1, "윗면이 바닥(뒤집어서)", "충전 60 %, 벽 4 (플렉셔는 벽만)", 3),
     ("P09", "arm_servo", "서보쪽 팔 (서보 채널·받침판)", "PAN", 1, "발이 바닥(세워서), 브림", "충전 60 %, 벽 4, 받침판 아래 25 mm 브리지", 4),
-    ("P10", "arm_idle", "부싱쪽 팔", "PAN", 1, "바깥면이 바닥(눕혀서)", "충전 60 %, 벽 4", 4),
+    ("P10", "arm_idle", "부싱쪽 팔 (위에서 끼우는 축 자리)", "PAN", 1, "바깥면이 바닥(눕혀서)", "충전 60 %, 벽 4", 4),
     ("P11", "tilt_cradle", "Tilt 크래들 (H형)", "TILT", 1, "위쪽 끝이 바닥(뒤집어서)", "충전 60 %, 벽 4", 4),
 ]
 if g.EYE:
@@ -53,20 +53,20 @@ BOUGHT = [
     ("B05", "tilt_horn", "Tilt 혼 (서보 동봉)", "TILT"),
     ("B06", "camera", "Camera Module 3 Wide", "TILT"),
     ("B07", "pi5_stack", "Raspberry Pi 5 + 쿨러 + AI HAT+", "BASE"),
-    ("B08", "fasteners_base", "M3 x 10 + M3 너트 (고정부)", "BASE"),
-    ("B09", "fasteners_pan", "M3 x 10 + M3 너트 (Pan 회전부)", "PAN"),
-    ("B10", "fasteners_tilt", "M2 x 10 + M2 너트 (카메라)", "TILT"),
+    ("B08", "fasteners_base", "M3 x 10, M2.5 x 5 (고정부)", "BASE"),
+    ("B09", "fasteners_pan", "M3 x 10 (Pan 회전부)", "PAN"),
+    ("B10", "fasteners_tilt", "M2 x 5 (카메라)", "TILT"),
 ]
 PARAMS = [  # (name, description) -> value read from the generator
     ("DECK_T", "상판·하판 두께"), ("BASE_GAP", "상판 밑면 ~ 하판 윗면"), ("PILLAR_R", "기둥 반지름"),
     ("H_TILT", "Tilt축 높이 (상판 윗면 기준)"), ("WRAP_R_OUT", "케이블 채널 바깥 반지름"), ("DISC_R", "턴테이블 반지름"),
     ("DISC_T", "턴테이블 두께"), ("TUBE_ID", "베어링 튜브 안지름"), ("TUBE_TOP", "베어링 튜브 위 높이"),
     ("FIT_SHAFT", "6806 축 반지름 여유"), ("FIT_BORE", "6806 구멍 반지름 여유"), ("SV_H", "서보 높이 (뒷면~축 면, 실측)"), ("SV_BOSS_H", "톱니 돌출 (실측 2~3)"),
-    ("NUT_POCKET_AF", "너트 홈·슬롯 맞변"), ("NUT_POCKET_H", "너트 홈 깊이"), ("EAR_CLAMP", "케이지 귀 체결 두께"),
+    ("PILOT_R", "M3 안내 구멍 반지름"), ("EAR_CLAMP", "케이지 귀 체결 두께"),
     ("FLEX_T", "플렉셔 판 두께"), ("FLEX_GAP", "플렉셔 틈"), ("FLEX_H2", "2단 판 높이"),
     ("HUB_R", "강체 허브 반지름"), ("HORN_SCREW_R", "혼 나사 원 반지름"), ("ARM_T_SERVO", "Tilt 서보쪽 팔 판 두께"), ("LOWER_T", "하판 두께"), ("PI_STANDOFF", "Pi 받침 돌출"), ("CAM_BOSS", "카메라 받침 돌출"), ("CH_SHELF", "Tilt 서보 받침판 두께"), ("HORN_HOLE_R", "팔 판 혼 U홈 반지름"),
     
-    ("TILT_PIN_D", "Tilt 출력 핀 지름"), ("BUSH_PRELOAD", "Tilt 부싱 예압"), ("PAN_SOFT_LIMIT", "Pan 소프트 리밋 [deg]"),
+    ("TILT_PIN_D", "Tilt 출력 핀 지름"), ("PAN_SOFT_LIMIT", "Pan 소프트 리밋 [deg]"),
 ]
 
 
@@ -158,10 +158,9 @@ def main():
             ("서보", "Feetech STS3215", 2, "Pan ID 1, Tilt ID 2 (혼·동봉 나사 포함)"),
             ("볼베어링", "6806-2RS 30×42×7", 1, "Pan 하중 지지"),
             ("나사", "M3 × 10", 21, "마운트 4, 케이지 3, 혼→강체 허브 4, 플렉셔 허브 2, 팔 4, 상판→기둥 4(셀프태핑)"),
-            ("너트", "M3 육각 맞변 5.5 × 2.4", 13, "육각 홈 7 (상판 3, 마운트 4), 옆 슬롯 6 (팔 4, 강체 허브 2)"),
             ("케이블 타이", "폭 4.8 이하, 길이 200 이상", 1, "Tilt 서보 들림 방지"),
-            ("나사 + 너트 (Pi)", "M2.5 × 5 + M2.5 너트 (맞변 5.0)", "4 + 4", "Pi 위에서 하판 아래 육각 홈의 너트로 (AI HAT+ 스페이서 수나사도 이 너트에)"),
-            ("나사 + 너트 (카메라)", "M2 × 6 + M2 너트", "4 + 4", "크래들 가운데 판 뒤 → 카메라 기판 앞 너트"),
+            ("나사 (Pi)", "M2.5 × 5", 4, "Pi 위에서 하판 안내 구멍에 바로"),
+            ("나사 (카메라)", "M2 × 5", 4, "카메라 기판 앞에서 크래들 가운데 판에 바로"),
             ("서보 동봉 나사", "혼용", 4, "크래들→Tilt 혼 4"),
             ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 500 mm", 1, "경로 약 380 mm"),
             ("서보 케이블", "5264-3P 900 mm", 1, "경로 약 360 mm"),

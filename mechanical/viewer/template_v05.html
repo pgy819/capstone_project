@@ -1,4 +1,4 @@
-<title>2축 짐벌 v0.5.5</title>
+<title>2축 짐벌 v0.5.6</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -72,7 +72,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
   </div>
   <aside>
     <section>
-      <h1>상단부 2축 짐벌 v0.5.5</h1>
+      <h1>상단부 2축 짐벌 v0.5.6</h1>
       <p class="sub" id="lead"></p>
     </section>
     <section aria-labelledby="h-pose">
@@ -99,11 +99,11 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
     <section aria-labelledby="h-v05">
       <h2 id="h-v05">v0.5 변경 (11/9)</h2>
       <table>
-        <tr><td>케이지 → 상판</td><td>M3 × 10 관통 + 너트 (상판 윗면 육각 홈)</td></tr>
-        <tr><td>마운트 → 상판</td><td>M3 × 10 관통 + 너트 (탭 윗면 육각 홈)</td></tr>
-        <tr><td>기둥 · 팔 · 허브</td><td>M3 × 10 관통 + 옆 슬롯 너트 (v0.5.1, 인서트 0개)</td></tr>
-        <tr><td>v0.5.5</td><td>하판+기둥 일체, 카메라 거치부 H형, 케이지 귀 얇게</td></tr>
-        <tr><td>Pi · 카메라</td><td>M2.5 × 5 + 너트 (Pi), M2 × 6 + 너트 (카메라)</td></tr>
+        <tr><td>케이지 → 상판</td><td>M3 × 10, 상판 안내 구멍에 바로</td></tr>
+        <tr><td>마운트 → 상판</td><td>M3 × 10, 탭 안내 구멍에 바로</td></tr>
+        <tr><td>기둥 · 팔 · 허브</td><td>M3 × 10, 안내 구멍에 바로 (v0.5.6, 너트 0개)</td></tr>
+        <tr><td>v0.5.5~6</td><td>하판+기둥 일체, H형 카메라 거치부, 너트 0개, 위에서 끼우는 Tilt 축</td></tr>
+        <tr><td>Pi · 카메라</td><td>M2.5 × 5 (Pi), M2 × 5 (카메라), 안내 구멍에 바로</td></tr>
         <tr><td>Tilt 서보 장착</td><td>위에서 채널에 끼워 아래 받침판에 얹고 케이블 타이 1개 (v0.5.4)</td></tr>
         <tr><td>Pan 구동</td><td>혼 → 강체 허브(M3 4개) → 플렉셔 허브(M3 2개) → 턴테이블</td></tr>
         <tr><td>축 정렬</td><td>마운트 바닥이 서보 출력 보스에 끼워져 6806과 서보 축이 같은 기준</td></tr>
@@ -135,7 +135,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
         <li><b>서보 출력 보스 지름 9 mm</b>: 베어링 마운트가 여기에 끼워져 정렬됨. 확인 쿠폰(Ø 9.2~9.5)으로 맞춤</li>
         <li><b>혼 나사 원 반지름 8 mm, 혼 위면 높이</b>: 강체 허브와 플렉셔 허브 사이 틈이 0이 되게 맞춤(종이 한 장이 끼면 정상)</li>
         <li><b>플렉셔 틈 0.7 mm</b>: 확인 쿠폰의 판스프링이 손가락으로 튕겨 움직이면 그 틈으로 출력</li>
-        <li><b>Tilt 부싱</b>: 출력물 혀 예압 0.15 mm로 유격 제거. 손으로 비틀어 헛도는 구간이 없는지 확인</li>
+        <li><b>Tilt 축 자리</b>: 핀을 위에서 눌러 끼우면 딸깍 하고 들어가야 정상. 헐거우면 손가락 틈을 좁혀 다시 출력</li>
         <li><b>카메라 홀·렌즈 위치, Pi 스택 높이 30 mm</b>: v0.1과 동일한 가정</li>
       </ul>
     </section>
@@ -162,15 +162,15 @@ const PARTS = [
   ["horn_coupler", "강체 허브 (혼에 M3 4개)", "#e3b53b", "pan", 0],
   ["turntable", "턴테이블", "#2f6fd6", "pan", 0],
   ["arm_servo", "서보쪽 팔", "#4a86e8", "pan", 0],
-  ["arm_idle", "부싱쪽 팔", "#4a86e8", "pan", 0],
+  ["arm_idle", "부싱쪽 팔 (위에서 끼우는 축 자리)", "#4a86e8", "pan", 0],
   ["tilt_servo", "Tilt 서보 STS3215", "#2a2d31", "pan", 1],
   ["tilt_horn", "Tilt 혼", "#a7abb0", "tilt", 1],
   ["tilt_cradle", "Tilt 크래들", "#e48a2a", "tilt", 0],
   ["camera", "Camera Module 3 Wide", "#1e6b45", "tilt", 1],
   ["eye_plate", "눈 장식판", "#c8321a", "tilt", 0],
-  ["fasteners_base", "체결 부품 (M3 × 10, 너트) 고정부", "#d9bf4d", "base", 1],
+  ["fasteners_base", "체결 부품 (M3 × 10, M2.5 × 5) 고정부", "#d9bf4d", "base", 1],
   ["fasteners_pan", "체결 부품 (M3 × 10) Pan", "#d9bf4d", "pan", 1],
-  ["fasteners_tilt", "체결 부품 (M2 × 6, 카메라)", "#d9bf4d", "tilt", 1],
+  ["fasteners_tilt", "체결 부품 (M2 × 5, 카메라)", "#d9bf4d", "tilt", 1],
 ];
 const ROUTES = __ROUTES__;
 const EXPLORE = __EXPLORE__;
