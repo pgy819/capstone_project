@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.6.1):
+"""Build the hand-off package of the current gimbal geometry (v0.6.2):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,7 +25,7 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v061"
+VER = "v062"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
@@ -156,7 +156,7 @@ def main():
             ("나사 (Pi)", "M2.5 × 5", 4, "Pi 위에서 하판 안내 구멍에 바로"),
             ("나사 (카메라)", "M2 × 5", 4, "카메라 기판 앞에서 크래들 가운데 판에 바로"),
             ("서보 동봉 나사", "혼용", 4, "크래들→Tilt 혼 4"),
-            ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 500 mm", 1, "경로 약 380 mm"),
+            ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 500 mm", 1, "경로 약 340 mm (채널 여유 한 바퀴 포함)"),
             ("서보 케이블", "5264-3P 900 mm", 1, "경로 약 360 mm"),
         ]:
             w.writerow(row)

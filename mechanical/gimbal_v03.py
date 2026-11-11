@@ -85,6 +85,7 @@ BRG_PAN = (42.0, 30.0, 7.0)              # 6806 (61806) OD, ID, W
 DECK_T = 5.0
 DECK_X0, DECK_X1, DECK_Y = -100.0, 50.0, 110.0
 PILLARS = [(-94.0, 49.0), (44.0, 49.0), (44.0, -49.0), (-30.0, -49.0)]   # kept off the port zones
+PILLARS_ROT180 = [(-94.0, -49.0), (-30.0, 49.0), (44.0, 49.0), (44.0, -49.0)]   # v0.6.2: Pi turned, USB end now at +Y
 PILLAR_R = 5.6                           # v0.6.1: d11.2 around the square socket (stays inside the r6 deck-corner fillet)
 BASE_GAP = 55.0                          # top-deck underside -> lower-deck top
 LOWER_TOP = -DECK_T - BASE_GAP
@@ -291,17 +292,31 @@ def pi_origin():
     return (DECK_X0 + 6.0, PI_L / 2)        # HDMI edge 6 mm inside the -X deck edge
 
 
+PI_ROT180 = True     # v0.6.2 (user, 11-12): Pi turned 180 deg in the same footprint so its CAM connector (HDMI
+                     # edge) faces the deck centre, next to the FPC drop; the camera cable was too short
+if PI_ROT180:
+    PILLARS = PILLARS_ROT180
+
+
 def pi_to_deck(lx, ly):
     ox, oy = pi_origin()
+    if PI_ROT180:
+        lx, ly = PI_L - lx, PI_W - ly
     return ox + ly, oy - lx
+
+
+def pi_box(lx0, lx1, ly0, ly1, z0, z1):
+    """Axis-aligned deck box of a rectangle given in Pi-local coordinates."""
+    (xa, ya), (xb, yb) = pi_to_deck(lx0, ly0), pi_to_deck(lx1, ly1)
+    return box(min(xa, xb), max(xa, xb), min(ya, yb), max(ya, yb), z0, z1)
 
 
 def pi_stack():
     ox, oy = pi_origin()
     z0 = LOWER_TOP + PI_STANDOFF
-    pcb = box(ox, ox + PI_W, oy - PI_L, oy, z0, z0 + PI_PCB)
-    stack = box(ox + 2, ox + PI_W - 2, oy - PI_L + 20, oy - 2, z0 + PI_PCB, z0 + PI_STACK_H)
-    usb = box(ox + 1, ox + PI_W - 1, oy - PI_L - 3, oy - PI_L + 20, z0 + PI_PCB, z0 + PI_PCB + 16)
+    pcb = pi_box(0, PI_L, 0, PI_W, z0, z0 + PI_PCB)
+    stack = pi_box(2, PI_L - 20, 2, PI_W - 2, z0 + PI_PCB, z0 + PI_STACK_H)
+    usb = pi_box(PI_L - 20, PI_L + 3, 1, PI_W - 1, z0 + PI_PCB, z0 + PI_PCB + 16)
     return pcb.union(stack).union(usb)
 
 
@@ -311,14 +326,13 @@ def pi_keepouts():
     z0 = LOWER_TOP + PI_STANDOFF + PI_PCB
     zones = {}
     for name, lx in PI_PORTS.items():
-        x, y = pi_to_deck(lx, 0)
         w = 9.5 if name == "USB-C" else 11.0
-        zones[name] = box(x - 30, x, y - w / 2, y + w / 2, z0, z0 + 7)
-    zones["USB/Ethernet"] = box(ox + 1, ox + PI_W - 1, oy - PI_L - 33, oy - PI_L - 3, z0, z0 + 16)
+        zones[name] = pi_box(lx - w / 2, lx + w / 2, -30, 0, z0, z0 + 7)
+    zones["USB/Ethernet"] = pi_box(PI_L + 3, PI_L + 33, 1, PI_W - 1, z0, z0 + 16)
     gx0, gy0 = pi_to_deck(PI_GPIO_X[0], PI_W - 5)
     gx1, gy1 = pi_to_deck(PI_GPIO_X[1], PI_W - 1)
     top = LOWER_TOP + PI_STANDOFF + PI_STACK_H
-    zones["GPIO jumpers"] = box(min(gx0, gx1), max(gx0, gx1) + 2, min(gy0, gy1), max(gy0, gy1), top, top + 18)
+    zones["GPIO jumpers"] = box(min(gx0, gx1) - 1, max(gx0, gx1) + 1, min(gy0, gy1), max(gy0, gy1), top, top + 18)
     return zones
 
 
@@ -834,8 +848,11 @@ def cable_routes(y_srv_out):
            (fx, fy, DISC_Z0 - 2)]
     wrap_r = R_MID + ANNULUS / 4
     fpc += [(*polar(180 + 30 * k, wrap_r), 10) for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)]  # one turn of slack
-    fpc += [(ex, ey, 6), (ex, ey, -DECK_T - 3), (pi_cam[0], ex * 0 + pi_cam[1] * 0 + ey, hat_top + 6),
-            (pi_cam[0], pi_cam[1], hat_top + 6), (pi_cam[0], pi_cam[1], LOWER_TOP + PI_STANDOFF + 3)]
+    if PI_ROT180:   # CAM connector on the Pi edge facing the drop: straight down, then in under the HAT
+        fpc += [(ex, ey, 6), (ex, ey, LOWER_TOP + PI_STANDOFF + 6), (pi_cam[0], pi_cam[1], LOWER_TOP + PI_STANDOFF + 3)]
+    else:
+        fpc += [(ex, ey, 6), (ex, ey, -DECK_T - 3), (pi_cam[0], ex * 0 + pi_cam[1] * 0 + ey, hat_top + 6),
+                (pi_cam[0], pi_cam[1], hat_top + 6), (pi_cam[0], pi_cam[1], LOWER_TOP + PI_STANDOFF + 3)]
     cx, cy, cz = tilt_conn_point()
     bus = [(cx, cy, cz), (0.5 * (cx + bx), 0.5 * (cy + by), 0.5 * (cz + DISC_Z0 + DISC_T) + 4), (bx, by, DISC_Z0 + DISC_T + 2),
            (bx, by, DISC_Z0 - 2)]
