@@ -143,20 +143,20 @@ WEB_X1 = CAM_BACK_X - CAM_BOSS           # web front face
 WEB_X0 = WEB_X1 - 2.5                    # web back face (CRADLE_WALL)
 CRADLE_X0 = 2 * (WEB_X0 + WEB_X1) / 2 - CRADLE_X1     # symmetric about the web
 
-PAN_SOFT_LIMIT = 140.0                   # v0.8: 10 deg inside the +-150 where the sector post meets the ribbon
+PAN_SOFT_LIMIT = 50.0                    # v0.8.1: 5 deg inside the +-55 where the 240-deg hub wall meets the ribbon
 PAN_RANGE = 180.0                         # v0.7: cable loop sized for +-180 deg (+10 deg margin each side)
 CUP_R, CUP_WALL, CUP_H = 27.0, 2.0, 20.0  # v0.7: cable cup around the post (replaces the channel + stop)
 CUP_TAB_ANGLES = (45, 135, 225, 315)
 CUP_TAB_R = CUP_R + CUP_WALL + 4.0
 # v0.8 (user, 11-14): camera FPC up the pan axis, out through the middle of the turntable (STOP == "axial")
 AX_FLOOR = 6.0                             # hub floor over the horn (screw heads counterbored AX_CB deep, flush)
-AX_CB = 2.2
+AX_CB = 3.0
 AX_LEG_GAP = 0.8                           # ribbon's lower edge above the floor
 AX_HOLE_R = 12.0                           # turntable centre hole: ribbon out + screwdriver to the horn screws
-AX_SECTOR = 50.0                           # the one post between hub and disc [deg], in front (0 deg), cable behind
-AX_SECTOR_R = (8.5, HUB_R + 1.0)           # twisting ribbon lives inside r 8; riser stands outside r 16.7
+AX_SECTOR = 240.0                          # v0.8.1 (user): wall between hub and disc over 240 deg (front), 120 deg open behind
+AX_SECTOR_R = (13.5, 16.5)                 # v0.8.1: wall clear of the horn screws (driver reaches them through the
+                                           # centre hole) and inside the cable riser (r 16.7), 3 mm thick
 AX_RISE_X = SV_SHAFT_FROM_END + 0.3 + 3.0 + 2.2   # ribbon riser: 2.2 mm outside the cage's shaft-end wall
-AX_GUIDE_T = 4.0                           # cable guide plate on the bushing arm (top end of the twist)
 CAGE_BOLTS_AXIAL = ((42.0, 11.0), (42.0, -11.0), (-5.0, 20.5), (-5.0, -20.5))   # shaft-end ear -> two side ears
 JOINT_H, JOINT_GAP, JOINT_SLOT = 12.0, 0.3, 0.6   # v0.7 lap joint: overlap height, tab-pillar gap, vertical slot play
 HOUSING_R = 24.0                          # outer-race housing outer radius (rotating) - channel inner boundary
@@ -187,7 +187,7 @@ PILOT_CLR = 0.15                         # radius clearance on the boss [VERIFY 
 def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     """Set the variant and derive every dependent dimension."""
     global WRAP_R_OUT, STOP, TILT_ORIENT, DISC_R, DISC_T, STOP_R, HOLE_FPC, HOLE_BUS, DECK_EXIT, H_TILT, R_MID, ANNULUS
-    global DISC_Z0, CAGE_BOLTS, AX_LEG_Z0, AX_GUIDE_Z
+    global DISC_Z0, CAGE_BOLTS, AX_LEG_Z0
     WRAP_R_OUT, STOP, TILT_ORIENT = wrap_r, stop, tilt_orient
     ANNULUS = WRAP_R_OUT - HOUSING_R - 0.5
     R_MID = HOUSING_R + 0.5 + ANNULUS / 2
@@ -222,7 +222,6 @@ def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     if stop == "axial":
         HOLE_FPC = HOLE_BUS = (180.0, 0.0)
         DECK_EXIT = (180.0, AX_RISE_X + 1.0)
-    AX_GUIDE_Z = H_TILT - 26.0 - AX_GUIDE_T     # top face 26 mm under the tilt axis (cradle sweep r 24.8)
 
 
 def loop_setup():
@@ -713,10 +712,16 @@ def ARM_FEET():
             "i": (y_idle_in - ARM_T_IDLE, y_idle_in + ARM_FOOT_W)}
 
 
+ARM_BOLT_X = 13.0     # v0.8.1: bolts moved out (x 9 -> 13) so the nuts under the disc clear the hub wall (r 15.5)
+ARM_BOLT_L = 12.0     # v0.8.1 (user): M3x12 down through foot (6) + disc (5), nut put on the bolt end from below
+ARM_NUT_POCKET = 3.0  # hex recess in the disc underside: a hanging nut would hit the fixed cable riser within +-55 deg
+
+
 def ARM_BOLTS(*_):
     f = ARM_FEET()
     ys, yi = (f["s"][0] + f["s"][1]) / 2, -(CRADLE_HALF_Y + 2.0) + ARM_FOOT_W / 2
-    return [(xb, ys) for xb in (-9.0, 9.0)] + [(xb, yi) for xb in (-9.0, 9.0)]
+    xb = ARM_BOLT_X
+    return [(-xb, ys), (xb, ys), (-xb, yi), (xb, yi)]
 
 
 def ARM_NUT_Z():
@@ -759,8 +764,10 @@ def turntable_yoke():
         y = y.cut(cyl_z(3.0, z0 + 6.0, z_disc_top + 1))          # look-through to the spline screw
     # arm bolts (v0.5.6, user: nut slots too hard): M3x10 down through the foot self-taps 4 mm into a blind
     # pilot hole in the disc (bottom skin stays closed)
-    for x, yb in ARM_BOLTS():
-        y = y.cut(cyl_z(PILOT_R, z_disc_top - 4.5, z_disc_top + 1, x, yb))
+    for x, yb in ARM_BOLTS():   # v0.8.1 (user): through hole, nut tightened from under the disc
+        y = y.cut(cyl_z(1.7, DISC_Z0 - 1, z_disc_top + 1, x, yb))
+        if STOP == "axial":   # nut recess open downward (prints open-side up: disc top is on the plate)
+            y = y.cut(hex_z(NUT_AF + 0.3, DISC_Z0 - 1, DISC_Z0 + ARM_NUT_POCKET, x, yb, 0.0))
     # arms
     arm_s = box(-ARM_W / 2, ARM_W / 2, y_srv_in, y_srv_out, z_disc_top - 0.1, H_TILT).union(
         cyl_y(ARM_W / 2, y_srv_in, y_srv_out, 0, H_TILT))
@@ -800,10 +807,6 @@ def turntable_yoke():
         px, _, pz = tilt_tf((sx, sy, 0))
         y = y.cut(cyl_y(1.4, y_srv_in - 1, y_srv_out + 1, px, pz))
     y = y.cut(tilt_bushing_cut(y_idle_out - 1, y_idle_in + 1))
-    if STOP == "axial":   # cable guide: top end of the twisting length, also holds the ribbon off the cradle
-        gd = box(-FPC_W / 2 - 2.5, FPC_W / 2 + 2.5, y_idle_in - 0.1, 2.5, AX_GUIDE_Z, AX_GUIDE_Z + AX_GUIDE_T)
-        gd = gd.cut(box(-FPC_W / 2 - 1.0, FPC_W / 2 + 1.0, -0.7, 0.7, AX_GUIDE_Z - 1, AX_GUIDE_Z + AX_GUIDE_T + 1))
-        y = y.union(gd)
     # cable entries into the wrap channel
     if STOP == "axial":
         pass
@@ -1060,13 +1063,14 @@ def fasteners():
     pan = None
     for a in range(4):                   # rigid hub -> horn: 5 mm floor + 4 mm horn, tip 1 mm below the horn
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
-        f = (m3(x, y, PAN_HORN_Z + HORN_T + AX_FLOOR - AX_CB, up=False, length=8.0) if STOP == "axial"
+        f = (m3(x, y, PAN_HORN_Z + HORN_T + AX_FLOOR - AX_CB, up=False, length=AX_FLOOR - AX_CB + HORN_T) if STOP == "axial"
              else m3(x, y, PAN_HORN_Z + HORN_T + 6.0, up=False))
         pan = f if pan is None else pan.union(f)
     for x, y in (HUB_SCREWS if PAN_BEARING else ()):   # flexure hub (DISC_T) -> rigid hub
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
-    for x, y in ARM_BOLTS():   # foot (6) + disc: nut in the disc slot
-        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False))
+    for x, y in ARM_BOLTS():   # foot (6) + disc (5) + exposed nut under the disc
+        pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False, length=ARM_BOLT_L,
+                           nut_z=DISC_Z0 + ARM_NUT_POCKET - NUT_H, nut_rot=0.0))
     for x, y in PILLARS:                 # v0.7 lap joint: M3x16 from the outer flat of the tab, nut on the pillar's inner flat
         b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB).union(cyl_x(1.5, LAP_FLAT - 16.0, LAP_FLAT, LAP_ZB))
              .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT - 0.01, 0, LAP_ZB))))
@@ -1140,7 +1144,7 @@ def cable_routes_axial():
     """v0.8 routes: up past the cage end, in over the horn, up the axis, through the guide, loop to the camera."""
     zc = H_TILT
     pi_cam = pi_to_deck(48.0, 4.0)  # CAM/DISP connector [VERIFY]
-    zg = AX_GUIDE_Z + AX_GUIDE_T
+    zg = DISC_Z0 + DISC_T + 12.0
     zl = AX_LEG_Z0 + FPC_W / 2
     fpc = [(CRADLE_X0 + 1, 0, zc - CRADLE_HALF_Z + 4), (CRADLE_X0 - 6, 0, zc - CRADLE_HALF_Z - 2),   # tilt loop behind the cradle
            (CRADLE_X0 - 9, 0, zg + 14), (-6, 0, zg + 5), (0, 0, zg), (0, 0, DISC_Z0),               # guide, down the axis

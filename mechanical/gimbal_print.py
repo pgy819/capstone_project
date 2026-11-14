@@ -36,7 +36,6 @@ def configure():
     # Tilt-axis height kept at the v0.3 value. Since the servo plugs moved to the face opposite the horn, 63 mm
     # would also fit (lower CoM) but costs 6 deg of down-look and more FOV occlusion; see metrics_v04.json.
     g.H_TILT = max(g.H_TILT, H_TILT_KEEP + (g.DISC_Z0 - 22.0))   # v0.8: the disc rose 6.3 mm, the tilt axis with it
-    g.AX_GUIDE_Z = g.H_TILT - 26.0 - g.AX_GUIDE_T
 
 
 def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
@@ -46,7 +45,7 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
     # 0.1 mm slivers hanging outside the disc on the turntable since v0.5.4
     turntable = yoke.intersect(g.box(-big, big, -big, big, -big, z_top)).intersect(g.cyl_z(g.DISC_R + 0.01, -big, z_top + 1))
     upper = yoke.cut(g.box(-big, big, -big, big, -big, z_top))
-    ys = 5.0   # v0.8: split at y = 5 so the cable guide (reaches y = 2.5) stays whole on the bushing arm
+    ys = 0.0
     arm_s = upper.intersect(g.box(-big, big, ys, big, z_top, big))
     arm_i = upper.intersect(g.box(-big, big, -big, ys, z_top, big))
     # bolt-down feet on the inner side of each arm, 2x M3 clearance; nuts in the turntable side slots

@@ -50,7 +50,7 @@ def main():
                 res["static"].append(f"{n} x top pillar bolts {v:.1f} mm3")
             continue
         v = e.overlap(e.mesh(n, sh), M["fasteners_pan"])
-        if n == "turntable":   # 4 self-tapping M3 in d2.6 pilots: 4 x 4 mm x pi(1.5^2-1.3^2) expected
+        if n == "turntable" and g.STOP != "axial":   # 4 self-tapping M3 in d2.6 pilots (v0.8.1: through + nut)
             v -= 4 * 4.0 * math.pi * (1.5 ** 2 - g.PILOT_R ** 2)
         if v > 0.5:
             res["static"].append(f"{n} x fasteners_pan {v:.1f} mm3")
