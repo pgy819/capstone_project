@@ -24,7 +24,7 @@ import gimbal_v03 as g
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "print_v05")
 BED = (220.0, 220.0, 250.0)          # typical FDM bed [VERIFY your printer]
-VARIANT = dict(wrap_r=36.0, stop="none", tilt_orient="down")   # v0.7: no stop
+VARIANT = dict(wrap_r=36.0, stop="axial", tilt_orient="down")   # v0.8: cable up the pan axis
 H_TILT_KEEP = 79.0
 
 
@@ -35,7 +35,8 @@ def configure():
         g.HOLE_BUS = (135.0, g.R_MID)
     # Tilt-axis height kept at the v0.3 value. Since the servo plugs moved to the face opposite the horn, 63 mm
     # would also fit (lower CoM) but costs 6 deg of down-look and more FOV occlusion; see metrics_v04.json.
-    g.H_TILT = max(g.H_TILT, H_TILT_KEEP)
+    g.H_TILT = max(g.H_TILT, H_TILT_KEEP + (g.DISC_Z0 - 22.0))   # v0.8: the disc rose 6.3 mm, the tilt axis with it
+    g.AX_GUIDE_Z = g.H_TILT - 26.0 - g.AX_GUIDE_T
 
 
 def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
@@ -45,8 +46,9 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
     # 0.1 mm slivers hanging outside the disc on the turntable since v0.5.4
     turntable = yoke.intersect(g.box(-big, big, -big, big, -big, z_top)).intersect(g.cyl_z(g.DISC_R + 0.01, -big, z_top + 1))
     upper = yoke.cut(g.box(-big, big, -big, big, -big, z_top))
-    arm_s = upper.intersect(g.box(-big, big, 0, big, z_top, big))
-    arm_i = upper.intersect(g.box(-big, big, -big, 0, z_top, big))
+    ys = 5.0   # v0.8: split at y = 5 so the cable guide (reaches y = 2.5) stays whole on the bushing arm
+    arm_s = upper.intersect(g.box(-big, big, ys, big, z_top, big))
+    arm_i = upper.intersect(g.box(-big, big, -big, ys, z_top, big))
     # bolt-down feet on the inner side of each arm, 2x M3 clearance; nuts in the turntable side slots
     foot_t = g.ARM_FOOT_T              # 6 mm foot + 4 mm into the disc nut = M3x10
     feet = g.ARM_FEET()

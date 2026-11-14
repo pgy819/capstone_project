@@ -143,11 +143,21 @@ WEB_X1 = CAM_BACK_X - CAM_BOSS           # web front face
 WEB_X0 = WEB_X1 - 2.5                    # web back face (CRADLE_WALL)
 CRADLE_X0 = 2 * (WEB_X0 + WEB_X1) / 2 - CRADLE_X1     # symmetric about the web
 
-PAN_SOFT_LIMIT = 150.0
+PAN_SOFT_LIMIT = 140.0                   # v0.8: 10 deg inside the +-150 where the sector post meets the ribbon
 PAN_RANGE = 180.0                         # v0.7: cable loop sized for +-180 deg (+10 deg margin each side)
 CUP_R, CUP_WALL, CUP_H = 27.0, 2.0, 20.0  # v0.7: cable cup around the post (replaces the channel + stop)
 CUP_TAB_ANGLES = (45, 135, 225, 315)
 CUP_TAB_R = CUP_R + CUP_WALL + 4.0
+# v0.8 (user, 11-14): camera FPC up the pan axis, out through the middle of the turntable (STOP == "axial")
+AX_FLOOR = 6.0                             # hub floor over the horn (screw heads counterbored AX_CB deep, flush)
+AX_CB = 2.2
+AX_LEG_GAP = 0.8                           # ribbon's lower edge above the floor
+AX_HOLE_R = 12.0                           # turntable centre hole: ribbon out + screwdriver to the horn screws
+AX_SECTOR = 50.0                           # the one post between hub and disc [deg], in front (0 deg), cable behind
+AX_SECTOR_R = (8.5, HUB_R + 1.0)           # twisting ribbon lives inside r 8; riser stands outside r 16.7
+AX_RISE_X = SV_SHAFT_FROM_END + 0.3 + 3.0 + 2.2   # ribbon riser: 2.2 mm outside the cage's shaft-end wall
+AX_GUIDE_T = 4.0                           # cable guide plate on the bushing arm (top end of the twist)
+CAGE_BOLTS_AXIAL = ((42.0, 11.0), (42.0, -11.0), (-5.0, 20.5), (-5.0, -20.5))   # shaft-end ear -> two side ears
 JOINT_H, JOINT_GAP, JOINT_SLOT = 12.0, 0.3, 0.6   # v0.7 lap joint: overlap height, tab-pillar gap, vertical slot play
 HOUSING_R = 24.0                          # outer-race housing outer radius (rotating) - channel inner boundary
 STOP = "rim"
@@ -177,10 +187,16 @@ PILOT_CLR = 0.15                         # radius clearance on the boss [VERIFY 
 def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     """Set the variant and derive every dependent dimension."""
     global WRAP_R_OUT, STOP, TILT_ORIENT, DISC_R, DISC_T, STOP_R, HOLE_FPC, HOLE_BUS, DECK_EXIT, H_TILT, R_MID, ANNULUS
+    global DISC_Z0, CAGE_BOLTS, AX_LEG_Z0, AX_GUIDE_Z
     WRAP_R_OUT, STOP, TILT_ORIENT = wrap_r, stop, tilt_orient
     ANNULUS = WRAP_R_OUT - HOUSING_R - 0.5
     R_MID = HOUSING_R + 0.5 + ANNULUS / 2
-    if stop == "none":                               # v0.7: no hard stop (servo angle limits in EEPROM instead)
+    if stop == "axial":
+        # disc sits one ribbon width (on edge) above the hub floor: horn top + floor + gap + 16 + 1
+        AX_LEG_Z0 = PAN_HORN_Z + HORN_T + AX_FLOOR + AX_LEG_GAP
+        DISC_Z0 = AX_LEG_Z0 + FPC_W + 1.0
+        CAGE_BOLTS = CAGE_BOLTS_AXIAL
+    if stop in ("none", "axial"):                    # v0.7: no hard stop (servo angle limits in EEPROM instead)
         DISC_T = 5.0
         STOP_R = 0.0
         DISC_R = 43.0
@@ -203,6 +219,10 @@ def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     HOLE_BUS = (math.degrees(math.atan2(cy, cx)), R_MID)
     if stop == "none":
         loop_setup()
+    if stop == "axial":
+        HOLE_FPC = HOLE_BUS = (180.0, 0.0)
+        DECK_EXIT = (180.0, AX_RISE_X + 1.0)
+    AX_GUIDE_Z = H_TILT - 26.0 - AX_GUIDE_T     # top face 26 mm under the tilt axis (cradle sweep r 24.8)
 
 
 def loop_setup():
@@ -376,12 +396,21 @@ def pi_keepouts():
 
 
 # ----------------------------------------------------------------------------- printed parts: base
+def deck_tabs():
+    """Bolt positions of whatever sits on the deck around the horn: channel (<= v0.6), cup (v0.7), nothing (v0.8)."""
+    if STOP == "axial":
+        return []
+    return [(a, CUP_TAB_R) for a in CUP_TAB_ANGLES] if STOP == "none" else [(a, MOUNT_TAB_R) for a in MOUNT_TAB_ANGLES]
+
+
 def top_deck():
     deck = box(DECK_X0, DECK_X1, -DECK_Y / 2, DECK_Y / 2, -DECK_T, 0).edges("|Z").fillet(6.0)
     c = 0.4
     deck = deck.cut(box(-SV_SHAFT_FROM_END - c, SV_L - SV_SHAFT_FROM_END + c, -SV_W / 2 - c, SV_W / 2 + c, -DECK_T - 1, 1))
     ex, ey = polar(*DECK_EXIT)
-    if STOP == "none":   # v0.7: cable drop against the cup wall (outer end of the U loop), long side tangential
+    if STOP == "axial":  # v0.8: ribbon + tilt wires come up past the cage's shaft-end wall, 16.7 mm from the axis
+        deck = deck.cut(box(-AX_RISE_X - 2.8, -AX_RISE_X + 1.0, -FPC_W / 2 - 1, FPC_W / 2 + 1, -DECK_T - 1, 1))
+    elif STOP == "none":   # v0.7: cable drop against the cup wall (outer end of the U loop), long side tangential
         deck = deck.cut(arc_slot(DECK_EXIT[0], DECK_EXIT[1], FPC_W + 2.0, 4.5, -DECK_T - 1, 1))
     else:
         ex, ey = polar(*DECK_EXIT)
@@ -391,7 +420,7 @@ def top_deck():
     for sx, sy in CAGE_BOLTS:       # cage bolts self-tap into the deck (no nut)
         blind = STOP == "none" and math.hypot(sx, sy) < CUP_R + 1     # v0.7: inside the cup -> M3x8, top skin closed
         deck = deck.cut(cyl_z(PILOT_R, -DECK_T - 1, -1.0 if blind else 1, sx, sy))
-    tabs = [(a, CUP_TAB_R) for a in CUP_TAB_ANGLES] if STOP == "none" else [(a, MOUNT_TAB_R) for a in MOUNT_TAB_ANGLES]
+    tabs = deck_tabs()
     for a, r in tabs:              # cup / channel through-bolts, head under the deck
         x, y = polar(a, r)
         deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, x, y))
@@ -555,7 +584,9 @@ def CAGE_EARS(x0, x1, y0, y1, t):
     """Ear footprints around CAGE_BOLTS (4 mm of material around each bolt), merged into the cage walls."""
     ears = []
     for sx, sy in CAGE_BOLTS:
-        if sx > x1:      # connector end (+X): ear grows out of the end wall
+        if x0 < sx < x1:  # v0.8 side ear: grows out of a long side wall (keeps the shaft-end face free for the cable)
+            ears.append((sx - 4.75, sx + 4.75, *sorted((math.copysign(y1 + t - 0.1, sy), sy + math.copysign(4.0, sy)))))
+        elif sx > x1:      # connector end (+X): ear grows out of the end wall
             ears.append((x1 + t - 0.1, sx + 4.0, sy - 4.75, sy + 4.75))   # head 2.75 + 0.5 + rib 1.5
         else:            # shaft end (-X)
             ears.append((sx - 4.0, x0 - t + 0.1, sy - 5.0, sy + 5.0))
@@ -573,6 +604,16 @@ def pan_cage():
     flange = None
     for (xa, xb, ya, yb), (sx, sy) in zip(CAGE_EARS(x0, x1, y0, y1, t), CAGE_BOLTS):
         e = box(xa, xb, ya, yb, z1 - EAR_CLAMP, z1)
+        if x0 < sx < x1:   # side ear: same two 45-degree ribs, turned 90 degrees
+            wy = math.copysign(y1 + t, sy)
+            oy = yb if sy > 0 else ya
+            ln = abs(oy - wy)
+            for xr in (xa, xb - 1.5):
+                pts = [(wy, z1 - EAR_CLAMP), (oy, z1 - EAR_CLAMP), (wy, z1 - EAR_CLAMP - ln)]
+                e = e.union(cq.Workplane("YZ").polyline(pts).close().extrude(1.5).translate((xr, 0, 0)))
+            e = e.cut(cyl_z(1.7, z0 - 1, z1 + 1, sx, sy))
+            flange = e if flange is None else flange.union(e)
+            continue
         # two 1.5 mm ribs at the ear's sides carry the flange at 45 degrees; the head goes in between them
         wall_x = x1 + t if sx > x1 else x0 - t
         ln = abs((xb if sx > x1 else xa) - wall_x)
@@ -702,6 +743,8 @@ def turntable_yoke():
         y = y.cut(pocket)
         for b in fb.values():
             y = y.union(b)
+    elif STOP == "axial":
+        y = disc.union(axial_hub()).cut(cyl_z(AX_HOLE_R, DISC_Z0 - 1, z_disc_top + 1))
     else:
         # v0.6 (user): no bearing, no flexure, no separate hub. A post grows down from the disc onto the servo horn
         # and is held by the 4 horn screws (M3x10 in counterbores from the disc top, 6 mm floor on the horn).
@@ -757,15 +800,21 @@ def turntable_yoke():
         px, _, pz = tilt_tf((sx, sy, 0))
         y = y.cut(cyl_y(1.4, y_srv_in - 1, y_srv_out + 1, px, pz))
     y = y.cut(tilt_bushing_cut(y_idle_out - 1, y_idle_in + 1))
+    if STOP == "axial":   # cable guide: top end of the twisting length, also holds the ribbon off the cradle
+        gd = box(-FPC_W / 2 - 2.5, FPC_W / 2 + 2.5, y_idle_in - 0.1, 2.5, AX_GUIDE_Z, AX_GUIDE_Z + AX_GUIDE_T)
+        gd = gd.cut(box(-FPC_W / 2 - 1.0, FPC_W / 2 + 1.0, -0.7, 0.7, AX_GUIDE_Z - 1, AX_GUIDE_Z + AX_GUIDE_T + 1))
+        y = y.union(gd)
     # cable entries into the wrap channel
-    if STOP == "none":   # v0.7: inner end of the U loop right beside the post; tilt servo wires in front
+    if STOP == "axial":
+        pass
+    elif STOP == "none":   # v0.7: inner end of the U loop right beside the post; tilt servo wires in front
         y = y.cut(arc_slot(HOLE_FPC[0], HOLE_FPC[1], FPC_W + 1.5, 4.0, DISC_Z0 - 1, z_disc_top + 1))
         bx, by = polar(*HOLE_BUS)
         y = y.cut(cyl_z(3.5, DISC_Z0 - 1, z_disc_top + 1, bx, by))
     else:
         y = y.cut(arc_slot(HOLE_FPC[0], HOLE_FPC[1], FPC_W + 3, min(6.0, ANNULUS - 2), DISC_Z0 - 1, z_disc_top + 1))
         y = y.cut(arc_slot(HOLE_BUS[0], HOLE_BUS[1], 10.0, min(7.0, ANNULUS - 2), DISC_Z0 - 1, z_disc_top + 1))
-    if STOP == "none":
+    if STOP in ("none", "axial"):
         pass
     elif STOP == "rim":   # pin at 0 deg hanging from the rim beside the fixed block
         y = y.union(cyl_z(3.0, 9.0, DISC_Z0 + 0.1, STOP_R, 0))
@@ -786,6 +835,37 @@ def turntable_yoke():
         y = y.cut(cyl_z(pr, DISC_Z0 - 1, z_disc_top + 1, x, yy))
 
     return y, y_srv_in, y_srv_out, y_idle_in
+
+
+def axial_hub():
+    """v0.8 (user, 11-14): the camera ribbon comes up beside the pan servo, turns in over the horn and leaves through
+    the middle of the turntable, so pan only twists it. The hub keeps the full ring on the horn (pocket, crush ribs,
+    4 radial slots, heads sunk flush) but only ONE sector post joins it to the disc, on the side away from the cable.
+    The other 310 degrees stay open for the ribbon's radial leg; the post meeting the ribbon is the end of travel
+    (about +-150 deg)."""
+    z0 = PAN_HORN_Z + HORN_T
+    zf = z0 + AX_FLOOR
+    ring = cyl_z(HUB_R, z0 - HORN_DEPTH, zf)
+    ring = ring.cut(horn_pocket(z0 - HORN_DEPTH - 1, z0, "z"))
+    ring = ring.cut(horn_slots(z0 - 1, zf + 1, zf - AX_CB, "z"))
+    ring = ring.cut(cyl_z(3.25, z0 - 1, zf + 1))                                # spline screw access
+    r0, r1 = AX_SECTOR_R
+    a0, a1 = -AX_SECTOR / 2, AX_SECTOR / 2
+    sec = (cq.Workplane("XY").moveTo(*polar(a0, r0)).lineTo(*polar(a0, r1))
+           .threePointArc(polar(0, r1), polar(a1, r1)).lineTo(*polar(a1, r0))
+           .threePointArc(polar(0, r0), polar(a0, r0)).close()
+           .extrude(DISC_Z0 - zf + 0.02).translate((0, 0, zf - 0.01)))
+    out = ring.union(sec).clean()
+    return cq.Workplane("XY").add(max(out.solids().vals(), key=lambda v: v.Volume()))
+
+
+def fpc_fixed(t=0.4):
+    """Fixed part of the ribbon in the v0.8 route (riser beside the cage, radial leg on edge, first bit up the
+    axis): used as a keep-out in the checks."""
+    rise = box(-AX_RISE_X - t, -AX_RISE_X, -FPC_W / 2, FPC_W / 2, -DECK_T - 30, AX_LEG_Z0 + FPC_W)
+    leg = box(-AX_RISE_X, 0, -t / 2, t / 2, AX_LEG_Z0, AX_LEG_Z0 + FPC_W)
+    up = box(-FPC_W / 2, FPC_W / 2, -t / 2, t / 2, AX_LEG_Z0, DISC_Z0)
+    return rise.union(leg).union(up)
 
 
 def horn_pocket(a0, a1, axis):
@@ -973,14 +1053,15 @@ def fasteners():
         blind = STOP == "none" and math.hypot(sx, sy) < CUP_R + 1
         f = m3(sx, sy, -DECK_T - EAR_CLAMP, length=8.0 if blind else 10.0)
         base = f if base is None else base.union(f)
-    tabs = [(a, CUP_TAB_R) for a in CUP_TAB_ANGLES] if STOP == "none" else [(a, MOUNT_TAB_R) for a in MOUNT_TAB_ANGLES]
+    tabs = deck_tabs()
     for a, r in tabs:                    # deck (5) + tab (5)
         x, y = polar(a, r)
         base = base.union(m3(x, y, -DECK_T))
     pan = None
     for a in range(4):                   # rigid hub -> horn: 5 mm floor + 4 mm horn, tip 1 mm below the horn
         x, y = polar(45 + 90 * a, HORN_SCREW_R)
-        f = m3(x, y, PAN_HORN_Z + HORN_T + 6.0, up=False)
+        f = (m3(x, y, PAN_HORN_Z + HORN_T + AX_FLOOR - AX_CB, up=False, length=8.0) if STOP == "axial"
+             else m3(x, y, PAN_HORN_Z + HORN_T + 6.0, up=False))
         pan = f if pan is None else pan.union(f)
     for x, y in (HUB_SCREWS if PAN_BEARING else ()):   # flexure hub (DISC_T) -> rigid hub
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
@@ -1055,7 +1136,32 @@ def cable_routes_cup():
     return {"camera FPC": fpc, "tilt servo bus": bus, "servo bus to STM32": out, "UART to STM32": uart}
 
 
+def cable_routes_axial():
+    """v0.8 routes: up past the cage end, in over the horn, up the axis, through the guide, loop to the camera."""
+    zc = H_TILT
+    pi_cam = pi_to_deck(48.0, 4.0)  # CAM/DISP connector [VERIFY]
+    zg = AX_GUIDE_Z + AX_GUIDE_T
+    zl = AX_LEG_Z0 + FPC_W / 2
+    fpc = [(CRADLE_X0 + 1, 0, zc - CRADLE_HALF_Z + 4), (CRADLE_X0 - 6, 0, zc - CRADLE_HALF_Z - 2),   # tilt loop behind the cradle
+           (CRADLE_X0 - 9, 0, zg + 14), (-6, 0, zg + 5), (0, 0, zg), (0, 0, DISC_Z0),               # guide, down the axis
+           (0, 0, zl), (-AX_RISE_X, 0, zl), (-AX_RISE_X, 0, -DECK_T - 2),                            # radial leg, riser
+           (-AX_RISE_X, 0, LOWER_TOP + PI_STANDOFF + 14), (pi_cam[0], pi_cam[1], LOWER_TOP + PI_STANDOFF + 6)]
+    cx, cy, cz = tilt_conn_point()
+    pan_conn = (SV_CONN_X, 0, SV_TOP - SV_H - 2.0 - SV_PLUG / 2)
+    bus = [(cx, cy, cz), (0, cy * 0.5, DISC_Z0 + DISC_T + 6), (2, 2, DISC_Z0 + DISC_T + 2), (2, 2, zl), (-AX_RISE_X - 1.5, 3, zl),
+           (-AX_RISE_X - 1.5, 3, -DECK_T - 4), (-AX_RISE_X - 1.5, 22, -DECK_T - 8), (SV_L - SV_SHAFT_FROM_END + 6, 22, -DECK_T - 8),
+           (SV_L - SV_SHAFT_FROM_END + 6, 0, pan_conn[2]), pan_conn]
+    out = [pan_conn, (DECK_X1 - 8, 0, pan_conn[2]), (10, 38, LOWER_TOP + 3), (10, 38, LOWER_TOP - 10)]
+    hat_top = LOWER_TOP + PI_STANDOFF + PI_STACK_H
+    gx, gy = pi_to_deck(sum(PI_GPIO_X) / 2, PI_W - 3)
+    uart = [(gx, gy, hat_top + 8), (gx + 8, gy, hat_top + 14), (10, 38, hat_top + 14),
+            (10, 38, LOWER_TOP + 3), (10, 38, LOWER_TOP - 10)]
+    return {"camera FPC": fpc, "tilt servo bus": bus, "servo bus to STM32": out, "UART to STM32": uart}
+
+
 def cable_routes(y_srv_out):
+    if STOP == "axial":
+        return cable_routes_axial()
     if STOP == "none":
         return cable_routes_cup()
     zc = H_TILT
@@ -1097,7 +1203,8 @@ def build(export=True):
     yoke, y_srv_in, y_srv_out, y_idle_in = turntable_yoke()
     parts = {}
     parts["top_deck"] = (top_deck(), (0.80, 0.82, 0.85), True, "base")
-    parts["bearing_mount"] = (bearing_mount(), (0.55, 0.57, 0.60), True, "base")
+    if STOP != "axial":   # v0.8: nothing stands on the deck around the horn any more
+        parts["bearing_mount"] = (bearing_mount(), (0.55, 0.57, 0.60), True, "base")
     parts["lower_deck"] = (lower_deck(), (0.80, 0.82, 0.85), True, "base")
     parts["pan_cage"] = (pan_cage(), (0.55, 0.57, 0.60), True, "base")
     parts["pan_servo"] = (servo_z_up().translate((0, 0, SV_TOP)), (0.12, 0.12, 0.13), False, "base")

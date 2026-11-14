@@ -1,4 +1,4 @@
-<title>2축 짐벌 v0.7</title>
+<title>2축 짐벌 v0.8</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -72,18 +72,18 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
   </div>
   <aside>
     <section>
-      <h1>상단부 2축 짐벌 v0.7</h1>
+      <h1>상단부 2축 짐벌 v0.8</h1>
       <p class="sub" id="lead"></p>
     </section>
     <section aria-labelledby="h-pose">
       <h2 id="h-pose">자세</h2>
-      <div class="ctrl"><label for="psi">Pan ψ</label><input id="psi" type="range" min="-180" max="180" step="1" value="0"><output id="psi-o" for="psi">0°</output></div>
+      <div class="ctrl"><label for="psi">Pan ψ</label><input id="psi" type="range" min="-150" max="150" step="1" value="0"><output id="psi-o" for="psi">0°</output></div>
       <div class="ctrl"><label for="th">Tilt θ</label><input id="th" type="range" min="-90" max="90" step="1" value="0"><output id="th-o" for="th">0°</output></div>
       <div class="btns">
         <button type="button" data-pose="0,0">정면</button>
         <button type="button" data-pose="60,30">ψ 60°, θ 30°</button>
         <button type="button" data-pose="-150,-45">ψ −150°, θ −45°</button>
-        <button type="button" id="stopbtn" data-pose="180,0">Pan 180°</button>
+        <button type="button" id="stopbtn" data-pose="150,0">Pan 150°</button>
         <button type="button" id="sweep">스윕 재생</button>
         <button type="button" id="eyecam">눈 정면 보기</button>
         <button type="button" id="allcam">전체 보기</button>
@@ -97,11 +97,19 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
       <div class="legend" id="legend"></div>
     </section>
     <section aria-labelledby="h-v05">
-      <h2 id="h-v07">v0.7 변경 (11/14)</h2>
+      <h2 id="h-v08">v0.8 변경 (11/14)</h2>
+      <table>
+        <tr><td>카메라 케이블</td><td>Pan 서보 케이지 끝면 옆으로 올라와 혼 위에서 축으로 꺾여 턴테이블 가운데 구멍으로 나감. Pan은 비틀림만 줌 (경로 약 __FPC__ mm)</td></tr>
+        <tr><td>턴테이블</td><td>혼 고리(턱·돌기·긴 구멍) + 50° 부채꼴 기둥 하나, 가운데 구멍 Ø 24. 높이 +6.3 mm</td></tr>
+        <tr><td>Pan 범위</td><td>±150° (부채꼴 기둥이 케이블에 닿는 곳이 끝)</td></tr>
+        <tr><td>케이블 컵</td><td>제거 (나사 4개 감소)</td></tr>
+        <tr><td>케이블 가이드</td><td>부싱쪽 팔에서 축까지 나온 판: 비틀림 구간(약 28 mm)의 위 끝</td></tr>
+        <tr><td>케이지 귀</td><td>축 쪽 끝면 귀 → 양 옆면 귀 2개 (끝면을 케이블 자리로 비움)</td></tr>
+      </table>
+      <h2 style="margin-top:14px">v0.7 변경 (11/14)</h2>
       <table>
         <tr><td>상판 ↔ 기둥</td><td>계단식 겹침: 상판 반원 혀가 기둥 바깥 절반 자리로 내려옴, 가로 M3 × 16 + 너트 (끼워 넣는 면 없음)</td></tr>
-        <tr><td>카메라 케이블</td><td>기둥 바로 옆으로 곧게 올라가 턴테이블 아래 U자 고리 하나 (경로 약 __FPC__ mm)</td></tr>
-        <tr><td>스토퍼 · 채널</td><td>제거. 낮은 케이블 컵(벽 20 mm)만 남김. 서보 각도 제한(EEPROM)으로 보호</td></tr>
+        <tr><td>스토퍼 · 채널</td><td>제거. 서보 각도 제한(EEPROM)으로 보호</td></tr>
         <tr><td>혼 결합</td><td>턱 + 깎이는 돌기 6개 + 방사형 긴 구멍 (혼 지름은 혼 게이지 쿠폰으로 결정)</td></tr>
         <tr><td>Pi</td><td>받침 5 mm, M2.5 × 8, 하판 배선 구멍 3개</td></tr>
         <tr><td>카메라 고정</td><td>방식 __CAM__ (샘플 쿠폰 A~F)</td></tr>
@@ -122,7 +130,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
     <section aria-labelledby="h-dims">
       <h2 id="h-dims">주요 치수와 추정치</h2>
       <table id="dims"></table>
-      <h2 style="margin-top:14px">케이블 길이 (경로 추정, U 고리 포함)</h2>
+      <h2 style="margin-top:14px">케이블 길이 (경로 추정)</h2>
       <table id="cables"></table>
       <p class="sub" style="margin-top:8px">질량은 PLA 유효 충전율 40 %, STS3215 55 g 가정. 화각 가림은 102°×67° 화각의 광선 중 짐벌 부품에 막히는 비율입니다.</p>
     </section>
@@ -140,7 +148,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
         <li><b>AI HAT+ 아래 FPC 통과</b>: HAT 가장자리로 FPC를 빼낼 틈이 있는지</li>
         <li><b>M3 안내 구멍</b>: 확인 쿠폰으로 지름(PILOT_R)을 정한 뒤 출력</li>
         <li><b>혼 지름·두께</b>: 혼 게이지 쿠폰(C02)으로 HORN_D, HORN_T를 정한 뒤 큰 부품 출력</li>
-        <li><b>카메라 FPC 길이</b>: 경로 약 __FPC__ mm. 이보다 짧으면 Pan 범위를 줄여 U 고리를 줄임</li>
+        <li><b>카메라 FPC 길이</b>: 경로 약 __FPC__ mm. 비틀림 구간 약 28 mm가 ±150°를 버티는지 손으로 먼저 확인</li>
         <li><b>Tilt 축 자리</b>: 핀을 위에서 눌러 끼우면 딸깍 하고 들어가야 정상. 헐거우면 손가락 틈을 좁혀 다시 출력</li>
         <li><b>카메라 홀·렌즈 위치, Pi 스택 높이 30 mm</b>: v0.1과 동일한 가정</li>
       </ul>
@@ -159,7 +167,6 @@ const EYE_X = __EYEX__;
 const PARTS = [
   // name, label, colour, group (base | pan | tilt), purchased?
   ["top_deck", "상판", "#c9ced4", "base", 0],
-  ["bearing_mount", "케이블 컵 (U 고리 자리)", "#8d959e", "base", 0],
   ["lower_deck", "하판 + 기둥 (일체형)", "#c9ced4", "base", 0],
   ["pan_cage", "Pan 서보 케이지", "#8d959e", "base", 0],
   ["pan_servo", "Pan 서보 STS3215", "#2a2d31", "base", 1],
@@ -287,13 +294,13 @@ const fmtE = v => v.toExponential(2).replace("e-", "×10⁻").replace(/⁻(\d)/,
 const pct = v => (v * 100).toFixed(0) + " %";
 function fillTables() {
   const b = BEST, fb = Math.max(...Object.entries(b.fov_base).filter(([k]) => k.endsWith(",0")).map(([, v]) => v));
-  document.getElementById("lead").textContent = `상판-기둥 계단식 결합, 축 옆 U 고리 케이블, 스토퍼 없는 혼 직결 Pan, 현장 맞춤형 혼 자리 버전입니다. Tilt 서보 몸체 ${ORIENT[b.orient]} 방향.`;
+  document.getElementById("lead").textContent = `상판-기둥 계단식 결합, Pan 축을 따라 올라오는 카메라 케이블, 혼 직결 Pan, 현장 맞춤형 혼 자리 버전입니다. Tilt 서보 몸체 ${ORIENT[b.orient]} 방향.`;
   const rows = [
     ["Tilt축 높이 (상판 윗면 기준)", b.H_TILT.toFixed(0) + " mm"],
     ["턴테이블 지름", b.disc_d.toFixed(0) + " mm"],
     ["회전부 최고 높이", b.top_z.toFixed(0) + " mm"],
-    ["케이블 U 고리 (기둥 r15 ↔ 컵 벽 r27)", "약 __LOOP__ mm"],
-    ["Pan 가동 / 소프트 리밋", "±180° (스토퍼 없음) / ±150°"],
+    ["케이블 비틀림 구간 (턴테이블 구멍 ~ 가이드)", "약 28 mm"],
+    ["Pan 가동 / 소프트 리밋", "±150° (기둥이 케이블에 닿는 곳) / ±140°"],
     ["Tilt 가동 범위 (기구 간섭 기준)", "±90°"],
     ["Pan 회전부 질량", b.mass_g.toFixed(0) + " g"],
     ["무게중심 편심", b.com_r + " mm"],
