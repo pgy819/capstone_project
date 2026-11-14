@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.6.2):
+"""Build the hand-off package of the current gimbal geometry (v0.7):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,21 +25,24 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v062"
+VER = "v070"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
 # part number, source name, Korean name, group, qty, print orientation, settings, order
 PRINTED = [
     ("C01", "check_coupon", "확인 쿠폰 (M3 안내 구멍 지름)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
-    ("P01", "top_deck", "상판 (아래 사각 돌기 4개)", "BASE", 1, "윗면이 바닥(뒤집어서), 돌기가 위로", "충전 25 %, 벽 3", 2),
+    ("C02", "horn_gauge", "혼 게이지 (지름 20~27 턱 + 두께 3.0~6.0 홈)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
+] + [(f"C03{v}", f"cam_coupon_{v}", f"카메라 고정 샘플 {v}: {g.CAM_VARIANTS[v]}", "-", 0, "가운데 판 뒷면이 바닥", "PLA 100 %, 층 0.12~0.16", 1)
+     for v in "ABCDEF"] + [
+    ("P01", "top_deck", "상판 (아래 반원 혀 4개)", "BASE", 1, "윗면이 바닥(뒤집어서), 혀가 위로", "충전 25 %, 벽 3", 2),
     ("P02", "lower_deck", "하판 + 기둥 일체형", "BASE", 1, "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4, 리트랙션 켬", 2),
     ("P05", "pan_cage", "Pan 서보 케이지 (얇은 귀 + 옆 보강살)", "BASE", 1, "바닥이 바닥", "충전 40 %, 벽 3", 3),
-    ("P06", "bearing_mount", "케이블 채널 + 스토퍼", "BASE", 1, "조립 방향 그대로", "충전 40 %, 벽 4", 3),
-    ("P08", "turntable", "턴테이블 (가운데 기둥 일체, 혼 직결)", "PAN", 1, "윗면이 바닥(뒤집어서), 기둥이 위로", "충전 60 %, 벽 4", 3),
+    ("P06", "bearing_mount", "케이블 컵 (U 고리 자리, 스토퍼 없음)", "BASE", 1, "조립 방향 그대로", "충전 40 %, 벽 3", 3),
+    ("P08", "turntable", "턴테이블 (가운데 기둥 일체, 혼 턱·긴 구멍)", "PAN", 1, "윗면이 바닥(뒤집어서), 기둥이 위로", "충전 60 %, 벽 4", 3),
     ("P09", "arm_servo", "서보쪽 팔 (서보 채널·받침판)", "PAN", 1, "발이 바닥(세워서), 브림", "충전 60 %, 벽 4, 받침판 아래 25 mm 브리지", 4),
     ("P10", "arm_idle", "부싱쪽 팔 (위에서 끼우는 축 자리)", "PAN", 1, "바깥면이 바닥(눕혀서)", "충전 60 %, 벽 4", 4),
-    ("P11", "tilt_cradle", "Tilt 크래들 (H형)", "TILT", 1, "위쪽 끝이 바닥(뒤집어서)", "충전 60 %, 벽 4", 4),
+    ("P11", "tilt_cradle", f"Tilt 크래들 (H형, 카메라 고정 {g.CAM_MOUNT})", "TILT", 1, "위쪽 끝이 바닥(뒤집어서)", "충전 60 %, 벽 4", 4),
 ]
 if g.EYE:
     PRINTED.append(("P12", "eye_plate", "눈 장식판", "TILT", 1, "뒷면이 바닥", "충전 100 %, 층 0.12 권장", 4))
@@ -50,14 +53,16 @@ BOUGHT = [
     ("B05", "tilt_horn", "Tilt 혼 (서보 동봉)", "TILT"),
     ("B06", "camera", "Camera Module 3 Wide", "TILT"),
     ("B07", "pi5_stack", "Raspberry Pi 5 + 쿨러 + AI HAT+", "BASE"),
-    ("B08", "fasteners_base", "M3 x 10, M2.5 x 5 (고정부)", "BASE"),
+    ("B08", "fasteners_base", "M3 x 10/8/16 + 너트, M2.5 x 8 (고정부)", "BASE"),
     ("B09", "fasteners_pan", "M3 x 10 (Pan 회전부)", "PAN"),
-    ("B10", "fasteners_tilt", "M2 x 5 (카메라)", "TILT"),
+    ("B10", "fasteners_tilt", "M2 x 5 (카메라 아래 멈춤, 선택)", "TILT"),
 ]
 PARAMS = [  # (name, description) -> value read from the generator
     ("DECK_T", "상판·하판 두께"), ("BASE_GAP", "상판 밑면 ~ 하판 윗면"), ("PILLAR_R", "기둥 반지름"),
-    ("H_TILT", "Tilt축 높이 (상판 윗면 기준)"), ("WRAP_R_OUT", "케이블 채널 바깥 반지름"), ("DISC_R", "턴테이블 반지름"),
-    ("DISC_T", "턴테이블 두께"), ("TUBE_ID", "베어링 튜브 안지름"), ("TUBE_TOP", "베어링 튜브 위 높이"),
+    ("H_TILT", "Tilt축 높이 (상판 윗면 기준)"), ("DISC_R", "턴테이블 반지름"), ("DISC_T", "턴테이블 두께"),
+    ("HORN_D", "혼 지름 (혼 게이지로 결정)"), ("HORN_T", "혼 두께 (혼 게이지로 결정)"), ("HORN_CLR", "혼 턱 반지름 여유"),
+    ("HORN_RIB", "혼 턱 돌기 높이 (net 0.2 눌림)"), ("CUP_R", "케이블 컵 안 반지름"), ("CUP_H", "케이블 컵 높이"),
+    ("PAN_RANGE", "케이블 고리 설계 범위 ± [deg]"), ("JOINT_H", "상판-기둥 겹침 높이"), ("JOINT_GAP", "혀-기둥 틈"),
     ("SV_H", "서보 높이 (뒷면~축 면, 실측)"), ("SV_BOSS_H", "톱니 돌출 (실측 2~3)"),
     ("PILOT_R", "M3 안내 구멍 반지름"), ("EAR_CLAMP", "케이지 귀 체결 두께"),
     ("HUB_R", "턴테이블 가운데 기둥 반지름"), ("HORN_SCREW_R", "혼 나사 원 반지름"), ("ARM_T_SERVO", "Tilt 서보쪽 팔 판 두께"), ("LOWER_T", "하판 두께"), ("PI_STANDOFF", "Pi 받침 돌출"), ("CAM_BOSS", "카메라 받침 돌출"), ("CH_SHELF", "Tilt 서보 받침판 두께"), ("HORN_HOLE_R", "팔 판 혼 U홈 반지름"),
@@ -78,7 +83,8 @@ def main():
     yoke, a, b, c = g.turntable_yoke()
     tt, arm_s, arm_i = gp.split_yoke(yoke, a, b, c)
     shapes = {n: v[0] for n, v in parts.items()}
-    shapes.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, check_coupon=gp.check_coupon())
+    shapes.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, check_coupon=gp.check_coupon(), horn_gauge=gp.horn_gauge(),
+                  **{f"cam_coupon_{v}": gp.cam_coupon(v) for v in "ABCDEF"})
     orient = dict(gp.ORIENT)
     colors = {n: v[1] for n, v in parts.items()}
     colors.update(turntable=(0.20, 0.45, 0.85), arm_servo=(0.25, 0.50, 0.90), arm_idle=(0.25, 0.50, 0.90),
@@ -151,12 +157,14 @@ def main():
         w.writerow(["품목", "규격", "수량", "쓰임"])
         for row in [
             ("서보", "Feetech STS3215", 2, "Pan ID 1, Tilt ID 2 (혼·동봉 나사 포함)"),
-            ("나사", "M3 × 10", 19, "채널 4, 케이지 3, 턴테이블→Pan 혼 4, 팔 4, 기둥 옆→상판 돌기 4 (모두 안내 구멍에 바로)"),
+            ("나사", "M3 × 10", 10, "케이블 컵 4, 케이지 2, 팔 4 (안내 구멍에 바로)"),
+            ("나사", "M3 × 8", 1, "케이지 앞쪽 귀 (컵 안쪽이라 상판 윗면을 뚫지 않게)"),
+            ("나사 + 너트", "M3 × 16 + M3 너트", 4, "상판 혀 ↔ 기둥 (가로)"),
             ("케이블 타이", "폭 4.8 이하, 길이 200 이상", 1, "Tilt 서보 들림 방지"),
-            ("나사 (Pi)", "M2.5 × 5", 4, "Pi 위에서 하판 안내 구멍에 바로"),
-            ("나사 (카메라)", "M2 × 5", 4, "카메라 기판 앞에서 크래들 가운데 판에 바로"),
-            ("서보 동봉 나사", "혼용", 4, "크래들→Tilt 혼 4"),
-            ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 500 mm", 1, "경로 약 340 mm (채널 여유 한 바퀴 포함)"),
+            ("나사 (Pi)", "M2.5 × 8", 4, "Pi 위에서 5 mm 받침 안내 구멍에 바로"),
+            ("나사 (카메라)", "M2 × 5", 2, "방식 E: 기판 아래 끝 멈춤 (선택). A~C 방식이면 4개"),
+            ("혼 나사", "혼 구멍 규격 (M2~M3), 길이: Pan = 6 + 혼 두께, Tilt = 2.5 + 혼 두께", 6, "턴테이블→Pan 혼 4, 크래들→Tilt 혼 2 (모두 방사형 긴 구멍)"),
+            ("카메라 케이블", "Pi 5용 FPC 22핀↔15핀 300 mm 이상", 1, f"경로 약 {round(g.length(routes['camera FPC']))} mm (U 고리 포함)"),
             ("서보 케이블", "5264-3P 900 mm", 1, "경로 약 360 mm"),
         ]:
             w.writerow(row)

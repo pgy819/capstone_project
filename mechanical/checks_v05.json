@@ -3,9 +3,9 @@
  "notes": [],
  "tilt_overlap_max_mm3": 0.0,
  "pan_overlap_max_mm3": 0.0,
- "stop_deg": 168,
+ "stop_deg": null,
  "fov_self": {
-  "-30": 0.1852,
+  "-30": 0.2376,
   "0": 0.0,
   "30": 0.0
  },
@@ -25,11 +25,11 @@
  "cradle_in_60deg_cone": 0.0,
  "boresight_down_deg": -38,
  "volumes_cm3": {
-  "turntable_yoke": 59.08,
-  "bearing_mount": 23.22,
+  "turntable_yoke": 65.05,
+  "bearing_mount": 8.23,
   "pan_cage": 18.66,
-  "top_deck": 75.89,
-  "lower_deck": 63.05,
-  "tilt_cradle": 5.57
+  "top_deck": 77.25,
+  "lower_deck": 64.23,
+  "tilt_cradle": 6.13
  }
 }

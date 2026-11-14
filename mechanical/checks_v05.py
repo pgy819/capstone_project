@@ -17,7 +17,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 EXPECTED = {("pan_horn", "fasteners_pan"), ("horn_coupler", "pan_horn"), ("pan_servo", "pan_horn"), ("turntable_yoke", "pan_horn"), ("tilt_servo", "tilt_horn"), ("pi5_stack", "fasteners_base"), ("lower_deck", "fasteners_base"), ("top_deck", "fasteners_base"),
             ("bearing_mount", "fasteners_base"), ("horn_coupler", "fasteners_pan"), ("tilt_cradle", "fasteners_tilt"),
             ("turntable_yoke", "tilt_cradle"), ("camera", "fasteners_tilt"),   # self-tapping threads / snap-pivot grip (by design)
-            ("turntable_yoke", "fasteners_pan")}   # unsplit yoke has no arm-foot holes; checked on the split parts below
+            ("turntable_yoke", "fasteners_pan"),
+            ("tilt_cradle", "tilt_horn"),   # v0.7: crush ribs of the horn pockets (0.2 mm by design)
+            ("tilt_cradle", "camera")}      # v0.7 mount E: 6 crush bumps press 0.1 mm on the board back (by design)   # unsplit yoke has no arm-foot holes; checked on the split parts below
 
 
 def main():
@@ -62,9 +64,9 @@ def main():
     mb = trimesh.boolean.union([M[n] for n in ["top_deck", "bearing_mount", "lower_deck", "fasteners_base", "pan_cage"]]
                                + [K[k] for k in K if "tilt" not in k])
     res["pan_overlap_max_mm3"] = round(max(e.overlap(e.rot(mp, s * d, [0, 0, 1], [0, 0, 0]), mb)
-                                           for d in (15, 45, 90, 135, 155) for s in (-1, 1)), 2)
+                                           for d in (15, 45, 90, 135, 155, 180) for s in (-1, 1)), 2)
     y, bm = M["turntable_yoke"], M["bearing_mount"]
-    res["stop_deg"] = next((d for d in range(156, 181, 2) if e.overlap(e.rot(y, d, [0, 0, 1], [0, 0, 0]), bm) > 0.05), None)
+    res["stop_deg"] = None if g.STOP == "none" else next((d for d in range(156, 181, 2) if e.overlap(e.rot(y, d, [0, 0, 1], [0, 0, 0]), bm) > 0.05), None)
     if "horn_coupler" in M:   # radial float of the flexure (bearing version only)
         hub = M["horn_coupler"]
         for dx, dy in ((0.4, 0), (-0.4, 0), (0, 0.4), (0, -0.4)):

@@ -41,7 +41,9 @@ HORN_GAP = 0.5                           # horn underside above the shaft face
 SV_CONN_W, SV_CONN_H, SV_CONN_D = 16.0, 7.0, 6.0   # two 5264-3P sockets side by side [VERIFY]
 SV_CONN_X = (SV_L - 2 * SV_SHAFT_FROM_END) / 2  # centre of the wide face opposite the horn (user, 11-02) [VERIFY]
 SV_PLUG = 14.0                                      # plug + cable bend room out of that face
-HORN_D, HORN_T = 24.0, 4.0               # disc horn [VERIFY]
+HORN_D, HORN_T = 24.0, 4.0               # disc horn [VERIFY with the C02 horn gauge: pocket that fits, slot that fits]
+HORN_CLR, HORN_RIB, HORN_DEPTH = 0.4, 0.6, 2.0   # v0.7: pocket radius clearance, 6 crush ribs 0.6 tall (net -0.2), depth
+HORN_SLOT = (5.0, 10.5)                  # v0.7: radial screw slots from r5 to r10.5 - any horn hole circle in that range fits
 
 CAM_W, CAM_H, CAM_PCB = 25.0, 24.0, 1.0  # Camera Module 3 Wide [VERIFY holes/lens as Camera v2]
 CAM_LENS_D, CAM_LENS_H = 8.5, 11.4
@@ -52,8 +54,8 @@ FPC_W = 16.0                             # camera-end FPC width (15-pin)
 PI_L, PI_W, PI_PCB = 85.0, 56.0, 1.6
 PI_HOLES = [(3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5)]  # local (x along 85, y along 56) from PCIe-end corner
 PI_STACK_H = 30.0                        # PCB bottom -> AI HAT+ top [VERIFY]
-PI_STANDOFF = 0.5                        # v0.6 (user, 11-12): Pi bosses stand 0.5 mm proud (was 0.3)
-PI_RECESS = 1.0                          # pocket under the Pi footprint for underside parts (boss + 1.0 clearance) [VERIFY]
+PI_STANDOFF = 5.0                        # v0.7 (user, 11-14): Pi on 5 mm standoffs - two underside parts kept it from sitting (was 0.5)
+PI_RECESS = 0.0                          # pocket under the Pi footprint for underside parts (boss + 1.0 clearance) [VERIFY]
 LOWER_T = 3.2                            # v0.5.5 (user): lower deck as thin as strength allows (was 5)
 PILLAR_PILOT_R, PILLAR_PILOT_L = 1.3, 8.0  # M3x10 from the top deck self-taps into the pillar top (no nut)
 # v0.6.1 (user, 11-12): the top deck carries square pegs that drop into sockets in the pillar tops; one M3x10
@@ -65,7 +67,7 @@ PILOT_R = 1.3                            # M3 self-tapping pilot (d2.6) used whe
 M2_PILOT_R = 0.8                         # M2 self-tapping pilot (d1.6)
 # v0.5.3 fastener sizes (user, 11-09): M3 structure, M2.5 Raspberry Pi, M2 camera
 M25_CLR, M25_HEAD_D, M25_HEAD_H = 1.4, 4.5, 2.5   # clearance radius, socket head
-PI_SCREW_L = 5.0                         # M2.5 x 5 down through the Pi (1.6) self-taps into boss (0.3) + deck (3.2)
+PI_SCREW_L = 8.0                         # v0.7: M2.5 x 8 down through the Pi (1.6) self-taps 6.4 mm into the 5 mm standoff
 M25_NUT_AF, M25_NUT_H, M25_POCKET_AF, M25_POCKET_H = 5.0, 2.0, 5.3, 2.2   # (not used since v0.5.6)
 M25_PILOT_R = 1.05                       # M2.5 self-tapping pilot (d2.1) through the 0.3 boss + 3.2 deck
 M2_CLR, M2_HEAD_D, M2_HEAD_H = 1.1, 3.8, 2.0
@@ -103,7 +105,7 @@ FLEX_T, FLEX_GAP = 1.2, 0.7              # blade thickness (3 perimeters @0.4) /
 FLEX_H2 = 3.0                            # stage-2 blade height at the disc top face (axial compliance) [mm]
 FLEX_HUB = (6.5, 4.5)                    # hub half-size x, y
 HUB_SCREWS = ((3.5, 0.0), (-3.5, 0.0))   # flexure hub -> rigid hub, M3x10 into nuts in side slots (v0.5.1)
-HUB_R = TUBE_ID / 2 - 1.0                # rigid hub radius inside the fixed tube
+HUB_R = HORN_D / 2 + HORN_CLR + 2.1      # v0.7: turntable post radius, 2.1 mm wall around the horn pocket
 HORN_SCREW_R = 8.0                       # disc horn hole circle [VERIFY]
 STOP_R, STOP_HALF_W = 52.0, 6.0          # hard stop at 180 deg (rear)
 HOLE_FPC = (180.0, 33.0)                 # turntable cable holes (angle deg, radius)
@@ -111,10 +113,11 @@ HOLE_BUS = (128.0, 36.0)
 DECK_EXIT = (180.0, 35.0)                # where cables leave the channel downward
 
 H_TILT = 58.0
-ARM_W, ARM_T_SERVO, ARM_T_IDLE = 30.0, 3.5, 6.0
+ARM_T_SERVO, ARM_T_IDLE = 3.5, 6.0
 SADDLE_H, SADDLE_CLR = 2.5, 0.2          # torque-reaction pocket around the tilt servo case
 SV_CASE_HOLES = ()                       # servo held by the slide-in channel (v0.5.4), case holes not used
-HORN_HOLE_R = HORN_D / 2 + 1.0           # U-cut in the servo arm: the horn turns inside the arm plate
+HORN_HOLE_R = HORN_D / 2 + 2.5           # U-cut in the servo arm: horn + cradle lip turn inside the arm plate (v0.7: +2.5)
+ARM_W = max(30.0, 2 * HORN_HOLE_R + 4.0)  # v0.7: arm grows with the horn so 2 mm stays beside the U-cut
 # v0.5.4 (user, 11-09): tilt servo drops into a channel from above and sits on a load plate under its lower end
 CH_WALL, CH_LIP, CH_SHELF = 3.0, 2.5, 3.0   # side wall, back lip (inward), load plate thickness
 CH_CLR = 0.25                            # servo body clearance in the channel
@@ -125,7 +128,10 @@ CRADLE_HALF_Z = 18.0
 # v0.5.5 (user): H section seen from above: the camera web sits in the middle of the side walls, which run
 # the same length behind and in front of it and end at the tilt axis (only the horn hub / pivot boss go further)
 CRADLE_X0, CRADLE_X1 = None, 0.0         # set below from the camera position
-HUB_DISC_R = 10.8                        # cradle hub disc on the tilt horn: just covers the 4 screw heads (keeps out of the corner rays)
+HUB_DISC_R = HORN_D / 2 + HORN_CLR + 1.5 # v0.7: hub disc carries a lip around the horn; front clipped at HUB_CLIP_X
+HUB_CLIP_X = 11.0                        # nothing of the hub beyond x = 11 (60 deg cone from the lens stays clear)
+CAM_MOUNT = "E"                          # v0.7 camera fixing: A self-tap d1.8 / B through + nut / C big hole + nut /
+                                         # D heat-stake pins / E slide-in rails (default, no holes needed) / F tape pad
 EYE = False                              # eye plate left out for now (user, 11-12); geometry kept in eye_plate()
 EYE_X0, EYE_T = 6.0, 1.4                 # plate back face (lens front is at x=5.4) and thickness
 EYE_GROOVE_FLOOR = 3.0                   # groove ends this far above the cradle bottom (v0.5.4: plate can move down ~12 mm)
@@ -138,6 +144,11 @@ WEB_X0 = WEB_X1 - 2.5                    # web back face (CRADLE_WALL)
 CRADLE_X0 = 2 * (WEB_X0 + WEB_X1) / 2 - CRADLE_X1     # symmetric about the web
 
 PAN_SOFT_LIMIT = 150.0
+PAN_RANGE = 180.0                         # v0.7: cable loop sized for +-180 deg (+10 deg margin each side)
+CUP_R, CUP_WALL, CUP_H = 27.0, 2.0, 20.0  # v0.7: cable cup around the post (replaces the channel + stop)
+CUP_TAB_ANGLES = (45, 135, 225, 315)
+CUP_TAB_R = CUP_R + CUP_WALL + 4.0
+JOINT_H, JOINT_GAP, JOINT_SLOT = 12.0, 0.3, 0.6   # v0.7 lap joint: overlap height, tab-pillar gap, vertical slot play
 HOUSING_R = 24.0                          # outer-race housing outer radius (rotating) - channel inner boundary
 STOP = "rim"
 TILT_ORIENT = "back"
@@ -145,6 +156,8 @@ GROOVE_LUG_HALF = 4.0                     # groove stop: lug half-width on the t
 STOP_BLOCK_HALF = 5.0
 FIT_SHAFT = -0.05                        # radius allowance on printed pins/tubes that go into a bearing bore
 FIT_BORE = 0.15                          # printed bores that take a bearing OD (radius allowance)
+CABLE_HOLES = [(-26.0, -31.0, 16.0, 10.0),   # v0.7: USB-C plug beside the Pi power port (Pi edge at x = -38)
+               (10.0, -38.0, 14.0, 14.0), (10.0, 38.0, 14.0, 14.0)]   # servo supply, STM32 / UART wires
 PI_WINDOW = None                        # top-deck opening over the Pi (tried 11-02, user reverted: slots in the lower deck instead)
 PI_SLOT_W, PI_SLOT_HALF_L = 4.5, 46.0     # long narrow slots in the lower deck under the Pi: cooling + cable pass
 MOUNT_TAB_R = 43.0                       # bearing-mount fixing tabs outside the channel wall
@@ -167,7 +180,11 @@ def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     WRAP_R_OUT, STOP, TILT_ORIENT = wrap_r, stop, tilt_orient
     ANNULUS = WRAP_R_OUT - HOUSING_R - 0.5
     R_MID = HOUSING_R + 0.5 + ANNULUS / 2
-    if stop == "rim":
+    if stop == "none":                               # v0.7: no hard stop (servo angle limits in EEPROM instead)
+        DISC_T = 5.0
+        STOP_R = 0.0
+        DISC_R = 43.0
+    elif stop == "rim":
         DISC_T = 4.0
         STOP_R = WRAP_R_OUT + WRAP_WALL + 5.0
         DISC_R = STOP_R + 4.0
@@ -184,6 +201,28 @@ def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     H_TILT = h
     cx, cy, _ = tilt_conn_point()
     HOLE_BUS = (math.degrees(math.atan2(cy, cx)), R_MID)
+    if stop == "none":
+        loop_setup()
+
+
+def loop_setup():
+    """v0.7 (user, 11-14): camera FPC as close to the pan axis as the servo allows. The axis itself is taken by the
+    servo shaft and horn, so the cable rises straight up beside the post and, in the 20 mm under the turntable, makes
+    one reverse-wound U loop (car steering-wheel 'clock spring'): inner end on the post (turns), outer end on the cup
+    wall (fixed). Turning by d moves the U by d*ri/(ri+ro); the ribbon needed for a range T is
+    T*ri*ro/(ri+ro) + pi*(ro-ri)/2, about a third of the old one-turn spiral in the channel."""
+    global LOOP, HOLE_FPC, DECK_EXIT, HOLE_BUS
+    ri, ro = HUB_R + 0.5, CUP_R - 0.3
+    th = 2 * PAN_RANGE + 20.0                       # +10 deg margin at each end
+    a_max, b_max = th * ro / (ri + ro), th * ri / (ri + ro)
+    assert a_max < 330, "loop would overlap itself on the post"
+    tA = 180.0                                      # inner end: disc slot behind the post, between the arm feet
+    tB = tA - a_max / 2 + b_max / 2                 # outer end: deck slot against the wall (neutral = mid travel)
+    L = math.radians(th) * ri * ro / (ri + ro) + math.pi * (ro - ri) / 2
+    LOOP = dict(ri=ri, ro=ro, a_max=a_max, b_max=b_max, tA=tA, tB=tB, length=L)
+    HOLE_FPC = (tA, HUB_R + 2.3)
+    DECK_EXIT = (tB, CUP_R - 2.6)
+    HOLE_BUS = (0.0, HUB_R + 2.5)                   # tilt servo wires: small hole in front of the post
 
 
 def tilt_tf(p):
@@ -342,18 +381,20 @@ def top_deck():
     c = 0.4
     deck = deck.cut(box(-SV_SHAFT_FROM_END - c, SV_L - SV_SHAFT_FROM_END + c, -SV_W / 2 - c, SV_W / 2 + c, -DECK_T - 1, 1))
     ex, ey = polar(*DECK_EXIT)
-    deck = deck.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -DECK_T - 1, 1))  # cable drop
-    for x, y in PILLARS:   # v0.6.1: square peg under the deck, cross pilot hole facing the bolt entry side
-        a = pillar_slot_dir(x, y)
-        peg = box(x - PEG_A / 2, x + PEG_A / 2, y - PEG_A / 2, y + PEG_A / 2, -DECK_T - PEG_L, -DECK_T + 0.01)
-        peg = peg.edges("|Z and <Z").chamfer(0.6) if False else peg
-        hole = cyl_x(PILOT_R, -PEG_A, PEG_A, 0.0, 0.0).rotate((0, 0, 0), (0, 0, 1), a).translate((x, y, -DECK_T - CROSS_DZ))
-        deck = deck.union(peg).cut(hole)
-    for sx, sy in CAGE_BOLTS:       # v0.5.6: cage bolts self-tap 5 mm into the deck (no nut); tip ends at the deck top
-        deck = deck.cut(cyl_z(PILOT_R, -DECK_T - 1, 1, sx, sy))
-    for a in MOUNT_TAB_ANGLES:     # bearing-mount through-bolts, head under the deck; d3.6 so the boss pilot governs
-        x, y = polar(a, MOUNT_TAB_R)
-        deck = deck.cut(cyl_z(1.8 if BOSS_PILOT else 1.7, -DECK_T - 1, 1, x, y))
+    if STOP == "none":   # v0.7: cable drop against the cup wall (outer end of the U loop), long side tangential
+        deck = deck.cut(arc_slot(DECK_EXIT[0], DECK_EXIT[1], FPC_W + 2.0, 4.5, -DECK_T - 1, 1))
+    else:
+        ex, ey = polar(*DECK_EXIT)
+        deck = deck.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -DECK_T - 1, 1))
+    for x, y in PILLARS:   # v0.7 lap joint: half-round tab under the deck on the outer side of each pillar
+        deck = deck.union(lap_tab(x, y))
+    for sx, sy in CAGE_BOLTS:       # cage bolts self-tap into the deck (no nut)
+        blind = STOP == "none" and math.hypot(sx, sy) < CUP_R + 1     # v0.7: inside the cup -> M3x8, top skin closed
+        deck = deck.cut(cyl_z(PILOT_R, -DECK_T - 1, -1.0 if blind else 1, sx, sy))
+    tabs = [(a, CUP_TAB_R) for a in CUP_TAB_ANGLES] if STOP == "none" else [(a, MOUNT_TAB_R) for a in MOUNT_TAB_ANGLES]
+    for a, r in tabs:              # cup / channel through-bolts, head under the deck
+        x, y = polar(a, r)
+        deck = deck.cut(cyl_z(1.7, -DECK_T - 1, 1, x, y))
     # open window over the Pi (user, 11-02): cooling air + room for more cables; rim kept clear of the
     # pillar holes, bearing-mount tabs, Stage-2 M4 holes and the FPC drop
     if PI_WINDOW:
@@ -371,6 +412,8 @@ def top_deck():
 def bearing_mount():
     """Fixed: outer wall of the cable channel + hard-stop block (+ the 6806 tube when PAN_BEARING).
     v0.6: without the bearing this is just the cable channel: floor ring, wall, stop block, 4 fixing tabs."""
+    if STOP == "none":
+        return cable_cup()
     floor = ring_z(TUBE_ID / 2, WRAP_R_OUT + WRAP_WALL, 0, 2.0)
     wall = ring_z(WRAP_R_OUT, WRAP_R_OUT + WRAP_WALL, 0, TUBE_TOP)
     m = floor.union(wall)
@@ -395,6 +438,48 @@ def bearing_mount():
         m = m.union(blk).union(box(-(STOP_R - 4), -(WRAP_R_OUT + WRAP_WALL) + 0.5, -STOP_HALF_W, STOP_HALF_W, 0, 6))
     else:               # block on top of the wall at 180 deg, running in a groove under the disc
         m = m.union(box(-(WRAP_R_OUT + WRAP_WALL), -WRAP_R_OUT, -STOP_BLOCK_HALF, STOP_BLOCK_HALF, TUBE_TOP - 1, DISC_Z0 + 3.0))
+    return m
+
+
+def lap_frame(x, y, sh):
+    """Place a shape drawn in the pillar frame (u = outward toward the nearest deck edge, v sideways, z absolute)."""
+    return sh.rotate((0, 0, 0), (0, 0, 1), pillar_slot_dir(x, y)).translate((x, y, 0))
+
+
+LAP_Z0 = -DECK_T - JOINT_H                 # bottom of the overlap (step in the pillar)
+LAP_ZB = -DECK_T - JOINT_H / 2             # bolt axis
+LAP_FLAT = PILLAR_R - 0.8                  # flats for the bolt head (tab) and the nut (pillar)
+
+
+def lap_tab(x, y):
+    """v0.7 (user, 11-14: pegs did not go in): stepped lap joint. The pillar keeps its inner half up to the deck,
+    the deck brings the outer half down as a tab. Nothing slides into a hole, so print error does not matter:
+    the deck rests on the pillar's inner half (one height datum), the tab stands JOINT_GAP off the cut face, and
+    one horizontal M3 bolt + nut pulls them together. The tab hole is a short vertical slot (+-JOINT_SLOT)."""
+    r = PILLAR_R
+    t = cyl_z(r, LAP_Z0 + 0.5, -DECK_T + 0.01).intersect(box(JOINT_GAP, LAP_FLAT, -r - 1, r + 1, LAP_Z0, 0))
+    slot = (cyl_x(1.7, -1, r + 1, LAP_ZB - JOINT_SLOT).union(cyl_x(1.7, -1, r + 1, LAP_ZB + JOINT_SLOT))
+            .union(box(-1, r + 1, -1.7, 1.7, LAP_ZB - JOINT_SLOT, LAP_ZB + JOINT_SLOT)))
+    return lap_frame(x, y, t.cut(slot))
+
+
+def lap_pillar_cut(x, y):
+    """What the lap joint removes from a pillar: the outer half over JOINT_H, the bolt hole, the nut flat."""
+    r = PILLAR_R
+    c = box(0, r + 1, -r - 1, r + 1, LAP_Z0, 1)
+    c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB)).union(box(-r - 1, -LAP_FLAT, -r - 1, r + 1, LAP_ZB - 4, LAP_ZB + 4))
+    return lap_frame(x, y, c)
+
+
+def cable_cup():
+    """v0.7 (user, 11-14): channel and hard stop removed (the turntable is on the horn and the servo's EEPROM angle
+    limits keep it inside +-PAN_SOFT_LIMIT). What is left is a low wall around the post, so the outer leg of the
+    camera-cable U loop has something to lie against; 4 small tabs, M3x10 up through the deck self-tap into them."""
+    m = ring_z(CUP_R, CUP_R + CUP_WALL, 0, CUP_H)
+    for a in CUP_TAB_ANGLES:
+        x, y = polar(a, CUP_TAB_R)
+        tab = box(CUP_R + 0.5, CUP_TAB_R + 4.0, -4.0, 4.0, 0, 5.0).rotate((0, 0, 0), (0, 0, 1), a)
+        m = m.union(tab).cut(cyl_z(PILOT_R, -1, 6, x, y))
     return m
 
 
@@ -429,13 +514,18 @@ def lower_deck():
     # Pi: recess under the footprint (bosses keep a ring of full deck), GPIO pin window, slots
     corners = [pi_to_deck(lx, ly) for lx, ly in ((0, 0), (PI_L, PI_W))]
     (xa, xb), (ya, yb) = sorted((corners[0][0], corners[1][0])), sorted((corners[0][1], corners[1][1]))
-    rec = box(xa + 1.5, xb - 1.5, ya + 1.5, yb - 1.5, LOWER_TOP - PI_RECESS, LOWER_TOP + 1)
-    for lx, ly in PI_HOLES:
-        x, y = pi_to_deck(lx, ly)
-        rec = rec.cut(cyl_z(4.5, zb - 1, LOWER_TOP + 2, x, y))
-    deck = deck.cut(rec)
-    g0, g1 = pi_to_deck(PI_GPIO_X[0] - 1.0, PI_W - 7.5), pi_to_deck(PI_GPIO_X[1] + 1.0, PI_W - 0.5)
-    deck = deck.cut(box(min(g0[0], g1[0]), max(g0[0], g1[0]), min(g0[1], g1[1]), max(g0[1], g1[1]), zb - 1, LOWER_TOP + 1))
+    if PI_RECESS > 0:   # (v0.5.5-v0.6.2) recess + GPIO window; not needed on 5 mm standoffs (v0.7)
+        rec = box(xa + 1.5, xb - 1.5, ya + 1.5, yb - 1.5, LOWER_TOP - PI_RECESS, LOWER_TOP + 1)
+        for lx, ly in PI_HOLES:
+            x, y = pi_to_deck(lx, ly)
+            rec = rec.cut(cyl_z(4.5, zb - 1, LOWER_TOP + 2, x, y))
+        deck = deck.cut(rec)
+        g0, g1 = pi_to_deck(PI_GPIO_X[0] - 1.0, PI_W - 7.5), pi_to_deck(PI_GPIO_X[1] + 1.0, PI_W - 0.5)
+        deck = deck.cut(box(min(g0[0], g1[0]), max(g0[0], g1[0]), min(g0[1], g1[1]), max(g0[1], g1[1]), zb - 1, LOWER_TOP + 1))
+    # v0.7 (user, 11-14): cable holes - USB-C plug pass-through beside the Pi power port, two round holes for the
+    # servo supply / STM32 wires (rounded so a plug or a grommet goes through)
+    for cx, cy, w, h in CABLE_HOLES:
+        deck = deck.cut(box(cx - w / 2, cx + w / 2, cy - h / 2, cy + h / 2, zb - 1, LOWER_TOP + 1).edges("|Z").fillet(min(w, h) / 2 - 0.01))
     ox, oy = pi_origin()
     for i in range(5):  # long narrow slots under the Pi (user, 11-02): air in from below + cables through
         xc = ox + 12 + i * 8
@@ -444,6 +534,9 @@ def lower_deck():
     for lx, ly in PI_HOLES:
         x, y = pi_to_deck(lx, ly)
         deck = deck.union(cyl_z(3.0, LOWER_TOP - 0.01, LOWER_TOP + PI_STANDOFF, x, y))
+        if PI_STANDOFF > 2:   # 45-degree root so the 5 mm standoff does not snap off at the deck
+            deck = deck.union(cq.Workplane("XY").workplane(offset=LOWER_TOP - 0.01).center(x, y).circle(4.5)
+                              .workplane(offset=1.5).circle(3.0).loft())
         deck = deck.cut(cyl_z(M25_PILOT_R, zb - 1, LOWER_TOP + PI_STANDOFF + 1, x, y))   # v0.5.6: M2.5 self-taps
     # cable tie slots along the +X edge (servo bus / UART to the STM32 off-board)
     for y in (-20, 0, 20):
@@ -454,16 +547,7 @@ def lower_deck():
         root = (cq.Workplane("XY").workplane(offset=LOWER_TOP).center(x, y).circle(PILLAR_R + 0.3)
                 .workplane(offset=3.0).circle(PILLAR_R).loft())
         deck = deck.union(col).union(root)
-        # v0.6.1: square socket for the top-deck peg, cross hole for the side bolt (clearance on the entry side,
-        # pilot on the far side), small flat on the entry side for the screw head
-        sa = PEG_A / 2 + PEG_CLR
-        deck = deck.cut(box(x - sa, x + sa, y - sa, y + sa, -DECK_T - PEG_L - 0.5, 0))
-        a = pillar_slot_dir(x, y)
-        zc = -DECK_T - CROSS_DZ
-        loc = lambda sh: sh.rotate((0, 0, 0), (0, 0, 1), a).translate((x, y, zc))
-        deck = deck.cut(loc(cyl_x(1.7, 0.0, PILLAR_R + 1)))                     # entry side (+ local x)
-        deck = deck.cut(loc(cyl_x(PILOT_R, -PILLAR_R - 1, 0.0)))                  # far side
-        deck = deck.cut(loc(box(PILLAR_R - 0.6, PILLAR_R + 2, -3.5, 3.5, -3.5, 3.5)))   # head seat flat
+        deck = deck.cut(lap_pillar_cut(x, y))   # v0.7: stepped lap joint (outer half to the deck tab)
     return deck
 
 
@@ -622,10 +706,12 @@ def turntable_yoke():
         # v0.6 (user): no bearing, no flexure, no separate hub. A post grows down from the disc onto the servo horn
         # and is held by the 4 horn screws (M3x10 in counterbores from the disc top, 6 mm floor on the horn).
         z0 = PAN_HORN_Z + HORN_T
-        y = disc.union(cyl_z(HUB_R, z0, DISC_Z0 + 0.01))
-        for a in range(4):
-            x, yy = polar(45 + 90 * a, HORN_SCREW_R)
-            y = y.cut(cyl_z(1.7, z0 - 1, z_disc_top + 1, x, yy)).cut(cyl_z(3.1, z0 + 6.0, z_disc_top + 1, x, yy))
+        y = disc.union(cyl_z(HUB_R, z0 - HORN_DEPTH, DISC_Z0 + 0.01))
+        # v0.7 (user, 11-14: horn did not fit, no measurements): the post fits over the horn in a shallow pocket with
+        # crush ribs (presses on, ribs shave to size, centres the post), and the 4 screws go through radial slots
+        # (any hole circle between r5 and r10.5; any angle, since the pocket is round).
+        y = y.cut(horn_pocket(z0 - HORN_DEPTH - 1, z0, "z"))
+        y = y.cut(horn_slots(z0 - 1, z_disc_top + 1, z0 + 6.0, "z"))
         y = y.cut(cyl_z(3.25, z0 - 1, z0 + 4.0))                 # horn spline-screw head
         y = y.cut(cyl_z(3.0, z0 + 6.0, z_disc_top + 1))          # look-through to the spline screw
     # arm bolts (v0.5.6, user: nut slots too hard): M3x10 down through the foot self-taps 4 mm into a blind
@@ -672,9 +758,16 @@ def turntable_yoke():
         y = y.cut(cyl_y(1.4, y_srv_in - 1, y_srv_out + 1, px, pz))
     y = y.cut(tilt_bushing_cut(y_idle_out - 1, y_idle_in + 1))
     # cable entries into the wrap channel
-    y = y.cut(arc_slot(HOLE_FPC[0], HOLE_FPC[1], FPC_W + 3, min(6.0, ANNULUS - 2), DISC_Z0 - 1, z_disc_top + 1))
-    y = y.cut(arc_slot(HOLE_BUS[0], HOLE_BUS[1], 10.0, min(7.0, ANNULUS - 2), DISC_Z0 - 1, z_disc_top + 1))
-    if STOP == "rim":   # pin at 0 deg hanging from the rim beside the fixed block
+    if STOP == "none":   # v0.7: inner end of the U loop right beside the post; tilt servo wires in front
+        y = y.cut(arc_slot(HOLE_FPC[0], HOLE_FPC[1], FPC_W + 1.5, 4.0, DISC_Z0 - 1, z_disc_top + 1))
+        bx, by = polar(*HOLE_BUS)
+        y = y.cut(cyl_z(3.5, DISC_Z0 - 1, z_disc_top + 1, bx, by))
+    else:
+        y = y.cut(arc_slot(HOLE_FPC[0], HOLE_FPC[1], FPC_W + 3, min(6.0, ANNULUS - 2), DISC_Z0 - 1, z_disc_top + 1))
+        y = y.cut(arc_slot(HOLE_BUS[0], HOLE_BUS[1], 10.0, min(7.0, ANNULUS - 2), DISC_Z0 - 1, z_disc_top + 1))
+    if STOP == "none":
+        pass
+    elif STOP == "rim":   # pin at 0 deg hanging from the rim beside the fixed block
         y = y.union(cyl_z(3.0, 9.0, DISC_Z0 + 0.1, STOP_R, 0))
     else:               # annular groove over the wall top, interrupted by a lug at 0 deg
         gr = ring_z(WRAP_R_OUT - 0.6, WRAP_R_OUT + WRAP_WALL + 0.6, DISC_Z0 - 1, DISC_Z0 + 3.6)
@@ -695,6 +788,34 @@ def turntable_yoke():
     return y, y_srv_in, y_srv_out, y_idle_in
 
 
+def horn_pocket(a0, a1, axis):
+    """Round pocket for the servo horn with HORN_RIB crush ribs: pocket radius HORN_D/2 + HORN_CLR, six ribs
+    leave HORN_D/2 + HORN_CLR - HORN_RIB (0.2 mm interference). Ribs can be shaved with a knife on site."""
+    rp = HORN_D / 2 + HORN_CLR
+    wp = cq.Workplane("XY").circle(rp).extrude(a1 - a0)
+    for k in range(6):
+        rib = cq.Workplane("XY").circle(0.6).extrude(a1 - a0).translate((rp, 0, 0)).rotate((0, 0, 0), (0, 0, 1), 30 + 60 * k)
+        wp = wp.cut(rib.intersect(cq.Workplane("XY").circle(rp).extrude(a1 - a0)).cut(
+            cq.Workplane("XY").circle(rp - HORN_RIB).extrude(a1 - a0)))
+    wp = wp.translate((0, 0, a0))
+    return wp if axis == "z" else wp.rotate((0, 0, 0), (1, 0, 0), -90)   # "y": the pocket runs along +Y
+
+
+def horn_slots(a0, a1, a_cb, axis, angles=(45, 135, 225, 315), keep=None):
+    """Four radial slots HORN_SLOT[0]..[1] (M3 clearance 3.4) along the axis from a0 to a1, with a 6.4 mm wide
+    counterbore slot for the head from a_cb on. Works for M2 / M2.5 / M3 horn screws."""
+    r0, r1 = HORN_SLOT
+    out = None
+    for ang in angles:
+        for w, b0 in ((1.7, a0),) + (((3.2, a_cb),) if a_cb is not None else ()):
+            sl = cq.Workplane("XY").center(r0, 0).circle(w).extrude(a1 - b0).union(
+                cq.Workplane("XY").center(r1, 0).circle(w).extrude(a1 - b0)).union(
+                cq.Workplane("XY").center((r0 + r1) / 2, 0).rect(r1 - r0, 2 * w).extrude(a1 - b0))
+            sl = sl.translate((0, 0, b0)).rotate((0, 0, 0), (0, 0, 1), ang)
+            out = sl if out is None else out.union(sl)
+    return out if axis == "z" else out.rotate((0, 0, 0), (1, 0, 0), -90)
+
+
 def tilt_bushing_cut(y0, y1):
     """v0.5.6 (user: hard to assemble): snap-in pivot. The bore is open to the top through a 4.8 mm throat, so the
     cradle pin is simply pushed down into it from above. Two relief slots turn the throat walls into springy
@@ -710,7 +831,7 @@ def tilt_bushing_cut(y0, y1):
     return cut
 
 
-def tilt_cradle():
+def tilt_cradle(mount=None):
     """v0.5.5 (user, 11-12): H section seen from above. The camera sits on a web in the middle of two side walls,
     which run equally behind and in front of it and stop at the tilt axis, so nothing stands beside the lens.
     The horn hub (servo side) and the pivot boss (other side) are discs around the axis. Camera screws M2x5 from the
@@ -721,10 +842,15 @@ def tilt_cradle():
     side_p = box(CRADLE_X0, CRADLE_X1, CRADLE_HALF_Y - w, CRADLE_HALF_Y, z0, z1)
     side_n = box(CRADLE_X0, CRADLE_X1, -CRADLE_HALF_Y, -CRADLE_HALF_Y + w, z0, z1)
     cr = web.union(side_p).union(side_n)
-    cr = cr.union(cyl_y(HUB_DISC_R, CRADLE_HALF_Y - w, CRADLE_HALF_Y, 0, zc))            # horn hub (horn screws r8 + head)
-    for a in range(4):
-        x, z = polar(45 + 90 * a, 8.0)
-        cr = cr.cut(cyl_y(1.7, CRADLE_HALF_Y - w - 1, CRADLE_HALF_Y + 1, x, zc + z))
+    # v0.7 horn hub: disc + 2 mm lip around the horn with crush ribs (centres the cradle on the horn), two radial
+    # slots at the front (+-45 deg; the rear pair would put screw heads against the camera board edge),
+    # everything beyond x = HUB_CLIP_X trimmed so the 60 deg cone from the lens stays clear
+    hub = cyl_y(HUB_DISC_R, CRADLE_HALF_Y - w, CRADLE_HALF_Y + HORN_DEPTH, 0, zc)
+    hub = hub.cut(horn_pocket(CRADLE_HALF_Y, CRADLE_HALF_Y + HORN_DEPTH + 1, "y").translate((0, 0, zc)))
+    hub = hub.cut(box(HUB_CLIP_X, 50, -50, 50, -50, 200))
+    cr = cr.union(hub)
+    cr = cr.cut(horn_slots(-(CRADLE_HALF_Y + 1), -(CRADLE_HALF_Y - w - 1), None, "z", angles=(45, -45))
+                .rotate((0, 0, 0), (1, 0, 0), 90).translate((0, 0, zc)))
     cr = cr.union(cyl_y(7.0, -CRADLE_HALF_Y, -CRADLE_HALF_Y + w, 0, zc))                  # pivot boss
     cr = cr.union(cyl_y(TILT_PIN_D / 2, -(CRADLE_HALF_Y + 2.0 + ARM_T_IDLE + 1.0), -CRADLE_HALF_Y, 0, zc))  # pivot pin
     cr = cr.union(cyl_y(TILT_PIN_D / 2 + 2.0, -(CRADLE_HALF_Y + 1.9), -CRADLE_HALF_Y, 0, zc))              # thrust collar
@@ -732,10 +858,58 @@ def tilt_cradle():
     # relief in the web front for the parts on the camera back, window for its FPC connector
     cr = cr.cut(box(WEB_X1 - 1.0, WEB_X1 + 1, -8.5, 8.5, top - CAM_H + 7.0, top - 1.0))
     cr = cr.cut(box(WEB_X0 - 1, WEB_X1 + 1, -11.0, 11.0, z0 - 1, top - CAM_H + 7.0))
-    for hy, hz in CAM_HOLES:
-        z = top + hz
-        cr = cr.union(cyl_x(2.2, WEB_X1 - 1.01, WEB_X1 + CAM_BOSS, z, hy))
-        cr = cr.cut(cyl_x(M2_PILOT_R, WEB_X0 - 1, WEB_X1 + 1, z, hy))   # M2x5 from the camera front self-taps into the web
+    return cam_mount(cr, mount or CAM_MOUNT)
+
+
+CAM_VARIANTS = {   # v0.7 (user, 11-14: camera hard to fix) - six ways; coupons C03-A..F, chosen one in CAM_MOUNT
+    "A": "자가탭 구멍 d1.8 (현재 방식, 덜 빡빡하게)",
+    "B": "관통 d2.4 + 뒤에서 M2 너트",
+    "C": "큰 구멍 d3.4 + 너트 + 와셔 (구멍 위치 +-0.7 흡수)",
+    "D": "열 고정 핀 4개 (인두로 핀 끝을 녹여 고정)",
+    "E": "옆 홈에 아래에서 밀어 넣기 (나사·구멍 위치 무관)",
+    "F": "양면 폼테이프 자리 + 위치 턱",
+}
+
+
+def cam_mount(cr, v):
+    """Camera fixing on the cradle web. Board back at CAM_BACK_X, front at CAM_BACK_X + CAM_PCB, 25 x 24."""
+    top = H_TILT + CAM_LENS_FROM_TOP
+    bot = top - CAM_H
+    xb, xf = CAM_BACK_X, CAM_BACK_X + CAM_PCB
+    hw = CAM_W / 2
+    if v in "ABCD":
+        for hy, hz in CAM_HOLES:
+            z = top + hz
+            cr = cr.union(cyl_x(2.2, WEB_X1 - 1.01, WEB_X1 + CAM_BOSS, z, hy))
+            if v == "A":
+                cr = cr.cut(cyl_x(0.9, WEB_X0 - 1, WEB_X1 + 1, z, hy))
+            elif v in "BC":
+                cr = cr.cut(cyl_x(1.2 if v == "B" else 1.7, WEB_X0 - 1, WEB_X1 + 1, z, hy))
+                cr = cr.cut(hex_z(M2_POCKET_AF, 0, M2_POCKET_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90)
+                            .translate((WEB_X0 - 0.01, hy, z)))           # nut drops into the back face
+            else:
+                cr = cr.union(cyl_x(0.95, WEB_X1, xf + 1.5, z, hy))      # pin d1.9 through the d2.2 board hole
+    elif v == "E":
+        # side rails: the board slides up from below between a back strip (web + 3 crush bumps) and a front lip that
+        # covers 1.2 mm of each board edge; stop block at the top; optional M2x5 under the bottom edge
+        c = 0.15
+        for sg in (1, -1):
+            ya, yb = sorted((sg * (hw - 1.2), sg * (CRADLE_HALF_Y - CRADLE_WALL + 0.01)))
+            z0r = H_TILT - CRADLE_HALF_Z
+            cr = cr.union(box(WEB_X1 - 0.01, xb - c, ya, yb, z0r, top + 2.0))                # back strip
+            cr = cr.union(box(xf + c, xf + c + 1.25, ya, yb, z0r, top + 2.0))                 # front lip
+            cr = cr.union(box(WEB_X1 - 0.01, xf + c + 0.01, ya, yb, top + 0.2, top + 2.0))    # top stop
+            for zb in (bot + 4, (bot + top) / 2, top - 4):                                    # crush bumps
+                cr = cr.union(cyl_z(0.5, zb - 1.5, zb + 1.5, xb - c, sg * (hw - 0.6)).intersect(
+                    box(xb - c - 0.01, xb - c + 0.25, -50, 50, -50, 200)))
+            cr = cr.cut(cyl_x(M2_PILOT_R, WEB_X0 - 1, xf + c + 1.3, bot - 1.4, sg * (hw - 0.6)))
+    elif v == "F":
+        # two tape pads (0.7 deep, tape ~1 mm stands 0.3 proud like the bosses) + ledge under the board corners
+        for sg in (1, -1):
+            ya, yb = sorted((sg * 8.9, sg * 12.3))
+            cr = cr.cut(box(WEB_X1 - 0.7, WEB_X1 + 0.01, ya, yb, bot + 7.5, top - 1.0))
+            ya, yb = sorted((sg * 11.0, sg * (CRADLE_HALF_Y - CRADLE_WALL + 0.01)))
+            cr = cr.union(box(WEB_X1 - 0.01, xf - 0.2, ya, yb, bot - 1.5, bot - 0.15))
     return cr
 
 
@@ -795,11 +969,13 @@ def m3(x, y, z_head, up=True, nut_z=None, length=10.0, nut_rot=None):
 def fasteners():
     """Returns (base, pan): every M3x10 + nut of the v0.5 stacks (screws into inserts carry no nut)."""
     base = None
-    for sx, sy in CAGE_BOLTS:            # ear (5) + deck (5); nut seated at the pocket floor
-        f = m3(sx, sy, -DECK_T - EAR_CLAMP)
+    for sx, sy in CAGE_BOLTS:            # ear (5) + deck (5); inside the cable cup M3x8 so the deck top stays closed
+        blind = STOP == "none" and math.hypot(sx, sy) < CUP_R + 1
+        f = m3(sx, sy, -DECK_T - EAR_CLAMP, length=8.0 if blind else 10.0)
         base = f if base is None else base.union(f)
-    for a in MOUNT_TAB_ANGLES:           # deck (5) + tab (5); nut in the tab pocket
-        x, y = polar(a, MOUNT_TAB_R)
+    tabs = [(a, CUP_TAB_R) for a in CUP_TAB_ANGLES] if STOP == "none" else [(a, MOUNT_TAB_R) for a in MOUNT_TAB_ANGLES]
+    for a, r in tabs:                    # deck (5) + tab (5)
+        x, y = polar(a, r)
         base = base.union(m3(x, y, -DECK_T))
     pan = None
     for a in range(4):                   # rigid hub -> horn: 5 mm floor + 4 mm horn, tip 1 mm below the horn
@@ -810,11 +986,10 @@ def fasteners():
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
     for x, y in ARM_BOLTS():   # foot (6) + disc: nut in the disc slot
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False))
-    for x, y in PILLARS:                 # v0.6.1: side bolt through pillar wall + peg (head on the outer flat)
-        a = pillar_slot_dir(x, y)
-        xh = PILLAR_R - 0.6
-        b = cyl_x(2.75, xh, xh + 3.0).union(cyl_x(1.5, xh - 10.0, xh))
-        base = base.union(b.rotate((0, 0, 0), (0, 0, 1), a).translate((x, y, -DECK_T - CROSS_DZ)))
+    for x, y in PILLARS:                 # v0.7 lap joint: M3x16 from the outer flat of the tab, nut on the pillar's inner flat
+        b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB).union(cyl_x(1.5, LAP_FLAT - 16.0, LAP_FLAT, LAP_ZB))
+             .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT - 0.01, 0, LAP_ZB))))
+        base = base.union(lap_frame(x, y, b))
     for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
         zt = LOWER_TOP + PI_STANDOFF + PI_PCB
@@ -828,15 +1003,61 @@ def fasteners_tilt():
     out = None
     top = H_TILT + CAM_LENS_FROM_TOP
     x_head = CAM_BACK_X + CAM_PCB
-    for hy, hz in CAM_HOLES:
-        z = top + hz
-        f = cyl_x(M2_HEAD_D / 2, x_head, x_head + M2_HEAD_H, z, hy).union(cyl_x(1.0, x_head - CAM_SCREW_L, x_head, z, hy))
+    pts = []
+    if CAM_MOUNT in "ABC":
+        pts = [(hy, top + hz, x_head) for hy, hz in CAM_HOLES]
+    elif CAM_MOUNT == "E":   # optional stop screws under the board's bottom edge, head in front of the lip
+        pts = [(sg * (CAM_W / 2 - 0.6), top - CAM_H - 1.4, x_head + 0.15 + 1.25) for sg in (1, -1)]
+    for hy, z, xh in pts:
+        f = cyl_x(M2_HEAD_D / 2, xh, xh + M2_HEAD_H, z, hy).union(cyl_x(1.0, xh - CAM_SCREW_L, xh, z, hy))
         out = f if out is None else out.union(f)
+    if out is None:          # D / F: nothing bought; keep a tiny placeholder so the part list stays the same
+        out = cyl_x(0.3, x_head, x_head + 0.3, top - CAM_H - 3, 0)
     return out
 
 
 # ----------------------------------------------------------------------------- cable routes (polylines, for length and display)
+def loop_points(r_in, r_out, z, a_from, a_mid, a_to, n=12):
+    """U loop polyline: along r_in from a_from to a_mid, U-turn, along r_out from a_mid to a_to."""
+    pts = [(*polar(a_from + (a_mid - a_from) * k / n, r_in), z) for k in range(n + 1)]
+    pts += [(*polar(a_mid - 8 * math.copysign(1, a_to - a_mid) * 0, (r_in + r_out) / 2 + (r_out - r_in) / 2 * math.sin(math.radians(90 * k / 4) - 0)), z)
+            for k in (1, 2, 3)]
+    pts += [(*polar(a_mid + (a_to - a_mid) * k / n, r_out), z) for k in range(n + 1)]
+    return pts
+
+
+def cable_routes_cup():
+    """v0.7 routes: FPC straight down beside the post, U loop in the cup, straight down the deck slot to the Pi."""
+    zc = H_TILT
+    L = LOOP
+    fx, fy = polar(*HOLE_FPC)
+    ex, ey = polar(*DECK_EXIT)
+    pi_cam = pi_to_deck(48.0, 4.0)  # CAM/DISP connector [VERIFY]
+    z_disc = DISC_Z0 + DISC_T
+    psi = L["tA"] - L["a_max"] / 2
+    fpc = [(CRADLE_X0 + 1, 0, zc - CRADLE_HALF_Z + 4), (CRADLE_X0 - 4, 0, zc - CRADLE_HALF_Z - 3),   # out of the cradle
+           (CRADLE_X0 - 10, 0, zc - 30), (fx - 1, fy, z_disc + 3), (fx, fy, DISC_Z0 - 2), (fx, fy, 12)]  # tilt loop, down
+    fpc += loop_points(L["ri"], L["ro"], 10, L["tA"], psi, L["tB"])
+    fpc += [(ex, ey, 8), (ex, ey, -DECK_T - 2), (ex, ey, LOWER_TOP + PI_STANDOFF + 14),
+            (pi_cam[0], pi_cam[1], LOWER_TOP + PI_STANDOFF + 6)]
+    bx, by = polar(*HOLE_BUS)
+    cx, cy, cz = tilt_conn_point()
+    bus = [(cx, cy, cz), (0.5 * (cx + bx), 0.5 * (cy + by), 0.5 * (cz + z_disc) + 4), (bx, by, z_disc + 2), (bx, by, 10)]
+    bus += loop_points(L["ri"] + 1.5, L["ro"] - 1.5, 6, 0.0, psi, L["tB"])
+    pan_conn = (SV_CONN_X, 0, SV_TOP - SV_H - 2.0 - SV_PLUG / 2)
+    bus += [(ex + 1, ey + 1, 6), (ex + 1, ey + 1, -DECK_T - 3), (-20, 20, -DECK_T - 6), (SV_L - SV_SHAFT_FROM_END + 6, 18, -DECK_T - 6),
+            (SV_L - SV_SHAFT_FROM_END + 6, 0, pan_conn[2]), pan_conn]
+    out = [pan_conn, (DECK_X1 - 8, 0, pan_conn[2]), (10, 38, LOWER_TOP + 3), (10, 38, LOWER_TOP - 10)]
+    hat_top = LOWER_TOP + PI_STANDOFF + PI_STACK_H
+    gx, gy = pi_to_deck(sum(PI_GPIO_X) / 2, PI_W - 3)
+    uart = [(gx, gy, hat_top + 8), (gx + 8, gy, hat_top + 14), (10, 38, hat_top + 14),
+            (10, 38, LOWER_TOP + 3), (10, 38, LOWER_TOP - 10)]
+    return {"camera FPC": fpc, "tilt servo bus": bus, "servo bus to STM32": out, "UART to STM32": uart}
+
+
 def cable_routes(y_srv_out):
+    if STOP == "none":
+        return cable_routes_cup()
     zc = H_TILT
     fx, fy = polar(*HOLE_FPC)
     ex, ey = polar(*DECK_EXIT)

@@ -24,14 +24,15 @@ import gimbal_v03 as g
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "print_v05")
 BED = (220.0, 220.0, 250.0)          # typical FDM bed [VERIFY your printer]
-VARIANT = dict(wrap_r=36.0, stop="groove", tilt_orient="down")
+VARIANT = dict(wrap_r=36.0, stop="none", tilt_orient="down")   # v0.7: no stop
 H_TILT_KEEP = 79.0
 
 
 def configure():
     g.configure(**VARIANT)
     # bus-cable hole off the arm/gusset footprint (connectors face down at angle ~90 deg)
-    g.HOLE_BUS = (135.0, g.R_MID)
+    if g.STOP != "none":
+        g.HOLE_BUS = (135.0, g.R_MID)
     # Tilt-axis height kept at the v0.3 value. Since the servo plugs moved to the face opposite the horn, 63 mm
     # would also fit (lower CoM) but costs 6 deg of down-look and more FOV occlusion; see metrics_v04.json.
     g.H_TILT = max(g.H_TILT, H_TILT_KEEP)
@@ -40,7 +41,9 @@ def configure():
 def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
     z_top = g.DISC_Z0 + g.DISC_T
     big = 500.0
-    turntable = yoke.intersect(g.box(-big, big, -big, big, -big, z_top))
+    # v0.7 fix: clip to the disc - the tilt-servo channel walls start 0.1 mm below the disc top and left two
+    # 0.1 mm slivers hanging outside the disc on the turntable since v0.5.4
+    turntable = yoke.intersect(g.box(-big, big, -big, big, -big, z_top)).intersect(g.cyl_z(g.DISC_R + 0.01, -big, z_top + 1))
     upper = yoke.cut(g.box(-big, big, -big, big, -big, z_top))
     arm_s = upper.intersect(g.box(-big, big, 0, big, z_top, big))
     arm_i = upper.intersect(g.box(-big, big, -big, 0, z_top, big))
@@ -94,6 +97,43 @@ def check_coupon():
     return base
 
 
+def horn_gauge():
+    """v0.7 C02 (user, 11-14: horn does not fit, no caliper data). Eight through-pockets D = 20..27 mm with the same
+    crush ribs as the turntable post and the cradle hub: push the horn into each; the snug one is HORN_D. A comb of
+    slots 3.0..6.0 mm (step 0.5) gives the horn thickness HORN_T. Numbers are engraved next to each."""
+    t = 3.0
+    out = None
+    for i, d in enumerate(range(20, 28)):
+        cx, cy = (i % 4) * 33.0, (i // 4) * 35.0
+        blk = g.box(cx - 15.5, cx + 15.5, cy - 15.5, cy + 19.0, 0, t)
+        keep = g.HORN_D
+        g.HORN_D = float(d)
+        pk = g.horn_pocket(-1, t + 1, "z").translate((cx, cy, 0))
+        g.HORN_D = keep
+        txt = cq.Workplane("XY").text(str(d), 4.0, 0.6, halign="center", valign="center").translate((cx, cy + 16.6, t - 0.6))
+        blk = blk.cut(pk).cut(txt)
+        out = blk if out is None else out.union(blk)
+    comb = g.box(-15.5, 117.5, 54.0, 72.0, 0, t)
+    for k in range(7):
+        w = 3.0 + 0.5 * k
+        x = -8 + k * 18.5
+        comb = comb.cut(g.box(x - w / 2, x + w / 2, 54.0 - 1, 66.0, -1, t + 1))
+        comb = comb.cut(cq.Workplane("XY").text(f"{w:.1f}", 3.5, 0.6, halign="center", valign="center").translate((x, 69.0, t - 0.6)))
+    return out.union(comb)
+
+
+def cam_coupon(v):
+    """v0.7 C03-<v>: the camera end of the tilt cradle (web + the stubs of both side walls) built with fixing
+    variant v, cut out so the real camera can be tried on it. Variant letter engraved on the wall top."""
+    cr = g.tilt_cradle(mount=v)
+    x1 = -3.0
+    c = cr.intersect(g.box(g.WEB_X0 - 0.01, x1, -(g.CRADLE_HALF_Y + 0.01), g.CRADLE_HALF_Y - 0.01, -100, 300))
+    c = c.translate((0, 0, -g.H_TILT))
+    txt = cq.Workplane("YZ").text(v, 5.0, 0.6, halign="center", valign="center").rotate((0, 0, 0), (0, 0, 1), 0)
+    txt = txt.translate((x1 - 0.6, 0, g.CRADLE_HALF_Z - 4.0))
+    return c.cut(txt)
+
+
 # build-plate orientation per part: (axis, angle) rotations applied in order
 ORIENT = {
     "top_deck": [((1, 0, 0), 180)],          # v0.6.1: top face on the plate, pillar pegs standing up
@@ -108,6 +148,8 @@ ORIENT = {
     "fit_coupon": [],
     "eye_plate": [((0, 1, 0), -90)],          # back face on the plate, rim and engraving up
     "check_coupon": [],
+    "horn_gauge": [],
+    **{f"cam_coupon_{v}": [((0, 1, 0), -90)] for v in "ABCDEF"},   # web back on the plate, walls and lips up
 }
 
 
