@@ -483,7 +483,15 @@ LAP_ZB = -DECK_T - JOINT_H / 2             # bolt axis
 LAP_FLAT = PILLAR_R - 0.8                  # flats for the bolt head (tab) and the nut (pillar)
 LAP_V = -1.0                               # v0.8.2: second cut line (plan-view L): pillar keeps u < 0 and v < LAP_V
 LAP_GAP_V = 0.3                            # gap on the side face (v), same as JOINT_GAP on the main face (u)
-LAP_BV = (LAP_V + LAP_GAP_V + PILLAR_R) / 2 - 0.4   # bolt line in v: middle of the tab, a little toward the pillar
+LAP_BV = 1.0                               # v0.8.4: bolt line in v (was 2.05: the nut ran off its flat)
+LAP_FLAT_NUT = PILLAR_R - 1.4              # v0.8.4: deeper nut flat (chord +-3.7) so the whole nut sits flat
+
+
+def cone_x(r_mouth, r_in, u_mouth, depth_dir, z, v=0.0):
+    """Countersink cone on the u axis: radius r_mouth at u_mouth narrowing to r_in, going depth_dir (+1/-1)."""
+    h = (r_mouth - r_in)
+    c = cq.Solid.makeCone(r_mouth + 0.3, r_in, h + 0.3, cq.Vector(u_mouth - depth_dir * 0.3, v, z), cq.Vector(depth_dir, 0, 0))
+    return cq.Workplane("XY").add(c)
 
 
 def lap_tab(x, y):
@@ -499,14 +507,18 @@ def lap_tab(x, y):
     bv = LAP_BV
     slot = (cyl_x(1.7, -1, r + 1, LAP_ZB - JOINT_SLOT, bv).union(cyl_x(1.7, -1, r + 1, LAP_ZB + JOINT_SLOT, bv))
             .union(box(-1, r + 1, bv - 1.7, bv + 1.7, LAP_ZB - JOINT_SLOT, LAP_ZB + JOINT_SLOT)))
-    return lap_frame(x, y, t.cut(slot))
+    t = t.cut(slot)
+    for dz in (-JOINT_SLOT, 0.0, JOINT_SLOT):   # v0.8.4: entry chamfer on the head side (both ends of the slot)
+        t = t.cut(cone_x(1.7 + 0.6, 1.7, LAP_FLAT, -1, LAP_ZB + dz, bv))
+    return lap_frame(x, y, t)
 
 
 def lap_pillar_cut(x, y):
     """What the lap joint removes from a pillar: the outer half over JOINT_H, the bolt hole, the nut flat."""
     r = PILLAR_R
     c = box(0, r + 1, LAP_V, r + 1, LAP_Z0, 1)          # v0.8.2: only the u > 0, v > LAP_V corner is removed (ㄴ)
-    c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB, LAP_BV)).union(box(-r - 1, -LAP_FLAT, -r - 1, r + 1, LAP_ZB - 4, LAP_ZB + 4))
+    c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB, LAP_BV)).union(box(-r - 1, -LAP_FLAT_NUT, -r - 1, r + 1, LAP_ZB - 4, LAP_ZB + 4))
+    c = c.union(cone_x(1.7 + 0.6, 1.7, 0.0, -1, LAP_ZB, LAP_BV))   # v0.8.4: entry chamfer where the bolt enters the pillar
     return lap_frame(x, y, c)
 
 
@@ -861,6 +873,77 @@ def turntable_yoke():
     return y, y_srv_in, y_srv_out, y_idle_in
 
 
+# v0.8.4 (user, 11-15: screws hard to start because printed holes come out small): every screw hole mouth gets a
+# 45-degree entry chamfer. Hole radius -> chamfer size. Only full-circle mouths on a flat face (the circle is an
+# inner loop of that face) are touched, so blind-hole bottoms and slots stay as they are.
+HOLE_CHAMFER = {0.8: 0.3, 0.9: 0.4, 0.95: 0.4, 1.05: 0.5, 1.2: 0.5, 1.3: 0.6, 1.7: 0.6}
+CHAMFER_LOG = {}
+
+
+def chamfer_holes(wp, name="part"):
+    """Entry chamfer on all screw-hole and screw-slot mouths of a printed part (see HOLE_CHAMFER). Tries all mouths
+    of one size at once, then mouth by mouth; a mouth the kernel refuses (too close to another feature) is skipped
+    and counted in CHAMFER_LOG[name] = (done, skipped)."""
+    solid = wp.val()
+    mouths = []                                            # (size, centre, edge count)
+    for f in solid.Faces():
+        if f.geomType() != "PLANE":
+            continue
+        for w in f.innerWires():
+            es = w.Edges()
+            arcs = [e for e in es if e.geomType() == "CIRCLE"]
+            if not arcs or not all(e.geomType() in ("CIRCLE", "LINE") for e in es):
+                continue                                   # round holes and slots only (no hex pockets)
+            if len({round(e.radius(), 2) for e in arcs}) != 1:
+                continue
+            r = round(arcs[0].radius(), 2)
+            size = next((c for hr, c in HOLE_CHAMFER.items() if abs(hr - r) < 0.02), None)
+            if size is not None:
+                mouths.append((size, w.Center(), [e.Center() for e in es]))
+
+    def edges_at(sol, centres):
+        out = []
+        for c in centres:
+            m = [e for e in sol.Edges() if (e.Center() - c).Length < 1e-4]
+            if not m:
+                return None
+            out.append(m[0])
+        return out
+
+    done = fail = 0
+    for size in sorted({m[0] for m in mouths}):
+        group = [m for m in mouths if m[0] == size]
+        try:
+            es = [e for m in group for e in edges_at(solid, m[2])]
+            new = solid.chamfer(size, None, es)
+            if not new.isValid():
+                raise ValueError
+            solid = new
+            done += len(group)
+            continue
+        except Exception:
+            pass
+        for m in group:
+            for sz in (size, round(size / 2, 2)):          # a tight spot gets half the chamfer
+                try:
+                    es = edges_at(solid, m[2])
+                    if es is None:
+                        raise ValueError
+                    new = solid.chamfer(sz, None, es)
+                    if not new.isValid():
+                        raise ValueError
+                    solid = new
+                    done += 1
+                    break
+                except Exception:
+                    if sz != size:
+                        fail += 1
+                        CHAMFER_LOG.setdefault(name + "_skipped", []).append(
+                            (round(m[1].x, 1), round(m[1].y, 1), round(m[1].z, 1)))
+    CHAMFER_LOG[name] = (done, fail)
+    return cq.Workplane("XY").add(solid)
+
+
 def hub_sector(r0, r1, z0, z1):
     """Front 240-deg sector (opening of AX_OPEN centred behind, at 180 deg)."""
     h = (360.0 - AX_OPEN) / 2
@@ -1105,7 +1188,7 @@ def fasteners():
                            nut_z=sum(arm_bolt_under(x, y)) - NUT_H, nut_rot=0.0))
     for x, y in PILLARS:                 # v0.7 lap joint: M3x16 from the outer flat of the tab, nut on the pillar's inner flat
         b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB, LAP_BV).union(cyl_x(1.5, LAP_FLAT - 16.0, LAP_FLAT, LAP_ZB, LAP_BV))
-             .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT - 0.01, LAP_BV, LAP_ZB))))
+             .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT_NUT - 0.01, LAP_BV, LAP_ZB))))
         base = base.union(lap_frame(x, y, b))
     for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
@@ -1238,11 +1321,11 @@ def length(poly):
 def build(export=True):
     yoke, y_srv_in, y_srv_out, y_idle_in = turntable_yoke()
     parts = {}
-    parts["top_deck"] = (top_deck(), (0.80, 0.82, 0.85), True, "base")
+    parts["top_deck"] = (chamfer_holes(top_deck(), "top_deck"), (0.80, 0.82, 0.85), True, "base")
     if STOP != "axial":   # v0.8: nothing stands on the deck around the horn any more
         parts["bearing_mount"] = (bearing_mount(), (0.55, 0.57, 0.60), True, "base")
-    parts["lower_deck"] = (lower_deck(), (0.80, 0.82, 0.85), True, "base")
-    parts["pan_cage"] = (pan_cage(), (0.55, 0.57, 0.60), True, "base")
+    parts["lower_deck"] = (chamfer_holes(lower_deck(), "lower_deck"), (0.80, 0.82, 0.85), True, "base")
+    parts["pan_cage"] = (chamfer_holes(pan_cage(), "pan_cage"), (0.55, 0.57, 0.60), True, "base")
     parts["pan_servo"] = (servo_z_up().translate((0, 0, SV_TOP)), (0.12, 0.12, 0.13), False, "base")
     parts["pi5_stack"] = (pi_stack(), (0.15, 0.55, 0.30), False, "base")
     od, idr, w = BRG_PAN
@@ -1256,7 +1339,7 @@ def build(export=True):
     ts = tilt_rot(servo_z_up())
     parts["tilt_servo"] = (ts, (0.12, 0.12, 0.13), False, "pan")
     parts["tilt_horn"] = (cyl_y(HORN_D / 2, CRADLE_HALF_Y, CRADLE_HALF_Y + HORN_T, 0, H_TILT), (0.70, 0.70, 0.72), False, "tilt")
-    parts["tilt_cradle"] = (tilt_cradle(), (0.95, 0.55, 0.15), True, "tilt")
+    parts["tilt_cradle"] = (chamfer_holes(tilt_cradle(), "tilt_cradle"), (0.95, 0.55, 0.15), True, "tilt")
     if EYE:
         parts["eye_plate"] = (eye_plate(), (0.85, 0.20, 0.10), True, "tilt")
     parts["camera"] = (camera_module().translate((CAM_BACK_X, 0, H_TILT)), (0.10, 0.45, 0.25), False, "tilt")

@@ -33,9 +33,9 @@
  "boresight_down_deg": -34,
  "volumes_cm3": {
   "turntable_yoke": 62.7,
-  "pan_cage": 19.08,
-  "top_deck": 76.62,
-  "lower_deck": 65.15,
-  "tilt_cradle": 6.13
+  "pan_cage": 19.06,
+  "top_deck": 76.6,
+  "lower_deck": 65.02,
+  "tilt_cradle": 6.12
  }
 }

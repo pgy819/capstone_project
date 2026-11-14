@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.8.3):
+"""Build the hand-off package of the current gimbal geometry (v0.8.4):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,7 +25,7 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v083"
+VER = "v084"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
@@ -82,7 +82,7 @@ def main():
     yoke, a, b, c = g.turntable_yoke()
     tt, arm_s, arm_i = gp.split_yoke(yoke, a, b, c)
     shapes = {n: v[0] for n, v in parts.items()}
-    shapes.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, check_coupon=gp.check_coupon(), horn_gauge=gp.horn_gauge(),
+    shapes.update(turntable=tt, arm_servo=arm_s, arm_idle=arm_i, check_coupon=g.chamfer_holes(gp.check_coupon(), "check_coupon"), horn_gauge=gp.horn_gauge(),
                   **{f"cam_coupon_{v}": gp.cam_coupon(v) for v in "ABCDEF"})
     orient = dict(gp.ORIENT)
     colors = {n: v[1] for n, v in parts.items()}
