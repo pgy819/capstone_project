@@ -143,19 +143,18 @@ WEB_X1 = CAM_BACK_X - CAM_BOSS           # web front face
 WEB_X0 = WEB_X1 - 2.5                    # web back face (CRADLE_WALL)
 CRADLE_X0 = 2 * (WEB_X0 + WEB_X1) / 2 - CRADLE_X1     # symmetric about the web
 
-PAN_SOFT_LIMIT = 50.0                    # v0.8.1: 5 deg inside the +-55 where the 240-deg hub wall meets the ribbon
+PAN_SOFT_LIMIT = 85.0                    # v0.8.2: 5 deg inside the +-90 the ribbon passage is cut for
 PAN_RANGE = 180.0                         # v0.7: cable loop sized for +-180 deg (+10 deg margin each side)
 CUP_R, CUP_WALL, CUP_H = 27.0, 2.0, 20.0  # v0.7: cable cup around the post (replaces the channel + stop)
 CUP_TAB_ANGLES = (45, 135, 225, 315)
 CUP_TAB_R = CUP_R + CUP_WALL + 4.0
 # v0.8 (user, 11-14): camera FPC up the pan axis, out through the middle of the turntable (STOP == "axial")
-AX_FLOOR = 6.0                             # hub floor over the horn (screw heads counterbored AX_CB deep, flush)
+AX_FLOOR = 5.0                             # hub floor over the horn (screw heads counterbored AX_CB deep, flush)
 AX_CB = 3.0
-AX_LEG_GAP = 0.8                           # ribbon's lower edge above the floor
+AX_SLOT = 2.0                              # v0.8.2: flat ribbon passage between the hub floor and the disc
+AX_RANGE = 90.0                            # v0.8.2: pan range the passage is cut for (+-)
+AX_FILL_R0 = 12.0                          # filled from here out (inside: driver access to the horn screws)
 AX_HOLE_R = 12.0                           # turntable centre hole: ribbon out + screwdriver to the horn screws
-AX_SECTOR = 240.0                          # v0.8.1 (user): wall between hub and disc over 240 deg (front), 120 deg open behind
-AX_SECTOR_R = (13.5, 16.5)                 # v0.8.1: wall clear of the horn screws (driver reaches them through the
-                                           # centre hole) and inside the cable riser (r 16.7), 3 mm thick
 AX_RISE_X = SV_SHAFT_FROM_END + 0.3 + 3.0 + 2.2   # ribbon riser: 2.2 mm outside the cage's shaft-end wall
 CAGE_BOLTS_AXIAL = ((42.0, 11.0), (42.0, -11.0), (-5.0, 20.5), (-5.0, -20.5))   # shaft-end ear -> two side ears
 JOINT_H, JOINT_GAP, JOINT_SLOT = 12.0, 0.3, 0.6   # v0.7 lap joint: overlap height, tab-pillar gap, vertical slot play
@@ -193,8 +192,10 @@ def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
     R_MID = HOUSING_R + 0.5 + ANNULUS / 2
     if stop == "axial":
         # disc sits one ribbon width (on edge) above the hub floor: horn top + floor + gap + 16 + 1
-        AX_LEG_Z0 = PAN_HORN_Z + HORN_T + AX_FLOOR + AX_LEG_GAP
-        DISC_Z0 = AX_LEG_Z0 + FPC_W + 1.0
+        # v0.8.2 (user: turntable too tall): the ribbon now crosses FLAT in a 2 mm slot right over the hub floor,
+        # so the disc sits on the hub (DISC_Z0 11.5 instead of 28.3)
+        AX_LEG_Z0 = PAN_HORN_Z + HORN_T + AX_FLOOR + 0.6
+        DISC_Z0 = PAN_HORN_Z + HORN_T + AX_FLOOR + AX_SLOT
         CAGE_BOLTS = CAGE_BOLTS_AXIAL
     if stop in ("none", "axial"):                    # v0.7: no hard stop (servo angle limits in EEPROM instead)
         DISC_T = 5.0
@@ -477,6 +478,9 @@ def lap_frame(x, y, sh):
 LAP_Z0 = -DECK_T - JOINT_H                 # bottom of the overlap (step in the pillar)
 LAP_ZB = -DECK_T - JOINT_H / 2             # bolt axis
 LAP_FLAT = PILLAR_R - 0.8                  # flats for the bolt head (tab) and the nut (pillar)
+LAP_V = -1.0                               # v0.8.2: second cut line (plan-view L): pillar keeps u < 0 and v < LAP_V
+LAP_GAP_V = 0.3                            # gap on the side face (v), same as JOINT_GAP on the main face (u)
+LAP_BV = (LAP_V + LAP_GAP_V + PILLAR_R) / 2 - 0.4   # bolt line in v: middle of the tab, a little toward the pillar
 
 
 def lap_tab(x, y):
@@ -484,18 +488,22 @@ def lap_tab(x, y):
     the deck brings the outer half down as a tab. Nothing slides into a hole, so print error does not matter:
     the deck rests on the pillar's inner half (one height datum), the tab stands JOINT_GAP off the cut face, and
     one horizontal M3 bolt + nut pulls them together. The tab hole is a short vertical slot (+-JOINT_SLOT)."""
+    # v0.8.2 (user): seen from above the pillar head is an L (ㄴ: the inner half u < 0 plus the strip v < LAP_V)
+    # and the deck tab is the corner that fills it (ㄱ). The tab bears on TWO faces of the pillar (u and v), so
+    # sideways sway is held by shape, not only by the bolt; 0.3 mm gaps on both faces keep it print-error tolerant.
     r = PILLAR_R
-    t = cyl_z(r, LAP_Z0 + 0.5, -DECK_T + 0.01).intersect(box(JOINT_GAP, LAP_FLAT, -r - 1, r + 1, LAP_Z0, 0))
-    slot = (cyl_x(1.7, -1, r + 1, LAP_ZB - JOINT_SLOT).union(cyl_x(1.7, -1, r + 1, LAP_ZB + JOINT_SLOT))
-            .union(box(-1, r + 1, -1.7, 1.7, LAP_ZB - JOINT_SLOT, LAP_ZB + JOINT_SLOT)))
+    t = cyl_z(r, LAP_Z0 + 0.5, -DECK_T + 0.01).intersect(box(JOINT_GAP, LAP_FLAT, LAP_V + LAP_GAP_V, r + 1, LAP_Z0, 0))
+    bv = LAP_BV
+    slot = (cyl_x(1.7, -1, r + 1, LAP_ZB - JOINT_SLOT, bv).union(cyl_x(1.7, -1, r + 1, LAP_ZB + JOINT_SLOT, bv))
+            .union(box(-1, r + 1, bv - 1.7, bv + 1.7, LAP_ZB - JOINT_SLOT, LAP_ZB + JOINT_SLOT)))
     return lap_frame(x, y, t.cut(slot))
 
 
 def lap_pillar_cut(x, y):
     """What the lap joint removes from a pillar: the outer half over JOINT_H, the bolt hole, the nut flat."""
     r = PILLAR_R
-    c = box(0, r + 1, -r - 1, r + 1, LAP_Z0, 1)
-    c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB)).union(box(-r - 1, -LAP_FLAT, -r - 1, r + 1, LAP_ZB - 4, LAP_ZB + 4))
+    c = box(0, r + 1, LAP_V, r + 1, LAP_Z0, 1)          # v0.8.2: only the u > 0, v > LAP_V corner is removed (ㄴ)
+    c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB, LAP_BV)).union(box(-r - 1, -LAP_FLAT, -r - 1, r + 1, LAP_ZB - 4, LAP_ZB + 4))
     return lap_frame(x, y, c)
 
 
@@ -714,7 +722,7 @@ def ARM_FEET():
 
 ARM_BOLT_X = 13.0     # v0.8.1: bolts moved out (x 9 -> 13) so the nuts under the disc clear the hub wall (r 15.5)
 ARM_BOLT_L = 12.0     # v0.8.1 (user): M3x12 down through foot (6) + disc (5), nut put on the bolt end from below
-ARM_NUT_POCKET = 3.0  # hex recess in the disc underside: a hanging nut would hit the fixed cable riser within +-55 deg
+ARM_NUT_POCKET = 4.5  # hex recess in the turntable underside (7 mm thick there): nut sunk, M3x12 fully engaged
 
 
 def ARM_BOLTS(*_):
@@ -762,12 +770,13 @@ def turntable_yoke():
         y = y.cut(horn_slots(z0 - 1, z_disc_top + 1, z0 + 6.0, "z"))
         y = y.cut(cyl_z(3.25, z0 - 1, z0 + 4.0))                 # horn spline-screw head
         y = y.cut(cyl_z(3.0, z0 + 6.0, z_disc_top + 1))          # look-through to the spline screw
+    z_bot = PAN_HORN_Z + HORN_T + AX_FLOOR if STOP == "axial" else DISC_Z0   # underside of the disc region
     # arm bolts (v0.5.6, user: nut slots too hard): M3x10 down through the foot self-taps 4 mm into a blind
     # pilot hole in the disc (bottom skin stays closed)
     for x, yb in ARM_BOLTS():   # v0.8.1 (user): through hole, nut tightened from under the disc
-        y = y.cut(cyl_z(1.7, DISC_Z0 - 1, z_disc_top + 1, x, yb))
+        y = y.cut(cyl_z(1.7, z_bot - 1, z_disc_top + 1, x, yb))
         if STOP == "axial":   # nut recess open downward (prints open-side up: disc top is on the plate)
-            y = y.cut(hex_z(NUT_AF + 0.3, DISC_Z0 - 1, DISC_Z0 + ARM_NUT_POCKET, x, yb, 0.0))
+            y = y.cut(hex_z(NUT_AF + 0.3, z_bot - 1, z_bot + ARM_NUT_POCKET, x, yb, 0.0))
     # arms
     arm_s = box(-ARM_W / 2, ARM_W / 2, y_srv_in, y_srv_out, z_disc_top - 0.1, H_TILT).union(
         cyl_y(ARM_W / 2, y_srv_in, y_srv_out, 0, H_TILT))
@@ -835,39 +844,49 @@ def turntable_yoke():
         x, yy = polar(a, R_MID)
         if abs(yy) < 33 and abs(x) < ARM_W / 2 + pr + 1:    # keep material under the arms
             continue
-        y = y.cut(cyl_z(pr, DISC_Z0 - 1, z_disc_top + 1, x, yy))
+        y = y.cut(cyl_z(pr, z_bot - 1, z_disc_top + 1, x, yy))
 
     return y, y_srv_in, y_srv_out, y_idle_in
 
 
 def axial_hub():
-    """v0.8 (user, 11-14): the camera ribbon comes up beside the pan servo, turns in over the horn and leaves through
-    the middle of the turntable, so pan only twists it. The hub keeps the full ring on the horn (pocket, crush ribs,
-    4 radial slots, heads sunk flush) but only ONE sector post joins it to the disc, on the side away from the cable.
-    The other 310 degrees stay open for the ribbon's radial leg; the post meeting the ribbon is the end of travel
-    (about +-150 deg)."""
+    """v0.8.2 (user, 11-14: turntable too tall, unstable). The camera ribbon comes up beside the pan servo, bends
+    flat over the hub floor into a 2 mm slot, reaches the axis and bends up through the middle of the turntable.
+    The disc sits right on the hub: between hub floor and disc everything is solid except the swept path of the flat
+    ribbon (its strip turned through +-AX_RANGE) and the screwdriver opening r < AX_FILL_R0. All bends are plain
+    out-of-plane bends - no 45-degree folds."""
     z0 = PAN_HORN_Z + HORN_T
     zf = z0 + AX_FLOOR
     ring = cyl_z(HUB_R, z0 - HORN_DEPTH, zf)
     ring = ring.cut(horn_pocket(z0 - HORN_DEPTH - 1, z0, "z"))
     ring = ring.cut(horn_slots(z0 - 1, zf + 1, zf - AX_CB, "z"))
     ring = ring.cut(cyl_z(3.25, z0 - 1, zf + 1))                                # spline screw access
-    r0, r1 = AX_SECTOR_R
-    a0, a1 = -AX_SECTOR / 2, AX_SECTOR / 2
-    sec = (cq.Workplane("XY").moveTo(*polar(a0, r0)).lineTo(*polar(a0, r1))
-           .threePointArc(polar(0, r1), polar(a1, r1)).lineTo(*polar(a1, r0))
-           .threePointArc(polar(0, r0), polar(a0, r0)).close()
-           .extrude(DISC_Z0 - zf + 0.02).translate((0, 0, zf - 0.01)))
-    out = ring.union(sec).clean()
+    fill = ring_z(AX_FILL_R0, DISC_R, zf - 0.01, DISC_Z0 + 0.01).cut(ribbon_sweep(zf - 1, DISC_Z0 - 0.3))
+    out = ring.union(fill).clean()
     return cq.Workplane("XY").add(max(out.solids().vals(), key=lambda v: v.Volume()))
 
 
+def ribbon_sweep(z0, z1, step=5.0):
+    """Space the fixed flat ribbon leg (y +-FPC_W/2, from the axis back to the riser) needs while the turntable
+    turns +-AX_RANGE: the strip (+0.6 mm all round) turned through the range."""
+    hw = FPC_W / 2 + 0.6
+    x0 = -(AX_RISE_X + 3.5)
+    out = None
+    n = int(round(2 * AX_RANGE / step))
+    for k in range(n + 1):
+        a = -AX_RANGE + k * step
+        b = box(x0, 0.6, -hw, hw, z0, z1).rotate((0, 0, 0), (0, 0, 1), a)
+        out = b if out is None else out.union(b)
+    return out
+
+
 def fpc_fixed(t=0.4):
-    """Fixed part of the ribbon in the v0.8 route (riser beside the cage, radial leg on edge, first bit up the
-    axis): used as a keep-out in the checks."""
-    rise = box(-AX_RISE_X - t, -AX_RISE_X, -FPC_W / 2, FPC_W / 2, -DECK_T - 30, AX_LEG_Z0 + FPC_W)
-    leg = box(-AX_RISE_X, 0, -t / 2, t / 2, AX_LEG_Z0, AX_LEG_Z0 + FPC_W)
-    up = box(-FPC_W / 2, FPC_W / 2, -t / 2, t / 2, AX_LEG_Z0, DISC_Z0)
+    """Fixed part of the ribbon in the v0.8.2 route (riser beside the cage, flat leg over the hub floor, first bit
+    up the axis): used as a keep-out in the checks."""
+    hw = FPC_W / 2
+    rise = box(-AX_RISE_X - t, -AX_RISE_X, -hw, hw, -DECK_T - 30, AX_LEG_Z0 + t / 2)
+    leg = box(-AX_RISE_X, 0, -hw, hw, AX_LEG_Z0 - t / 2, AX_LEG_Z0 + t / 2)
+    up = box(-t, 0, -hw, hw, AX_LEG_Z0 - t / 2, DISC_Z0)
     return rise.union(leg).union(up)
 
 
@@ -1070,10 +1089,10 @@ def fasteners():
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T, up=False))
     for x, y in ARM_BOLTS():   # foot (6) + disc (5) + exposed nut under the disc
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False, length=ARM_BOLT_L,
-                           nut_z=DISC_Z0 + ARM_NUT_POCKET - NUT_H, nut_rot=0.0))
+                           nut_z=(PAN_HORN_Z + HORN_T + AX_FLOOR if STOP == "axial" else DISC_Z0) + ARM_NUT_POCKET - NUT_H, nut_rot=0.0))
     for x, y in PILLARS:                 # v0.7 lap joint: M3x16 from the outer flat of the tab, nut on the pillar's inner flat
-        b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB).union(cyl_x(1.5, LAP_FLAT - 16.0, LAP_FLAT, LAP_ZB))
-             .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT - 0.01, 0, LAP_ZB))))
+        b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB, LAP_BV).union(cyl_x(1.5, LAP_FLAT - 16.0, LAP_FLAT, LAP_ZB, LAP_BV))
+             .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT - 0.01, LAP_BV, LAP_ZB))))
         base = base.union(lap_frame(x, y, b))
     for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
@@ -1145,7 +1164,7 @@ def cable_routes_axial():
     zc = H_TILT
     pi_cam = pi_to_deck(48.0, 4.0)  # CAM/DISP connector [VERIFY]
     zg = DISC_Z0 + DISC_T + 12.0
-    zl = AX_LEG_Z0 + FPC_W / 2
+    zl = AX_LEG_Z0
     fpc = [(CRADLE_X0 + 1, 0, zc - CRADLE_HALF_Z + 4), (CRADLE_X0 - 6, 0, zc - CRADLE_HALF_Z - 2),   # tilt loop behind the cradle
            (CRADLE_X0 - 9, 0, zg + 14), (-6, 0, zg + 5), (0, 0, zg), (0, 0, DISC_Z0),               # guide, down the axis
            (0, 0, zl), (-AX_RISE_X, 0, zl), (-AX_RISE_X, 0, -DECK_T - 2),                            # radial leg, riser
