@@ -1,4 +1,4 @@
-<title>2축 짐벌 v0.8.2</title>
+<title>2축 짐벌 v0.8.3</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -72,18 +72,18 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
   </div>
   <aside>
     <section>
-      <h1>상단부 2축 짐벌 v0.8.2</h1>
+      <h1>상단부 2축 짐벌 v0.8.3</h1>
       <p class="sub" id="lead"></p>
     </section>
     <section aria-labelledby="h-pose">
       <h2 id="h-pose">자세</h2>
-      <div class="ctrl"><label for="psi">Pan ψ</label><input id="psi" type="range" min="-90" max="90" step="1" value="0"><output id="psi-o" for="psi">0°</output></div>
-      <div class="ctrl"><label for="th">Tilt θ</label><input id="th" type="range" min="-90" max="90" step="1" value="0"><output id="th-o" for="th">0°</output></div>
+      <div class="ctrl"><label for="psi">Pan ψ</label><input id="psi" type="range" min="-20" max="20" step="1" value="0"><output id="psi-o" for="psi">0°</output></div>
+      <div class="ctrl"><label for="th">Tilt θ</label><input id="th" type="range" min="-20" max="20" step="1" value="0"><output id="th-o" for="th">0°</output></div>
       <div class="btns">
         <button type="button" data-pose="0,0">정면</button>
         <button type="button" data-pose="60,30">ψ 60°, θ 30°</button>
-        <button type="button" data-pose="-85,-45">ψ −85°, θ −45°</button>
-        <button type="button" id="stopbtn" data-pose="90,0">Pan 90°</button>
+        <button type="button" data-pose="-15,-45">ψ −15°, θ −45°</button>
+        <button type="button" id="stopbtn" data-pose="20,0">Pan 20°</button>
         <button type="button" id="sweep">스윕 재생</button>
         <button type="button" id="eyecam">눈 정면 보기</button>
         <button type="button" id="allcam">전체 보기</button>
@@ -97,11 +97,11 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
       <div class="legend" id="legend"></div>
     </section>
     <section aria-labelledby="h-v05">
-      <h2 id="h-v08">v0.8.2 변경 (11/14)</h2>
+      <h2 id="h-v08">v0.8.3 변경 (11/14)</h2>
       <table>
         <tr><td>카메라 케이블</td><td>Pan 서보 케이지 끝면 옆으로 올라와 혼 위에서 축으로 꺾여 턴테이블 가운데 구멍으로 나감. Pan은 비틀림만 줌 (경로 약 __FPC__ mm)</td></tr>
-        <tr><td>턴테이블</td><td>높이 14 mm(이전 30.8): 원판이 혼 고리 바로 위, 케이블은 2 mm 틈으로 눕혀 지나감. 가운데 구멍 Ø 24</td></tr>
-        <tr><td>Pan 범위</td><td>±90° (틈 끝이 케이블에 닿는 곳), 소프트 ±85°</td></tr>
+        <tr><td>턴테이블</td><td>높이 14 mm, 넓은 혼 자리(r 24)가 앞쪽 240°를 원판과 통째로 잇고 뒤 120°만 케이블 구멍. 케이블은 2 mm 틈으로 눕혀 지나감</td></tr>
+        <tr><td>Pan 범위</td><td>±20° (구멍 끝이 케이블에 닿는 곳), 소프트 ±15°</td></tr>
         <tr><td>케이블 컵</td><td>제거 (나사 4개 감소)</td></tr>
         <tr><td>팔 ↔ 턴테이블</td><td>M3 × 12 관통 + 너트 (턴테이블 밑면 육각 홈)</td></tr>
         <tr><td>케이지 귀</td><td>축 쪽 끝면 귀 → 양 옆면 귀 2개 (끝면을 케이블 자리로 비움)</td></tr>
@@ -148,7 +148,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
         <li><b>AI HAT+ 아래 FPC 통과</b>: HAT 가장자리로 FPC를 빼낼 틈이 있는지</li>
         <li><b>M3 안내 구멍</b>: 확인 쿠폰으로 지름(PILOT_R)을 정한 뒤 출력</li>
         <li><b>혼 지름·두께</b>: 혼 게이지 쿠폰(C02)으로 HORN_D, HORN_T를 정한 뒤 큰 부품 출력</li>
-        <li><b>카메라 FPC 길이</b>: 경로 약 __FPC__ mm. 턴테이블 위 축 구간 비틀림 ±90°를 손으로 먼저 확인</li>
+        <li><b>카메라 FPC 길이</b>: 경로 약 __FPC__ mm. 케이블 300 mm, 설계 예산 250 mm 안</li>
         <li><b>Tilt 축 자리</b>: 핀을 위에서 눌러 끼우면 딸깍 하고 들어가야 정상. 헐거우면 손가락 틈을 좁혀 다시 출력</li>
         <li><b>카메라 홀·렌즈 위치, Pi 스택 높이 30 mm</b>: v0.1과 동일한 가정</li>
       </ul>
@@ -299,7 +299,7 @@ function fillTables() {
     ["Tilt축 높이 (상판 윗면 기준)", b.H_TILT.toFixed(0) + " mm"],
     ["턴테이블 지름", b.disc_d.toFixed(0) + " mm"],
     ["회전부 최고 높이", b.top_z.toFixed(0) + " mm"],
-    ["Pan 가동 / 소프트 리밋", "±90° (틈 끝) / ±85°"],
+    ["Pan 가동 / 소프트 리밋", "±20° (구멍 끝) / ±15°"],
     ["Tilt 가동 범위 (기구 간섭 기준)", "±90°"],
     ["Pan 회전부 질량", b.mass_g.toFixed(0) + " g"],
     ["무게중심 편심", b.com_r + " mm"],
@@ -356,7 +356,7 @@ new ResizeObserver(resize).observe(canvas);
 function tick(now) {
   if (sweeping) {
     const s = (now - t0) / 1000 * (reduce ? 0.3 : 1);
-    setPose(Math.round(85 * Math.sin(s * 0.6)), Math.round(80 * Math.sin(s * 1.1)));
+    setPose(Math.round(15 * Math.sin(s * 0.6)), Math.round(80 * Math.sin(s * 1.1)));
   }
   if (fly) {
     let k = Math.min((now - fly.s) / (reduce ? 1 : 700), 1); const e = k * k * (3 - 2 * k);

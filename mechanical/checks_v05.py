@@ -73,6 +73,9 @@ def main():
         pts = rib.sample(20000)
         free = [d for d in range(-180, 181, 5) if not e.rot(mp, d, [0, 0, 1], [0, 0, 0]).contains(pts).any()]
         res["pan_cable_free_deg"] = [min(free), max(free)]
+        res["fpc_route_mm"] = round(g.length(routes["camera FPC"]))
+        res["fpc_budget_mm"] = g.FPC_BUDGET
+        assert res["fpc_route_mm"] <= g.FPC_BUDGET, "camera FPC route longer than the budget"
         res["cable_vs_fixed_mm3"] = round(e.overlap(rib, trimesh.boolean.union([M[n] for n in ("pan_cage", "pan_servo", "top_deck", "pan_horn")])), 2)
     res["stop_deg"] = None if g.STOP in ("none", "axial") else next((d for d in range(156, 181, 2) if e.overlap(e.rot(y, d, [0, 0, 1], [0, 0, 0]), bm) > 0.05), None)
     if "horn_coupler" in M:   # radial float of the flexure (bearing version only)
