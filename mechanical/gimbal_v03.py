@@ -518,7 +518,6 @@ def lap_pillar_cut(x, y):
     r = PILLAR_R
     c = box(0, r + 1, LAP_V, r + 1, LAP_Z0, 1)          # v0.8.2: only the u > 0, v > LAP_V corner is removed (ㄴ)
     c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB, LAP_BV)).union(box(-r - 1, -LAP_FLAT_NUT, -r - 1, r + 1, LAP_ZB - 4, LAP_ZB + 4))
-    c = c.union(cone_x(1.7 + 0.6, 1.7, 0.0, -1, LAP_ZB, LAP_BV))   # v0.8.4: entry chamfer where the bolt enters the pillar
     return lap_frame(x, y, c)
 
 
@@ -873,14 +872,41 @@ def turntable_yoke():
     return y, y_srv_in, y_srv_out, y_idle_in
 
 
-# v0.8.4 (user, 11-15: screws hard to start because printed holes come out small): every screw hole mouth gets a
-# 45-degree entry chamfer. Hole radius -> chamfer size. Only full-circle mouths on a flat face (the circle is an
-# inner loop of that face) are touched, so blind-hole bottoms and slots stay as they are.
+# v0.8.4 (user, 11-15: screws hard to start because printed holes come out small): 45-degree entry chamfers.
+# v0.8.5 (user, 11-15): ONLY where a screw goes in - the mouth must face the screw head, and no other part may
+# touch that face around the hole. Mating faces and exit sides stay sharp.
 HOLE_CHAMFER = {0.8: 0.3, 0.9: 0.4, 0.95: 0.4, 1.05: 0.5, 1.2: 0.5, 1.3: 0.6, 1.7: 0.6}
 CHAMFER_LOG = {}
 
 
-def chamfer_holes(wp, name="part"):
+def mouth_is_entry(c, n, r, mates):
+    """c: mouth centre, n: outward face normal, r: hole radius. True if a recorded screw goes INTO the part here
+    (axis through c, head on the outside) and no mate solid sits against the face around the hole."""
+    hit = False
+    for p, d in SCREWS:
+        w = c - p
+        along = w.dot(d)
+        if along < -0.6:                        # mouth behind the head
+            continue
+        if (w - d * along).Length > 0.7:        # not on this screw's axis
+            continue
+        if d.dot(n) < -0.5:                     # face looks back at the head -> the screw enters here
+            hit = True
+            break
+    if not hit:
+        return False
+    u = n.cross(cq.Vector(0, 0, 1) if abs(n.z) < 0.9 else cq.Vector(1, 0, 0)).normalized()
+    v = n.cross(u)
+    rr = r + 1.3
+    for k in range(8):
+        a = 2 * math.pi * k / 8
+        q = c + u * (rr * math.cos(a)) + v * (rr * math.sin(a)) + n * 0.45
+        if any(m.isInside(q, 1e-3) for m in mates):
+            return False                       # another part sits against this face
+    return True
+
+
+def chamfer_holes(wp, name="part", mates=()):
     """Entry chamfer on all screw-hole and screw-slot mouths of a printed part (see HOLE_CHAMFER). Tries all mouths
     of one size at once, then mouth by mouth; a mouth the kernel refuses (too close to another feature) is skipped
     and counted in CHAMFER_LOG[name] = (done, skipped)."""
@@ -898,8 +924,12 @@ def chamfer_holes(wp, name="part"):
                 continue
             r = round(arcs[0].radius(), 2)
             size = next((c for hr, c in HOLE_CHAMFER.items() if abs(hr - r) < 0.02), None)
-            if size is not None:
-                mouths.append((size, w.Center(), [e.Center() for e in es]))
+            if size is None:
+                continue
+            c = w.Center()
+            if not mouth_is_entry(c, f.normalAt(c), r, mates):
+                continue
+            mouths.append((size, c, [e.Center() for e in es]))
 
     def edges_at(sol, centres):
         out = []
@@ -1152,9 +1182,17 @@ def eye_plate():
 
 
 # ----------------------------------------------------------------------------- fasteners (bought, for checks/BOM)
+SCREWS = []   # v0.8.5: (head seat point, unit shank direction) of every screw, filled by the fastener builders
+
+
+def note_screw(p, d):
+    SCREWS.append((cq.Vector(*p), cq.Vector(*d).normalized()))
+
+
 def m3(x, y, z_head, up=True, nut_z=None, length=10.0, nut_rot=None):
     """M3 socket-head screw (head d5.5 x 3) with its seat at z_head, shank `length` toward +Z (up) or -Z."""
     sgn = 1 if up else -1
+    note_screw((x, y, z_head), (0, 0, sgn))
     head = cyl_z(2.75, z_head - 3.0, z_head) if up else cyl_z(2.75, z_head, z_head + 3.0)
     shank = cyl_z(1.5, *sorted((z_head, z_head + sgn * length)), x=0, y=0)
     out = head.union(shank).translate((x, y, 0))
@@ -1166,6 +1204,7 @@ def m3(x, y, z_head, up=True, nut_z=None, length=10.0, nut_rot=None):
 
 def fasteners():
     """Returns (base, pan): every M3x10 + nut of the v0.5 stacks (screws into inserts carry no nut)."""
+    SCREWS.clear()
     base = None
     for sx, sy in CAGE_BOLTS:            # ear (5) + deck (5); inside the cable cup M3x8 so the deck top stays closed
         blind = STOP == "none" and math.hypot(sx, sy) < CUP_R + 1
@@ -1190,9 +1229,13 @@ def fasteners():
         b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB, LAP_BV).union(cyl_x(1.5, LAP_FLAT - 16.0, LAP_FLAT, LAP_ZB, LAP_BV))
              .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT_NUT - 0.01, LAP_BV, LAP_ZB))))
         base = base.union(lap_frame(x, y, b))
+        a = math.radians(pillar_slot_dir(x, y))
+        ca, sa = math.cos(a), math.sin(a)
+        note_screw((x + LAP_FLAT * ca - LAP_BV * sa, y + LAP_FLAT * sa + LAP_BV * ca, LAP_ZB), (-ca, -sa, 0))
     for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
         zt = LOWER_TOP + PI_STANDOFF + PI_PCB
+        note_screw((x, y, zt), (0, 0, -1))
         f = cyl_z(M25_HEAD_D / 2, zt, zt + M25_HEAD_H, x, y).union(cyl_z(1.25, zt - PI_SCREW_L, zt, x, y))
         base = base.union(f)
     return base, pan
@@ -1209,6 +1252,7 @@ def fasteners_tilt():
     elif CAM_MOUNT == "E":   # optional stop screws under the board's bottom edge, head in front of the lip
         pts = [(sg * (CAM_W / 2 - 0.6), top - CAM_H - 1.4, x_head + 0.15 + 1.25) for sg in (1, -1)]
     for hy, z, xh in pts:
+        note_screw((xh, hy, z), (-1, 0, 0))
         f = cyl_x(M2_HEAD_D / 2, xh, xh + M2_HEAD_H, z, hy).union(cyl_x(1.0, xh - CAM_SCREW_L, xh, z, hy))
         out = f if out is None else out.union(f)
     if out is None:          # D / F: nothing bought; keep a tiny placeholder so the part list stays the same
@@ -1321,11 +1365,11 @@ def length(poly):
 def build(export=True):
     yoke, y_srv_in, y_srv_out, y_idle_in = turntable_yoke()
     parts = {}
-    parts["top_deck"] = (chamfer_holes(top_deck(), "top_deck"), (0.80, 0.82, 0.85), True, "base")
+    parts["top_deck"] = (top_deck(), (0.80, 0.82, 0.85), True, "base")
     if STOP != "axial":   # v0.8: nothing stands on the deck around the horn any more
         parts["bearing_mount"] = (bearing_mount(), (0.55, 0.57, 0.60), True, "base")
-    parts["lower_deck"] = (chamfer_holes(lower_deck(), "lower_deck"), (0.80, 0.82, 0.85), True, "base")
-    parts["pan_cage"] = (chamfer_holes(pan_cage(), "pan_cage"), (0.55, 0.57, 0.60), True, "base")
+    parts["lower_deck"] = (lower_deck(), (0.80, 0.82, 0.85), True, "base")
+    parts["pan_cage"] = (pan_cage(), (0.55, 0.57, 0.60), True, "base")
     parts["pan_servo"] = (servo_z_up().translate((0, 0, SV_TOP)), (0.12, 0.12, 0.13), False, "base")
     parts["pi5_stack"] = (pi_stack(), (0.15, 0.55, 0.30), False, "base")
     od, idr, w = BRG_PAN
@@ -1339,7 +1383,7 @@ def build(export=True):
     ts = tilt_rot(servo_z_up())
     parts["tilt_servo"] = (ts, (0.12, 0.12, 0.13), False, "pan")
     parts["tilt_horn"] = (cyl_y(HORN_D / 2, CRADLE_HALF_Y, CRADLE_HALF_Y + HORN_T, 0, H_TILT), (0.70, 0.70, 0.72), False, "tilt")
-    parts["tilt_cradle"] = (chamfer_holes(tilt_cradle(), "tilt_cradle"), (0.95, 0.55, 0.15), True, "tilt")
+    parts["tilt_cradle"] = (tilt_cradle(), (0.95, 0.55, 0.15), True, "tilt")
     if EYE:
         parts["eye_plate"] = (eye_plate(), (0.85, 0.20, 0.10), True, "tilt")
     parts["camera"] = (camera_module().translate((CAM_BACK_X, 0, H_TILT)), (0.10, 0.45, 0.25), False, "tilt")
@@ -1347,6 +1391,11 @@ def build(export=True):
     parts["fasteners_base"] = (fb, (0.85, 0.75, 0.30), False, "base")
     parts["fasteners_pan"] = (fp, (0.85, 0.75, 0.30), False, "pan")
     parts["fasteners_tilt"] = (fasteners_tilt(), (0.85, 0.75, 0.30), False, "tilt")
+    # v0.8.5: entry chamfers, now that every part and every screw exists (mates = the other solid parts)
+    solid_names = [n for n in parts if not n.startswith("fasteners")]
+    for n in ("top_deck", "lower_deck", "pan_cage", "tilt_cradle"):
+        mates = [parts[m][0].val() for m in solid_names if m != n]
+        parts[n] = (chamfer_holes(parts[n][0], n, mates),) + parts[n][1:]
 
     keepouts = {f"keepout {k}": v for k, v in pi_keepouts().items()}
     keepouts["keepout pan servo plugs"] = servo_conn_keepout_z_up().translate((0, 0, SV_TOP))

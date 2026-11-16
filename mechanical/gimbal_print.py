@@ -67,10 +67,15 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
             arm_i = arm_i.union(f).clean().cut(cut).clean()
     for a in (arm_s, arm_i):
         assert a.val().Volume() > 1000, "arm boolean failed"
-    # v0.8.4: entry chamfers on every screw hole (after the split, so the arm-foot holes are included)
-    turntable = g.chamfer_holes(turntable, "turntable")
-    arm_s = g.chamfer_holes(arm_s, "arm_servo")
-    arm_i = g.chamfer_holes(arm_i, "arm_idle")
+    # v0.8.5: entry chamfers only where a screw goes in and no other part touches (after the split, so the arm
+    # feet and the turntable see each other as mates)
+    if not g.SCREWS:
+        g.fasteners()
+        g.fasteners_tilt()
+    horn = g.cyl_z(g.HORN_D / 2, g.PAN_HORN_Z, g.PAN_HORN_Z + g.HORN_T).val()
+    turntable = g.chamfer_holes(turntable, "turntable", [arm_s.val(), arm_i.val(), horn])
+    arm_s = g.chamfer_holes(arm_s, "arm_servo", [turntable.val()])
+    arm_i = g.chamfer_holes(arm_i, "arm_idle", [turntable.val()])
     return turntable, arm_s, arm_i
 
 
