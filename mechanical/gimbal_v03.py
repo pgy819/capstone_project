@@ -160,6 +160,9 @@ AX_RING_R = 15.8                           # full round ring on the horn (clear 
 AX_POST = 40.0                             # ONE post from the ring up to the table, in front, this wide [deg]
 AX_POST_R = (13.5, 30.0)                   # post radii below the floor (merges with the ring) ...
 AX_POST_R_UP = 17.6                        # ... and above it (clear of the flat ribbon leg, which ends at r 16.7)
+AX_POST_WIDE_R = 19.6                      # v0.9.1 (user: junction +50 %): beyond this radius nothing fixed (riser
+AX_POST_WIDE = 64.0                        # corners end at r 18.9), so the post widens 40 -> 64 deg where it meets
+                                           # the table without costing any pan range
 TABLE = (-19.0, 31.0, -26.0, 23.0, 6.0)    # table outline: x0, x1, y0, y1, corner radius (arm feet + post top)
 AX_FILL_R0 = 12.5                          # open inside (driver access to the horn screws through the centre hole)
 FPC_BUDGET = 250.0                         # user: 300 mm camera cable, plan with 250 mm
@@ -207,7 +210,7 @@ def configure(wrap_r=44.0, stop="rim", tilt_orient="back"):
         DISC_Z0 = PAN_HORN_Z + HORN_T + AX_FLOOR + AX_SLOT
         CAGE_BOLTS = CAGE_BOLTS_AXIAL
     if stop in ("none", "axial"):                    # v0.7: no hard stop (servo angle limits in EEPROM instead)
-        DISC_T = 5.0
+        DISC_T = 6.0 if stop == "axial" else 5.0     # v0.9.1 (user): table 5 -> 6 mm
         STOP_R = 0.0
         DISC_R = 43.0
     elif stop == "rim":
@@ -1008,8 +1011,10 @@ def axial_hub():
     ring = ring.cut(horn_slots(z0 - 1, zf + 1, zf - AX_CB, "z"))
     ring = ring.cut(cyl_z(3.25, z0 - 1, zf + 1))                                # spline screw access
     h = AX_POST / 2
+    hw = AX_POST_WIDE / 2
     post = (sector_z(AX_POST_R[0], AX_POST_R[1], -h, h, z0 - HORN_DEPTH, zf + 0.01)
-            .union(sector_z(AX_POST_R_UP, AX_POST_R[1], -h, h, zf - 0.3, DISC_Z0 + 0.01)))
+            .union(sector_z(AX_POST_R_UP, AX_POST_R[1], -h, h, zf - 0.3, DISC_Z0 + 0.01))
+            .union(sector_z(AX_POST_WIDE_R, AX_POST_R[1], -hw, hw, z0 - HORN_DEPTH, DISC_Z0 + 0.01)))
     out = ring.union(post).clean()
     return cq.Workplane("XY").add(max(out.solids().vals(), key=lambda v: v.Volume()))
 
@@ -1029,8 +1034,9 @@ def table_prism(z0, z1):
 
 
 def in_post(x, y):
-    a = math.degrees(math.atan2(y, x))
-    return abs(a) <= AX_POST / 2 and AX_POST_R_UP <= math.hypot(x, y) <= AX_POST_R[1]
+    a, r = abs(math.degrees(math.atan2(y, x))), math.hypot(x, y)
+    return ((a <= AX_POST / 2 and AX_POST_R_UP <= r <= AX_POST_R[1])
+            or (a <= AX_POST_WIDE / 2 and AX_POST_WIDE_R <= r <= AX_POST_R[1]))
 
 
 def fpc_fixed(t=0.4):
