@@ -1,0 +1,320 @@
+<title>짐벌 v1.0 후보</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: drawing-sheet feel - a sticky 3D viewport on the left, a ruled spec column on the right; one column on phones. */
+:root {
+  --bg: #f3f5f4; --panel: #ffffff; --ink: #18201d; --muted: #5d6b66; --rule: #d5dcd9; --soft: #e8eeeb;
+  --accent: #0f7a5c; --accent-ink: #ffffff; --old: #8a6d3b; --warn: #b4531f; --view: #e9eeec;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121715; --panel: #18201d; --ink: #e4ece8; --muted: #93a39d; --rule: #2b3632; --soft: #1f2925;
+  --accent: #3fc79b; --accent-ink: #0b1411; --old: #d1aa66; --warn: #f08a55; --view: #1a2220; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121715; --panel: #18201d; --ink: #e4ece8; --muted: #93a39d; --rule: #2b3632; --soft: #1f2925;
+  --accent: #3fc79b; --accent-ink: #0b1411; --old: #d1aa66; --warn: #f08a55; --view: #1a2220; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.55; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+header { max-width: 1320px; margin: 0 auto 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+h1 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0; max-width: 70ch; }
+.badge { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: 1px 7px; border-radius: 3px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.viewer { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); background: var(--view); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+#view { display: block; width: 100%; height: min(72vh, 640px); touch-action: none; }
+.hud { position: absolute; left: 12px; top: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); display: grid; gap: 2px; pointer-events: none; }
+.hud b { color: var(--ink); font-weight: 500; }
+#loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+#loading[hidden] { display: none; }
+.controls { display: grid; gap: 10px; padding: 12px 14px 14px; border-top: 1px solid var(--rule); background: var(--panel); }
+.slider { display: grid; grid-template-columns: 44px minmax(0, 1fr) 58px; align-items: center; gap: 10px; }
+.slider label { font-weight: 600; font-size: 13px; }
+.slider output { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 13px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: inherit; font-size: 12.5px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.col { display: grid; gap: 14px; min-width: 0; }
+section { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px 16px; min-width: 0; }
+h2 { font-size: 13px; font-weight: 600; margin: 0 0 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0 0 8px; max-width: 66ch; }
+.idea { font-size: 15px; }
+.idea strong { color: var(--accent); }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.old, td.new { font-variant-numeric: tabular-nums; }
+td.old { color: var(--old); }
+td.new { color: var(--accent); font-weight: 600; }
+.parts { display: grid; gap: 2px; }
+.parts label { display: grid; grid-template-columns: 18px 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px 2px; border-bottom: 1px dashed var(--soft); cursor: pointer; }
+.sw { width: 12px; height: 12px; border-radius: 2px; }
+.tag { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+ol, ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+li { max-width: 66ch; }
+.warn li::marker { color: var(--warn); }
+.note { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); }
+  .viewer { position: relative; top: 0; }
+  #view { height: 58vh; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<header>
+  <span class="badge">후보 · 본 모델 아님</span>
+  <h1>상단부 2축 짐벌 v1.0 후보</h1>
+  <p class="sub">Pi를 Pan 회전부에 올려 카메라 FPC가 회전축을 건너지 않게 한 단순 구조입니다. 추가 부품 구매 없이 기존 부품만 씁니다. 본 모델은 v0.9.2 그대로입니다.</p>
+</header>
+
+<div class="wrap">
+  <div class="viewer">
+    <canvas id="view" aria-label="v1.0 후보 3D 모델"></canvas>
+    <div class="hud"><span>Pan <b id="hud-psi">0.0°</b></span><span>Tilt <b id="hud-th">0.0°</b></span></div>
+    <div id="loading">3D 모델을 불러오는 중…</div>
+    <div class="controls">
+      <div class="slider"><label for="psi">Pan</label><input type="range" id="psi" min="-150" max="150" step="1" value="0"><output id="psi-o">0°</output></div>
+      <div class="slider"><label for="th">Tilt</label><input type="range" id="th" min="-90" max="90" step="1" value="0"><output id="th-o">0°</output></div>
+      <div class="btns">
+        <button type="button" data-pose="0,0">정면</button>
+        <button type="button" data-pose="150,0">Pan +150°</button>
+        <button type="button" data-pose="-150,30">Pan −150°, Tilt +30°</button>
+        <button type="button" data-pose="0,-90">Tilt −90°</button>
+        <button type="button" id="sweep">자동 회전</button>
+        <button type="button" id="xray">받침대 투명</button>
+        <button type="button" id="cab" class="on">전선 보기</button>
+        <button type="button" id="home">전체 보기</button>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <section>
+      <h2>핵심 아이디어</h2>
+      <p class="idea">카메라와 <strong>Pi가 같이 돌면</strong> 넓은 카메라 FPC가 Pan 회전축을 건너지 않습니다.</p>
+      <p>회전축을 건너는 것은 둥근 전선 세 가닥(Pi 전원, Pi-STM32 UART, Tilt 서보 버스)뿐이고, 턴테이블 아래 혼 둘레의 느슨한 고리 하나로 Pan ±150°를 받습니다. 그래서 케이블 채널, 축 통과, 부채꼴 기둥, 2 mm 틈이 모두 필요 없어지고, 하판·상판·기둥 대신 받침대 하나와 누름판 하나로 끝납니다.</p>
+    </section>
+
+    <section>
+      <h2>v0.9.2와 비교 (모델 검사 값)</h2>
+      <div class="tbl"><table id="cmp"></table></div>
+      <p class="note">회전부 질량은 출력물 충전 60 % 가정과 구매 부품 대략값으로 계산했습니다. 토크 여유는 STS3215 정지 토크 약 1.9 N·m(7.4 V) 기준입니다.</p>
+    </section>
+
+    <section>
+      <h2>부품 (클릭해서 숨기기)</h2>
+      <div class="parts" id="parts"></div>
+    </section>
+
+    <section>
+      <h2>체결 부품 · 모두 기존 목록 안</h2>
+      <div class="tbl"><table>
+        <tr><th>품목</th><th>수량</th><th>쓰임</th></tr>
+        <tr><td>M3 × 10</td><td class="num">4</td><td>누름판 → 받침대</td></tr>
+        <tr><td>M3 × 12 + 너트</td><td class="num">6 + 6</td><td>팔 4, Pi 받침판 2 (너트는 턴테이블 밑면 홈)</td></tr>
+        <tr><td>M2.5 × 8</td><td class="num">4</td><td>Pi</td></tr>
+        <tr><td>혼 나사</td><td class="num">4 + 2</td><td>턴테이블 → Pan 혼, 크래들 → Tilt 혼</td></tr>
+        <tr><td>케이블 타이</td><td class="num">1</td><td>Tilt 서보 (기존과 같음)</td></tr>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>케이블 경로 (추정)</h2>
+      <div class="tbl"><table id="cables"></table></div>
+      <p class="note">카메라 FPC는 모델상 약 60 mm이고, 크래들 뒤 여유 고리를 두면 실제로는 100 mm 안팎입니다. 300 mm 케이블이면 넉넉합니다.</p>
+    </section>
+
+    <section>
+      <h2>조립 순서</h2>
+      <ol>
+        <li>서보 ID와 중앙(2048) 설정. Pan EEPROM 각도 제한 341 / 3755 (2048 ∓ 150°).</li>
+        <li>Pan 서보 케이블을 꽂고 받침대 탑에 위에서 넣습니다. 커넥터는 두 레일 사이로, 케이블은 옆 창으로. 누름판을 얹고 M3 × 10 네 개.</li>
+        <li>Pan 혼을 끼우고 턴테이블 기둥을 혼에 눌러 끼운 뒤 혼 나사 4개.</li>
+        <li>두 팔과 Pi 받침판을 턴테이블에 올리고 M3 × 12, 밑면 홈에 너트.</li>
+        <li>Pi를 받침판 뒤에 M2.5 × 8로. 카메라 FPC는 받침판 아래 창으로 넘겨 CAM 포트에.</li>
+        <li>Pi 전원·UART·Tilt 서보 버스를 턴테이블 전선 구멍으로 내려 혼 둘레에 느슨한 고리를 한 바퀴 만들고 받침대 옆으로 뺍니다. ±150° 돌려 보며 당기지 않는지 확인.</li>
+        <li>Tilt 서보, 크래들, 카메라는 v0.9.2와 같습니다.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>대가와 주의점</h2>
+      <ul class="warn">
+        <li>회전부가 약 2.2배 무거워져 Pan 축이 받는 기울임 힘이 약 3배가 됩니다. 토크는 충분하지만 축 유격에 의한 흔들림이 더 보일 수 있습니다.</li>
+        <li>Pi가 같이 돌기 때문에 개발 중에는 HDMI 대신 SSH로 접속합니다.</li>
+        <li>나중에 IMU(BNO085)를 붙일 때 위치를 다시 정해야 합니다.</li>
+        <li>누름판이 서보 윗면 테두리 1.5 mm를 누르므로, 그 자리에 평평한 부분이 있는지 실측이 필요합니다.</li>
+        <li>전체 높이는 발판 바닥에서 Pi 윗끝까지 약 155 mm입니다.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const GLB_B64 = "__GLB__";
+const H_TILT = __HTILT__;
+const CHECKS = __CHECKS__;
+const ROUTES = __ROUTES__;
+const PARTS = [
+  ["pedestal", "받침대 (발판 + 서보 탑)", "#c9ced4", "base", 0],
+  ["clamp_plate", "누름판", "#8d959e", "base", 0],
+  ["pan_servo", "Pan 서보 STS3215", "#2a2d31", "base", 1],
+  ["pan_horn", "Pan 혼", "#a7abb0", "pan", 1],
+  ["turntable", "턴테이블 (혼 기둥 + 판)", "#2f6fd6", "pan", 0],
+  ["arm_servo", "서보쪽 팔", "#4a86e8", "pan", 0],
+  ["arm_idle", "부싱쪽 팔", "#4a86e8", "pan", 0],
+  ["pi_bracket", "Pi 받침판", "#7aa7e0", "pan", 0],
+  ["pi5_stack", "Pi 5 + 쿨러 + AI HAT+", "#2f8a52", "pan", 1],
+  ["tilt_servo", "Tilt 서보 STS3215", "#2a2d31", "pan", 1],
+  ["tilt_horn", "Tilt 혼", "#a7abb0", "tilt", 1],
+  ["tilt_cradle", "Tilt 크래들", "#e48a2a", "tilt", 0],
+  ["camera", "Camera Module 3 Wide", "#1e6b45", "tilt", 1],
+  ["fasteners_base", "나사 (받침대)", "#d9bf4d", "base", 1],
+  ["fasteners_pan", "나사 (혼·팔)", "#d9bf4d", "pan", 1],
+  ["fasteners_v10", "나사 (Pi 받침판·Pi)", "#d9bf4d", "pan", 1],
+  ["fasteners_tilt", "나사 (카메라, 선택)", "#d9bf4d", "tilt", 1],
+];
+const ROUTE_STYLE = { "camera FPC": ["#d8a10f", "카메라 FPC", "tilt"], "Pi power (USB-C)": ["#d64545", "Pi 전원 USB-C", "pan"],
+  "UART Pi-STM32": ["#3a7bf0", "UART Pi-STM32", "pan"], "tilt servo bus": ["#8a5cd6", "Tilt 서보 버스", "pan"] };
+
+// comparison table
+(function () {
+  const c = CHECKS, pct = v => (v * 100).toFixed(1) + " %";
+  const fb = Math.max(...Object.entries(c.fov_base).filter(([k]) => k.endsWith(",-30")).map(([, v]) => v));
+  const rows = [
+    ["Pan 범위", "±130° (소프트 ±125°)", "±150° (소프트)"],
+    ["카메라 FPC", "약 159 mm, 회전축 통과", "약 60~100 mm, 축 안 건넘"],
+    ["턴테이블", "혼 고리 + 기둥 + 2 mm 틈", "혼 기둥 + 판"],
+    ["결합부", "상판-기둥 4, 케이지, 팔", "누름판, 팔, Pi 받침판"],
+    ["회전부 질량", "약 125 g", "약 " + c.rotating_mass_g.toFixed(0) + " g"],
+    ["Pan 축 기울임 힘", "0.023 N·m", c.tilt_moment_on_pan_shaft_Nm.toFixed(3) + " N·m"],
+    ["5000 °/s² 가속 토크", "약 0.011 N·m", c.pan_torque_at_5000degs2_Nm.toFixed(3) + " N·m"],
+    ["크래들 ↔ Pi 받침판 최소 틈", "—", c.cradle_to_bracket_min_gap_mm.toFixed(1) + " mm"],
+    ["Tilt −30° 가림 (회전부)", "23.8 %", pct(c.fov_self["-30"])],
+    ["Tilt −30° 가림 (고정부, 최악)", "최대 24 %", pct(fb)],
+    ["간섭 / 회전 간섭", "0 / 0", (c.static.length ? c.static.length + "건" : "0") + " / " + (c.pan_overlap_max_mm3 + c.tilt_overlap_max_mm3 === 0 ? "0" : "있음")],
+  ];
+  document.getElementById("cmp").innerHTML = "<tr><th>항목</th><th>v0.9.2</th><th>v1.0 후보</th></tr>" +
+    rows.map(([k, a, b]) => `<tr><td>${k}</td><td class="old">${a}</td><td class="new">${b}</td></tr>`).join("");
+  const cl = { "camera FPC": "카메라 FPC (크래들 → Pi CAM)", "Pi power (USB-C)": "Pi 전원 USB-C (회전 고리 포함)", "UART Pi-STM32": "UART Pi → STM32 (회전 고리 포함)", "tilt servo bus": "Tilt 서보 버스 (회전 고리 포함)" };
+  document.getElementById("cables").innerHTML = "<tr><th>전선</th><th>길이</th></tr>" + Object.entries(c.cable_mm).map(([k, v]) => `<tr><td>${cl[k] || k}</td><td class="num">≈ ${v} mm</td></tr>`).join("");
+})();
+
+const canvas = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+cam.up.set(0, 0, 1);
+const controls = new THREE.OrbitControls(cam, canvas);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8090a0, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(200, -150, 300); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xffffff, 0.25); fill.position.set(-200, 200, 100); scene.add(fill);
+const panPivot = new THREE.Group(); scene.add(panPivot);
+const tiltPivot = new THREE.Group(); tiltPivot.position.set(0, 0, H_TILT); panPivot.add(tiltPivot);
+const meshes = {}, cables = [], HOME = {};
+let fly = null;
+function line(pts, color, parent) {
+  const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(...p)));
+  const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.85 }));
+  l.renderOrder = 10; parent.add(l); return l;
+}
+line([[0, 0, -60], [0, 0, H_TILT + 50]], 0xd64545, scene);
+line([[0, -70, 0], [0, 70, 0]], 0xe0b020, tiltPivot);
+line([[0, 0, 0], [200, 0, 0]], 0x3a7bf0, tiltPivot);
+function b64ToBuf(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+new THREE.GLTFLoader().parse(b64ToBuf(GLB_B64), "", (gltf) => {
+  const root = gltf.scene; scene.add(root); root.updateMatrixWorld(true);
+  const found = []; root.traverse(o => { if (o.isMesh) found.push(o); });
+  for (const m of found) {
+    const key = PARTS.find(p => p[0] === m.name || p[0] === (m.parent && m.parent.name));
+    if (!key) continue;
+    const [name, , color, group] = key;
+    m.material = new THREE.MeshStandardMaterial({ color, roughness: 0.62, flatShading: true, metalness: /servo|horn/.test(name) ? 0.35 : 0.05, side: THREE.DoubleSide });
+    if (group === "pan") panPivot.attach(m); else if (group === "tilt") tiltPivot.attach(m);
+    meshes[name] = m;
+  }
+  for (const [name, pts] of Object.entries(ROUTES)) {
+    const [col, , grp] = ROUTE_STYLE[name] || ["#999", name, "pan"];
+    const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, "centripetal", 0.3);
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 10, name === "camera FPC" ? 2.2 : 1.4, 8, false),
+      new THREE.MeshStandardMaterial({ color: col, roughness: 0.5 }));
+    (grp === "tilt" ? panPivot : scene).add(tube); cables.push(tube);
+  }
+  const lg = document.getElementById("legend");
+  for (const [, [col, label]] of Object.entries(ROUTE_STYLE)) lg.insertAdjacentHTML("beforeend", `<span><i style="background:${col}"></i>${label}</span>`);
+  const bb = new THREE.Box3();
+  for (const m of Object.values(meshes)) bb.expandByObject(m);
+  const c = bb.getCenter(new THREE.Vector3()), r = bb.getSize(new THREE.Vector3()).length() / 2;
+  controls.target.copy(c);
+  const d = r / Math.sin(THREE.MathUtils.degToRad(cam.fov / 2)) * 0.85;
+  cam.position.copy(c).add(new THREE.Vector3(0.55, -0.7, 0.45).normalize().multiplyScalar(d));
+  cam.near = d / 50; cam.far = d * 10; cam.updateProjectionMatrix();
+  HOME.p = cam.position.clone(); HOME.t = controls.target.clone();
+  document.getElementById("loading").hidden = true;
+  const box = document.getElementById("parts");
+  for (const [name, label, color, group, bought] of PARTS) {
+    if (!meshes[name]) continue;
+    const id = "p-" + name, row = document.createElement("label");
+    row.htmlFor = id;
+    row.innerHTML = `<input type="checkbox" id="${id}" checked><span class="sw" style="background:${color}"></span><span>${label}</span><span class="tag">${bought ? "기존" : "출력"} · ${group === "base" ? "고정" : group === "pan" ? "Pan" : "Tilt"}</span>`;
+    row.querySelector("input").addEventListener("change", e => { meshes[name].visible = e.target.checked; });
+    box.appendChild(row);
+  }
+}, (err) => { document.getElementById("loading").textContent = "모델을 불러오지 못했습니다: " + err; });
+
+const psiIn = document.getElementById("psi"), thIn = document.getElementById("th");
+const fmt = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(0) + "°";
+function setPose(psi, th) {
+  psiIn.value = psi; thIn.value = th;
+  panPivot.rotation.z = -THREE.MathUtils.degToRad(psi);
+  tiltPivot.rotation.y = -THREE.MathUtils.degToRad(th);
+  document.getElementById("psi-o").textContent = fmt(+psi);
+  document.getElementById("th-o").textContent = fmt(+th);
+  document.getElementById("hud-psi").textContent = (+psi).toFixed(1) + "°";
+  document.getElementById("hud-th").textContent = (+th).toFixed(1) + "°";
+  // loop wires stay with the base; they are drawn only at the neutral pose
+  cables.forEach(cb => { if (cb.parent === scene) cb.visible = showCab && Math.abs(psi) < 1; });
+}
+let sweeping = false, t0 = 0, showCab = true;
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+psiIn.addEventListener("input", () => { sweeping = false; setPose(+psiIn.value, +thIn.value); });
+thIn.addEventListener("input", () => { sweeping = false; setPose(+psiIn.value, +thIn.value); });
+document.querySelectorAll("[data-pose]").forEach(b => b.addEventListener("click", () => { sweeping = false; const [p, t] = b.dataset.pose.split(",").map(Number); setPose(p, t); }));
+document.getElementById("sweep").addEventListener("click", e => { sweeping = !sweeping; t0 = performance.now(); e.target.classList.toggle("on", sweeping); });
+document.getElementById("home").addEventListener("click", () => { if (HOME.p) fly = { p0: cam.position.clone(), t0: controls.target.clone(), p: HOME.p.clone(), t: HOME.t.clone(), s: performance.now() }; });
+let xray = false;
+document.getElementById("xray").addEventListener("click", e => {
+  xray = !xray;
+  for (const n of ["pedestal", "clamp_plate"]) { const m = meshes[n]; if (!m) continue; m.material.transparent = xray; m.material.opacity = xray ? 0.25 : 1; m.material.depthWrite = !xray; }
+  e.target.classList.toggle("on", xray);
+});
+document.getElementById("cab").addEventListener("click", e => {
+  showCab = !showCab; e.target.classList.toggle("on", showCab);
+  cables.forEach(cb => { cb.visible = showCab && (cb.parent !== scene || Math.abs(+psiIn.value) < 1); });
+});
+function resize() { const r = canvas.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); cam.aspect = r.width / Math.max(r.height, 1); cam.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(canvas);
+function tick(now) {
+  if (sweeping) { const s = (now - t0) / 1000 * (reduce ? 0.3 : 1); setPose(Math.round(140 * Math.sin(s * 0.5)), Math.round(70 * Math.sin(s * 0.8))); }
+  if (fly) { const k = Math.min(1, (now - fly.s) / 700), e = k * k * (3 - 2 * k); cam.position.lerpVectors(fly.p0, fly.p, e); controls.target.lerpVectors(fly.t0, fly.t, e); if (k >= 1) fly = null; }
+  controls.update(); renderer.render(scene, cam); requestAnimationFrame(tick);
+}
+resize(); setPose(0, 0); requestAnimationFrame(tick);
+</script>
