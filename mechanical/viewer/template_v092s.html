@@ -75,7 +75,7 @@ li { max-width: 66ch; }
 <header>
   <span class="badge">별도 버전 · 원안 v0.9.2 기반</span>
   <h1>상단부 2축 짐벌 v0.9.2-S 단독형</h1>
-  <p class="sub">하단부 없이 책상 위에 혼자 서는 버전입니다. 원안 v0.9.2에 STM32 받침(하판 아래), FE-URT-1 받침틀(상판 위), 드라이버 → Pan → Tilt 버스 경로를 더했고, 가진 나사만 씁니다.</p>
+  <p class="sub">하단부 없이 책상 위에 혼자 서는 버전입니다. 원안 v0.9.2에 STM32(상판 밑면에 거꾸로, Pi 바로 위), FE-URT-1 받침틀(상판 위), 드라이버 → Pan → Tilt 버스 경로를 더했고, 가진 나사만 씁니다.</p>
 </header>
 
 <div class="wrap">
@@ -105,7 +105,7 @@ li { max-width: 66ch; }
       <h2>무엇이 바뀌었나</h2>
       <ol>
         <li><strong>모터 드라이버(FE-URT-1):</strong> 상판 위 받침틀(새 부품). 상판에 M3 × 8 두 개, 보드는 6 mm 받침 4개에 M2.5 × 8. 뚫린 틀이라 아래 배기구가 막히지 않습니다.</li>
-        <li><strong>STM32:</strong> 하판을 ㄴ자로 넓히는 대신 하판 아래에 다리 4개짜리 받침(새 부품). 받침이 기구 전체의 발이 되고, Nucleo는 부품면이 위로 오게 놓여 나사는 위에서, 점퍼선은 옆에서 꽂습니다.</li>
+        <li><strong>STM32:</strong> 상판 밑면에 Nucleo를 거꾸로(부품면이 Pi 쪽) 매달아 배선을 최소화. CN10이 Pi GPIO 바로 위(UART 약 2 cm), USB는 Pi USB-A 쪽, 드라이버는 상판 바로 위. 상판 밑면 받침 3개에 아래에서 M3 × 12. 그만큼 상판-하판 간격 55 → 75 mm.</li>
         <li><strong>버스 선 드라이버 → Pan → Tilt:</strong> Pan→Tilt 선은 카메라 케이블 바로 뒤로 올라와 혼 위 틈과 가운데 구멍을 지나고, 서보쪽 팔의 창과 Tilt 받침판 뒤쪽 홈으로 커넥터에 닿습니다. 플러그가 지나가도록 틈을 2 → 5 mm로 키웠습니다(턴테이블·Tilt축 +3 mm).</li>
         <li><strong>나사:</strong> 가진 것만. 케이지 귀를 5 → 7 mm로 두껍게 해 M3 × 10 대신 M3 × 12, 카메라는 M2 × 6.</li>
       </ol>
@@ -125,7 +125,7 @@ li { max-width: 66ch; }
       <h2>나사 · 모두 가진 것</h2>
       <div class="tbl"><table>
         <tr><th>품목</th><th>수량</th><th>쓰임</th></tr>
-        <tr><td>M3 × 12</td><td class="num">19</td><td>케이지 4, 상판-기둥 4, 팔 4, Nucleo 3, 받침 다리 → 기둥 4</td></tr>
+        <tr><td>M3 × 12</td><td class="num">15</td><td>케이지 4, 상판-기둥 4, 팔 4, Nucleo 3 (아래에서 상판 받침으로)</td></tr>
         <tr><td>M3 너트</td><td class="num">8</td><td>상판-기둥 4, 팔 4</td></tr>
         <tr><td>M3 × 8</td><td class="num">2</td><td>드라이버 받침틀 → 상판</td></tr>
         <tr><td>M2.5 × 8</td><td class="num">8</td><td>Pi 4, FE-URT-1 4</td></tr>
@@ -143,9 +143,8 @@ li { max-width: 66ch; }
     <section>
       <h2>조립 순서</h2>
       <ol>
-        <li>Nucleo를 STM32 받침에 부품면 위, USB가 뒤쪽 끝을 향하게 놓고 M3 × 12 세 개. 점퍼선은 이때 미리 꽂아 두면 편합니다.</li>
-        <li>하판을 받침 다리 위에 얹고, 받침 밑에서 다리 구멍으로 M3 × 12 네 개(드라이버 날 45 mm 이상).</li>
-        <li>Pi, 케이지, Pan 서보, 상판은 원안 순서대로.</li>
+        <li>상판 밑면 받침에 Nucleo를 부품면이 아래(Pi 쪽), USB가 +Y로 놓고 M3 × 12 세 개. 쓸 핀에 점퍼선을 미리 꽂아 둡니다.</li>
+        <li>Pi, 케이지, Pan 서보는 원안대로. Pi GPIO ↔ Nucleo CN10 점퍼, Nucleo USB ↔ Pi USB-A를 꽂고 상판을 기둥에 올립니다.</li>
         <li>Pan→Tilt 선은 턴테이블을 혼에 올리기 전에: Tilt 쪽 플러그를 틈 → 가운데 구멍으로 올리고, 반대쪽은 상판 홈으로 내려 Pan 서보 두 번째 소켓에.</li>
         <li>턴테이블, 팔, Tilt 부를 원안대로 조립하고, Tilt 쪽 플러그를 팔 창 → 받침판 아래 → 뒤쪽 홈 → 서보 커넥터로. 케이블 타이 하나로 서보와 선을 같이 묶습니다.</li>
         <li>FE-URT-1 받침틀을 상판에, 보드를 받침틀에. 드라이버 선은 옆 배선 구멍으로 내려 Pan 서보와 Nucleo로.</li>
@@ -157,8 +156,8 @@ li { max-width: 66ch; }
       <ul class="warn">
         <li>FE-URT-1 구멍 지름은 공개 자료에 없어 M2.5로 잡았습니다(M3 구멍이어도 머리가 눌러 줍니다).</li>
         <li>5264 플러그 크기(약 10 × 4.5 × 6.5 가정): 상판 홈, 5 mm 틈, 팔 창 11 × 6이 이 값 기준입니다.</li>
-        <li>Nucleo USB 끝 아래 쉼 2개 자리에 기판 바닥 부품이 없는지.</li>
-        <li>받침 위 기판에서 하판까지 28 mm: 암 점퍼(약 17 mm) + 꺾임이 들어갑니다.</li>
+        <li>열: Nucleo가 Pi 위 배기 슬롯 아래를 덮어 원안보다 열이 덜 빠집니다. 처음 몇 번 AI HAT+ 온도를 확인하세요.</li>
+        <li>Pi 스택 높이 30 mm와 GPIO 점퍼 18 mm가 간격 75 mm의 근거입니다.</li>
       </ul>
     </section>
   </div>
@@ -173,13 +172,12 @@ const H_TILT = __HTILT__;
 const CHECKS = __CHECKS__;
 const ROUTES = __ROUTES__;
 const PARTS = [
-  ["stm32_tray", "STM32 받침 (발, 다리 4)", "#b9c0c8", "base", 0],
-  ["nucleo_f401re", "NUCLEO-F401RE", "#e9e9e9", "base", 1],
-  ["lower_deck", "하판 + 기둥", "#d5dae0", "base", 0],
+  ["lower_deck", "하판 + 기둥 (75 mm)", "#d5dae0", "base", 0],
+  ["nucleo_f401re", "NUCLEO-F401RE (상판 밑면, 거꾸로)", "#e9e9e9", "base", 1],
   ["pi5_stack", "Pi 5 + 쿨러 + AI HAT+", "#2f8a52", "base", 1],
   ["pan_cage", "Pan 서보 케이지 (귀 7 mm)", "#8d959e", "base", 0],
   ["pan_servo", "Pan 서보 STS3215", "#2a2d31", "base", 1],
-  ["top_deck", "상판", "#d5dae0", "base", 0],
+  ["top_deck", "상판 (밑면 STM32 받침 3)", "#d5dae0", "base", 0],
   ["driver_frame", "FE-URT-1 받침틀", "#7d6bd6", "base", 0],
   ["fe_urt_1", "FE-URT-1 서보 드라이버", "#1f4fa0", "base", 1],
   ["pan_horn", "Pan 혼", "#a7abb0", "pan", 1],
@@ -191,7 +189,7 @@ const PARTS = [
   ["tilt_cradle", "Tilt 크래들", "#e48a2a", "tilt", 0],
   ["camera", "Camera Module 3 Wide", "#1e6b45", "tilt", 1],
   ["fasteners_base", "나사 (원안 고정부)", "#d9bf4d", "base", 1],
-  ["fasteners_sa", "나사 (받침·받침틀·보드)", "#d9bf4d", "base", 1],
+  ["fasteners_sa", "나사 (받침틀·드라이버·Nucleo)", "#d9bf4d", "base", 1],
   ["fasteners_pan", "나사 (혼·팔)", "#d9bf4d", "pan", 1],
   ["fasteners_tilt", "나사 (카메라, 선택)", "#d9bf4d", "tilt", 1],
 ];
@@ -211,6 +209,7 @@ const ROUTE_STYLE = { "camera FPC": ["#d8a10f", "카메라 FPC"], "Pan->Tilt ser
     ["혼 위 틈 / 팔 창 / 받침판 홈", c.hub_gap_mm + " mm / " + c.arm_window_mm.join(" × ") + " / " + c.plate_notch_mm.join(" × ")],
     ["카메라 FPC (예산 " + c.fpc_budget_mm + ")", c.cable_mm["camera FPC"] + " mm"],
     ["Tilt −30° 가림 (회전부 / 고정부 최악)", pct(c.fov_self["-30"]) + " / " + pct(fb)],
+    ["Nucleo 핀 끝 / 점퍼 끝 → AI HAT+", c.stm32_board_to_hat_top_mm + " / " + c.stm32_plugs_to_hat_top_mm + " mm"],
     ["책상 → 상판 윗면 / Tilt축", h.desk_to_top_deck_top + " / " + h.desk_to_tilt_axis + " mm"],
   ];
   document.getElementById("cmp").innerHTML = "<tr><th>항목</th><th>값</th></tr>" + rows.map(([k, b]) => `<tr><td>${k}</td><td class="new">${b}</td></tr>`).join("");
@@ -304,7 +303,7 @@ document.getElementById("home").addEventListener("click", () => { if (HOME.p) fl
 let xray = false;
 document.getElementById("xray").addEventListener("click", e => {
   xray = !xray;
-  for (const n of ["top_deck", "lower_deck", "stm32_tray"]) { const m = meshes[n]; if (!m) continue; m.material.transparent = xray; m.material.opacity = xray ? 0.25 : 1; m.material.depthWrite = !xray; }
+  for (const n of ["top_deck", "lower_deck"]) { const m = meshes[n]; if (!m) continue; m.material.transparent = xray; m.material.opacity = xray ? 0.25 : 1; m.material.depthWrite = !xray; }
   e.target.classList.toggle("on", xray);
 });
 document.getElementById("cab").addEventListener("click", e => {
