@@ -480,11 +480,13 @@ def lap_frame(x, y, sh):
 
 LAP_Z0 = -DECK_T - JOINT_H                 # bottom of the overlap (step in the pillar)
 LAP_ZB = -DECK_T - JOINT_H / 2             # bolt axis
-LAP_FLAT = PILLAR_R - 0.8                  # flats for the bolt head (tab) and the nut (pillar)
-LAP_V = -1.0                               # v0.8.2: second cut line (plan-view L): pillar keeps u < 0 and v < LAP_V
-LAP_GAP_V = 0.3                            # gap on the side face (v), same as JOINT_GAP on the main face (u)
-LAP_BV = 1.0                               # v0.8.4: bolt line in v (was 2.05: the nut ran off its flat)
-LAP_FLAT_NUT = PILLAR_R - 1.4              # v0.8.4: deeper nut flat (chord +-3.7) so the whole nut sits flat
+# v0.8.6 (user, 11-16): back to a plain stepped half-lap, but the two halves are EQUAL - the cut sits on the
+# centre line with the gap split evenly, and both outer flats are at the same depth - so tab and pillar head have
+# the same section and one centred bolt carries the joint.
+LAP_FLAT = PILLAR_R - 1.2                  # both outer flats (head on the tab, nut on the pillar): chord +-3.46
+LAP_FLAT_NUT = LAP_FLAT
+LAP_BV = 0.0                               # bolt on the centre line
+LAP_BOLT_L = 12.0                          # 4.25 + 0.3 + 4.25 + nut 2.4 = 11.2 -> M3 x 12
 
 
 def cone_x(r_mouth, r_in, u_mouth, depth_dir, z, v=0.0):
@@ -495,29 +497,28 @@ def cone_x(r_mouth, r_in, u_mouth, depth_dir, z, v=0.0):
 
 
 def lap_tab(x, y):
-    """v0.7 (user, 11-14: pegs did not go in): stepped lap joint. The pillar keeps its inner half up to the deck,
-    the deck brings the outer half down as a tab. Nothing slides into a hole, so print error does not matter:
-    the deck rests on the pillar's inner half (one height datum), the tab stands JOINT_GAP off the cut face, and
-    one horizontal M3 bolt + nut pulls them together. The tab hole is a short vertical slot (+-JOINT_SLOT)."""
-    # v0.8.2 (user): seen from above the pillar head is an L (ㄴ: the inner half u < 0 plus the strip v < LAP_V)
-    # and the deck tab is the corner that fills it (ㄱ). The tab bears on TWO faces of the pillar (u and v), so
-    # sideways sway is held by shape, not only by the bolt; 0.3 mm gaps on both faces keep it print-error tolerant.
+    """Stepped half-lap (v0.7, equal halves since v0.8.6). The pillar keeps its inner half up to the deck, the deck
+    brings the outer half down as a tab of the same size. Nothing slides into a hole, so print error does not matter:
+    the deck rests on the pillar's half (one height datum), the halves stand JOINT_GAP apart, and one centred
+    horizontal M3 x 12 + nut pulls them together. The tab hole is a short vertical slot (+-JOINT_SLOT)."""
     r = PILLAR_R
-    t = cyl_z(r, LAP_Z0 + 0.5, -DECK_T + 0.01).intersect(box(JOINT_GAP, LAP_FLAT, LAP_V + LAP_GAP_V, r + 1, LAP_Z0, 0))
+    g2 = JOINT_GAP / 2
+    t = cyl_z(r, LAP_Z0 + 0.5, -DECK_T + 0.01).intersect(box(g2, LAP_FLAT, -r - 1, r + 1, LAP_Z0, 0))
     bv = LAP_BV
     slot = (cyl_x(1.7, -1, r + 1, LAP_ZB - JOINT_SLOT, bv).union(cyl_x(1.7, -1, r + 1, LAP_ZB + JOINT_SLOT, bv))
             .union(box(-1, r + 1, bv - 1.7, bv + 1.7, LAP_ZB - JOINT_SLOT, LAP_ZB + JOINT_SLOT)))
     t = t.cut(slot)
-    for dz in (-JOINT_SLOT, 0.0, JOINT_SLOT):   # v0.8.4: entry chamfer on the head side (both ends of the slot)
+    for dz in (-JOINT_SLOT, 0.0, JOINT_SLOT):   # entry chamfer on the head side only (both ends of the slot)
         t = t.cut(cone_x(1.7 + 0.6, 1.7, LAP_FLAT, -1, LAP_ZB + dz, bv))
     return lap_frame(x, y, t)
 
 
 def lap_pillar_cut(x, y):
-    """What the lap joint removes from a pillar: the outer half over JOINT_H, the bolt hole, the nut flat."""
+    """What the lap joint removes from a pillar: the outer half (+ half the gap) over JOINT_H, the bolt hole and the
+    nut flat at the same depth as the tab's head flat."""
     r = PILLAR_R
-    c = box(0, r + 1, LAP_V, r + 1, LAP_Z0, 1)          # v0.8.2: only the u > 0, v > LAP_V corner is removed (ㄴ)
-    c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB, LAP_BV)).union(box(-r - 1, -LAP_FLAT_NUT, -r - 1, r + 1, LAP_ZB - 4, LAP_ZB + 4))
+    c = box(-JOINT_GAP / 2, r + 1, -r - 1, r + 1, LAP_Z0, 1)
+    c = c.union(cyl_x(1.7, -r - 1, 1, LAP_ZB, LAP_BV)).union(box(-r - 1, -LAP_FLAT_NUT, -r - 1, r + 1, LAP_Z0 - 0.01, -DECK_T + 0.01))
     return lap_frame(x, y, c)
 
 
@@ -883,10 +884,10 @@ def mouth_is_entry(c, n, r, mates):
     """c: mouth centre, n: outward face normal, r: hole radius. True if a recorded screw goes INTO the part here
     (axis through c, head on the outside) and no mate solid sits against the face around the hole."""
     hit = False
-    for p, d in SCREWS:
+    for p, d, ln in SCREWS:
         w = c - p
         along = w.dot(d)
-        if along < -0.6:                        # mouth behind the head
+        if along < -0.6 or along > ln + 0.5:    # mouth behind the head or past the screw tip
             continue
         if (w - d * along).Length > 0.7:        # not on this screw's axis
             continue
@@ -1185,14 +1186,14 @@ def eye_plate():
 SCREWS = []   # v0.8.5: (head seat point, unit shank direction) of every screw, filled by the fastener builders
 
 
-def note_screw(p, d):
-    SCREWS.append((cq.Vector(*p), cq.Vector(*d).normalized()))
+def note_screw(p, d, length=10.0):
+    SCREWS.append((cq.Vector(*p), cq.Vector(*d).normalized(), length))
 
 
 def m3(x, y, z_head, up=True, nut_z=None, length=10.0, nut_rot=None):
     """M3 socket-head screw (head d5.5 x 3) with its seat at z_head, shank `length` toward +Z (up) or -Z."""
     sgn = 1 if up else -1
-    note_screw((x, y, z_head), (0, 0, sgn))
+    note_screw((x, y, z_head), (0, 0, sgn), length)
     head = cyl_z(2.75, z_head - 3.0, z_head) if up else cyl_z(2.75, z_head, z_head + 3.0)
     shank = cyl_z(1.5, *sorted((z_head, z_head + sgn * length)), x=0, y=0)
     out = head.union(shank).translate((x, y, 0))
@@ -1225,17 +1226,17 @@ def fasteners():
     for x, y in ARM_BOLTS():   # foot (6) + disc (5) + exposed nut under the disc
         pan = pan.union(m3(x, y, DISC_Z0 + DISC_T + ARM_FOOT_T, up=False, length=ARM_BOLT_L,
                            nut_z=sum(arm_bolt_under(x, y)) - NUT_H, nut_rot=0.0))
-    for x, y in PILLARS:                 # v0.7 lap joint: M3x16 from the outer flat of the tab, nut on the pillar's inner flat
-        b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB, LAP_BV).union(cyl_x(1.5, LAP_FLAT - 16.0, LAP_FLAT, LAP_ZB, LAP_BV))
+    for x, y in PILLARS:                 # lap joint: M3x12 from the outer flat of the tab, nut on the pillar's outer flat
+        b = (cyl_x(2.75, LAP_FLAT, LAP_FLAT + 3.0, LAP_ZB, LAP_BV).union(cyl_x(1.5, LAP_FLAT - LAP_BOLT_L, LAP_FLAT, LAP_ZB, LAP_BV))
              .union(hex_z(NUT_AF, 0, NUT_H, 0, 0).rotate((0, 0, 0), (0, 1, 0), 90).translate((-LAP_FLAT_NUT - 0.01, LAP_BV, LAP_ZB))))
         base = base.union(lap_frame(x, y, b))
         a = math.radians(pillar_slot_dir(x, y))
         ca, sa = math.cos(a), math.sin(a)
-        note_screw((x + LAP_FLAT * ca - LAP_BV * sa, y + LAP_FLAT * sa + LAP_BV * ca, LAP_ZB), (-ca, -sa, 0))
+        note_screw((x + LAP_FLAT * ca - LAP_BV * sa, y + LAP_FLAT * sa + LAP_BV * ca, LAP_ZB), (-ca, -sa, 0), LAP_BOLT_L)
     for lx, ly in PI_HOLES:              # M2.5 x 5 down through the Pi into the nut under the lower deck
         x, y = pi_to_deck(lx, ly)
         zt = LOWER_TOP + PI_STANDOFF + PI_PCB
-        note_screw((x, y, zt), (0, 0, -1))
+        note_screw((x, y, zt), (0, 0, -1), PI_SCREW_L)
         f = cyl_z(M25_HEAD_D / 2, zt, zt + M25_HEAD_H, x, y).union(cyl_z(1.25, zt - PI_SCREW_L, zt, x, y))
         base = base.union(f)
     return base, pan
@@ -1252,7 +1253,7 @@ def fasteners_tilt():
     elif CAM_MOUNT == "E":   # optional stop screws under the board's bottom edge, head in front of the lip
         pts = [(sg * (CAM_W / 2 - 0.6), top - CAM_H - 1.4, x_head + 0.15 + 1.25) for sg in (1, -1)]
     for hy, z, xh in pts:
-        note_screw((xh, hy, z), (-1, 0, 0))
+        note_screw((xh, hy, z), (-1, 0, 0), CAM_SCREW_L)
         f = cyl_x(M2_HEAD_D / 2, xh, xh + M2_HEAD_H, z, hy).union(cyl_x(1.0, xh - CAM_SCREW_L, xh, z, hy))
         out = f if out is None else out.union(f)
     if out is None:          # D / F: nothing bought; keep a tiny placeholder so the part list stays the same

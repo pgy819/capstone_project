@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.8.5):
+"""Build the hand-off package of the current gimbal geometry (v0.8.6):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,7 +25,7 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v085"
+VER = "v086"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
@@ -35,7 +35,7 @@ PRINTED = [
     ("C02", "horn_gauge", "혼 게이지 (지름 20~27 턱 + 두께 3.0~6.0 홈)", "-", 1, "그대로", "PLA 100 %, 층 0.2", 1),
 ] + [(f"C03{v}", f"cam_coupon_{v}", f"카메라 고정 샘플 {v}: {g.CAM_VARIANTS[v]}", "-", 0, "가운데 판 뒷면이 바닥", "PLA 100 %, 층 0.12~0.16", 1)
      for v in "ABCDEF"] + [
-    ("P01", "top_deck", "상판 (아래 ㄱ자 혀 4개)", "BASE", 1, "윗면이 바닥(뒤집어서), 혀가 위로", "충전 25 %, 벽 3", 2),
+    ("P01", "top_deck", "상판 (아래 반원 혀 4개, 기둥과 같은 크기)", "BASE", 1, "윗면이 바닥(뒤집어서), 혀가 위로", "충전 25 %, 벽 3", 2),
     ("P02", "lower_deck", "하판 + 기둥 일체형", "BASE", 1, "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4, 리트랙션 켬", 2),
     ("P05", "pan_cage", "Pan 서보 케이지 (귀 4개: 뒤 2, 옆 2)", "BASE", 1, "바닥이 바닥", "충전 40 %, 벽 3", 3),
     ("P08", "turntable", "턴테이블 (높이 14 mm, 넓은 혼 자리 240°, 케이블 구멍 120°, 밑면 너트 홈)", "PAN", 1, "윗면이 바닥(뒤집어서), 혼 고리가 위로", "충전 60 %, 벽 4, 서포트: 빌드 플레이트에서만(가운데 구멍 속 기둥 하나)", 3),
@@ -158,7 +158,7 @@ def main():
             ("서보", "Feetech STS3215", 2, "Pan ID 1, Tilt ID 2 (혼·동봉 나사 포함)"),
             ("나사", "M3 × 10", 4, "케이지 4 (안내 구멍에 바로)"),
             ("나사 + 너트", "M3 × 12 + M3 너트", 4, "팔 → 턴테이블 관통, 너트는 밑면 육각 홈"),
-            ("나사 + 너트", "M3 × 16 + M3 너트", 4, "상판 혀 ↔ 기둥 (가로)"),
+            ("나사 + 너트", "M3 × 12 + M3 너트", 4, "상판 혀 ↔ 기둥 (가로, 가운데 1개씩)"),
             ("케이블 타이", "폭 4.8 이하, 길이 200 이상", 1, "Tilt 서보 들림 방지"),
             ("나사 (Pi)", "M2.5 × 8", 4, "Pi 위에서 5 mm 받침 안내 구멍에 바로"),
             ("나사 (카메라)", "M2 × 5", 2, "방식 E: 기판 아래 끝 멈춤 (선택). A~C 방식이면 4개"),

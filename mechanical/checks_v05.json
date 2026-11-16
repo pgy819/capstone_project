@@ -34,8 +34,8 @@
  "volumes_cm3": {
   "turntable_yoke": 62.7,
   "pan_cage": 19.07,
-  "top_deck": 76.61,
-  "lower_deck": 65.04,
+  "top_deck": 77.42,
+  "lower_deck": 64.0,
   "tilt_cradle": 6.13
  }
 }

@@ -1,4 +1,4 @@
-<title>2축 짐벌 v0.8.5</title>
+<title>2축 짐벌 v0.8.6</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -72,7 +72,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
   </div>
   <aside>
     <section>
-      <h1>상단부 2축 짐벌 v0.8.5</h1>
+      <h1>상단부 2축 짐벌 v0.8.6</h1>
       <p class="sub" id="lead"></p>
     </section>
     <section aria-labelledby="h-pose">
@@ -108,7 +108,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
       </table>
       <h2 style="margin-top:14px">v0.7 변경 (11/14)</h2>
       <table>
-        <tr><td>상판 ↔ 기둥</td><td>위에서 본 ㄱ/ㄴ: 상판 ㄱ자 혀가 기둥 ㄴ자 모서리에 두 면으로 맞닿음, 가로 M3 × 16 + 너트</td></tr>
+        <tr><td>상판 ↔ 기둥</td><td>계단식 반겹침: 같은 크기 반원 두 쪽, 가운데 가로 M3 × 12 + 너트 하나</td></tr>
         <tr><td>스토퍼 · 채널</td><td>제거. 서보 각도 제한(EEPROM)으로 보호</td></tr>
         <tr><td>혼 결합</td><td>턱 + 깎이는 돌기 6개 + 방사형 긴 구멍 (혼 지름은 혼 게이지 쿠폰으로 결정)</td></tr>
         <tr><td>Pi</td><td>받침 5 mm, M2.5 × 8, 하판 배선 구멍 3개</td></tr>
@@ -294,7 +294,7 @@ const fmtE = v => v.toExponential(2).replace("e-", "×10⁻").replace(/⁻(\d)/,
 const pct = v => (v * 100).toFixed(0) + " %";
 function fillTables() {
   const b = BEST, fb = Math.max(...Object.entries(b.fov_base).filter(([k]) => k.endsWith(",0")).map(([, v]) => v));
-  document.getElementById("lead").textContent = `상판-기둥 ㄱ/ㄴ 결합, Pan 축을 따라 올라오는 카메라 케이블, 혼 직결 Pan, 현장 맞춤형 혼 자리 버전입니다. Tilt 서보 몸체 ${ORIENT[b.orient]} 방향.`;
+  document.getElementById("lead").textContent = `상판-기둥 계단식 반겹침, Pan 축을 따라 올라오는 카메라 케이블, 혼 직결 Pan, 현장 맞춤형 혼 자리 버전입니다. Tilt 서보 몸체 ${ORIENT[b.orient]} 방향.`;
   const rows = [
     ["Tilt축 높이 (상판 윗면 기준)", b.H_TILT.toFixed(0) + " mm"],
     ["턴테이블 지름", b.disc_d.toFixed(0) + " mm"],
