@@ -143,6 +143,7 @@ WEB_X1 = CAM_BACK_X - CAM_BOSS           # web front face
 WEB_X0 = WEB_X1 - 2.5                    # web back face (CRADLE_WALL)
 CRADLE_X0 = 2 * (WEB_X0 + WEB_X1) / 2 - CRADLE_X1     # symmetric about the web
 
+NO_LIGHTEN = False                       # v1.0 candidate turns the disc lightening pockets off
 PAN_SOFT_LIMIT = 125.0                   # v0.9: inside the ~+-130 where the post meets the ribbon riser (checks)
 PAN_RANGE = 180.0                         # v0.7: cable loop sized for +-180 deg (+10 deg margin each side)
 CUP_R, CUP_WALL, CUP_H = 27.0, 2.0, 20.0  # v0.7: cable cup around the post (replaces the channel + stop)
@@ -885,7 +886,7 @@ def turntable_yoke():
         y = y.cut(gr.cut(lug))
     # lightening pockets in the disc (keep the ring under the arms solid)
     pr = min(7.0, ANNULUS / 2 - 1.0)
-    for a in (() if STOP == "axial" else (40, -40, 155, -140)):          # (+-60 dropped in v0.5.1: arm nut slots run there)
+    for a in (() if STOP == "axial" or NO_LIGHTEN else (40, -40, 155, -140)):          # (+-60 dropped in v0.5.1: arm nut slots run there)
         if abs(((a - HOLE_BUS[0]) + 180) % 360 - 180) < 25 or abs(((a - HOLE_FPC[0]) + 180) % 360 - 180) < 25:
             continue
         x, yy = polar(a, R_MID)
