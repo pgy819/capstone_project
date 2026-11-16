@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.9.1):
+"""Build the hand-off package of the current gimbal geometry (v0.9.2):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,7 +25,7 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v091"
+VER = "v092"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 

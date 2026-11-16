@@ -177,7 +177,13 @@ GROOVE_LUG_HALF = 4.0                     # groove stop: lug half-width on the t
 STOP_BLOCK_HALF = 5.0
 FIT_SHAFT = -0.05                        # radius allowance on printed pins/tubes that go into a bearing bore
 FIT_BORE = 0.15                          # printed bores that take a bearing OD (radius allowance)
-CABLE_HOLES = [(-26.0, -31.0, 16.0, 10.0),   # v0.7: USB-C plug beside the Pi power port (Pi edge at x = -38)
+PI_UNDER_SLOTS = False                  # v0.9.2 (user, 11-16): the vent-like slots under the Pi are filled in
+TOP_VENTS = True                        # v0.9.2 (user): vents in the top deck over the Pi - the warm air rises out
+VENT_W, VENT_PITCH = 3.0, 6.0           # vent slot width and spacing [mm]
+VENT_X = (-88.0, -42.0)                 # vent field over the Pi (Pi under the top deck: x -94..-38, y +-42.5)
+VENT_Y = (3.0, 33.0)                    # each vent row runs y +-(3..33): a 6 mm rib on the centre line stiffens the deck
+CABLE_HOLES = [(-29.0, -25.0, 14.0, 30.0),   # v0.9.2 (user): wider cable slot along the Pi's connector edge (x -38):
+                                             # USB-C + both micro-HDMI plugs pass (was 16 x 10 for USB-C only)
                (10.0, -38.0, 14.0, 14.0), (10.0, 38.0, 14.0, 14.0)]   # servo supply, STM32 / UART wires
 PI_WINDOW = None                        # top-deck opening over the Pi (tried 11-02, user reverted: slots in the lower deck instead)
 PI_SLOT_W, PI_SLOT_HALF_L = 4.5, 46.0     # long narrow slots in the lower deck under the Pi: cooling + cable pass
@@ -427,6 +433,13 @@ def top_deck():
     else:
         ex, ey = polar(*DECK_EXIT)
         deck = deck.cut(box(ex - min(6, ANNULUS / 2 - 0.5), ex + min(6, ANNULUS / 2 - 0.5), ey - (FPC_W + 4) / 2, ey + (FPC_W + 4) / 2, -DECK_T - 1, 1))
+    if TOP_VENTS:   # v0.9.2: rows of slots over the Pi (prints fine upside down: plain through slots)
+        n = int((VENT_X[1] - VENT_X[0]) // VENT_PITCH) + 1
+        for k in range(n):
+            xv = VENT_X[0] + k * VENT_PITCH
+            for sg in (1, -1):
+                ya, yb = sorted((sg * VENT_Y[0], sg * VENT_Y[1]))
+                deck = deck.cut(box(xv - VENT_W / 2, xv + VENT_W / 2, ya, yb, -DECK_T - 1, 1).edges("|Z").fillet(VENT_W / 2 - 0.01))
     for x, y in PILLARS:   # v0.7 lap joint: half-round tab under the deck on the outer side of each pillar
         deck = deck.union(lap_tab(x, y))
     for sx, sy in CAGE_BOLTS:       # cage bolts self-tap into the deck (no nut)
@@ -587,7 +600,7 @@ def lower_deck():
     for cx, cy, w, h in CABLE_HOLES:
         deck = deck.cut(box(cx - w / 2, cx + w / 2, cy - h / 2, cy + h / 2, zb - 1, LOWER_TOP + 1).edges("|Z").fillet(min(w, h) / 2 - 0.01))
     ox, oy = pi_origin()
-    for i in range(5):  # long narrow slots under the Pi (user, 11-02): air in from below + cables through
+    for i in range(5 if PI_UNDER_SLOTS else 0):  # long narrow slots under the Pi (user, 11-02; closed v0.9.2)
         xc = ox + 12 + i * 8
         deck = deck.cut(box(xc - PI_SLOT_W / 2, xc + PI_SLOT_W / 2, -PI_SLOT_HALF_L, PI_SLOT_HALF_L,
                             zb - 1, LOWER_TOP + 1).edges("|Z").fillet(PI_SLOT_W / 2 - 0.01))
