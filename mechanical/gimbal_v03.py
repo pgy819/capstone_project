@@ -196,6 +196,7 @@ MOUNT_TAB_ANGLES = (45, 135, 225, 315)
 NUT_AF, NUT_H = 5.5, 2.4                 # M3 nut across flats / height (ISO 4032)
 NUT_POCKET_AF, NUT_POCKET_H = 5.8, 2.6
 EAR_CLAMP = 5.0                          # ear material under the deck (5 + deck 5 = M3x10)
+CAGE_BOLT_L = 10.0                       # cage bolt length (EAR_CLAMP + DECK_T; the standalone variant uses 7 + 5 = M3x12)
 CAGE_BOLTS = ((42.0, 11.0), (42.0, -11.0), (-20.0, 0.0))   # outside the mount floor / clear of the shoulder
 PAN_BEARING = False                      # v0.6 (user, 11-12): no 6806; the turntable sits on the servo horn directly
 BOSS_PILOT = False                       # v0.5.2: horn sits 0.5 mm above the case (2.5 mm spline), no room                        # mount floor locates on the servo output boss -> 6806 coaxial with the shaft
@@ -1255,7 +1256,7 @@ def fasteners():
     base = None
     for sx, sy in CAGE_BOLTS:            # ear (5) + deck (5); inside the cable cup M3x8 so the deck top stays closed
         blind = STOP == "none" and math.hypot(sx, sy) < CUP_R + 1
-        f = m3(sx, sy, -DECK_T - EAR_CLAMP, length=8.0 if blind else 10.0)
+        f = m3(sx, sy, -DECK_T - EAR_CLAMP, length=8.0 if blind else CAGE_BOLT_L)
         base = f if base is None else base.union(f)
     tabs = deck_tabs()
     for a, r in tabs:                    # deck (5) + tab (5)
