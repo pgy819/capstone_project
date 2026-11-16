@@ -4,15 +4,15 @@
  "tilt_overlap_max_mm3": 0.0,
  "pan_overlap_max_mm3": 0.0,
  "pan_cable_free_deg": [
-  -20,
-  20
+  -130,
+  130
  ],
  "fpc_route_mm": 159,
  "fpc_budget_mm": 250.0,
  "cable_vs_fixed_mm3": 0.0,
  "stop_deg": null,
  "fov_self": {
-  "-30": 0.2376,
+  "-30": 0.1825,
   "0": 0.0,
   "30": 0.0
  },
@@ -32,7 +32,7 @@
  "cradle_in_60deg_cone": 0.0,
  "boresight_down_deg": -34,
  "volumes_cm3": {
-  "turntable_yoke": 62.7,
+  "turntable_yoke": 46.5,
   "pan_cage": 19.07,
   "top_deck": 77.42,
   "lower_deck": 64.0,

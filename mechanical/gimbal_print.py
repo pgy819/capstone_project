@@ -43,7 +43,8 @@ def split_yoke(yoke, y_srv_in, y_srv_out, y_idle_in):
     big = 500.0
     # v0.7 fix: clip to the disc - the tilt-servo channel walls start 0.1 mm below the disc top and left two
     # 0.1 mm slivers hanging outside the disc on the turntable since v0.5.4
-    turntable = yoke.intersect(g.box(-big, big, -big, big, -big, z_top)).intersect(g.cyl_z(g.DISC_R + 0.01, -big, z_top + 1))
+    clip = g.table_prism(-big, z_top + 1) if g.STOP == "axial" else g.cyl_z(g.DISC_R + 0.01, -big, z_top + 1)
+    turntable = yoke.intersect(g.box(-big, big, -big, big, -big, z_top)).intersect(clip)
     upper = yoke.cut(g.box(-big, big, -big, big, -big, z_top))
     ys = 0.0
     arm_s = upper.intersect(g.box(-big, big, ys, big, z_top, big))

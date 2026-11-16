@@ -1,4 +1,4 @@
-"""Build the hand-off package of the current gimbal geometry (v0.8.6):
+"""Build the hand-off package of the current gimbal geometry (v0.9):
 
   gimbal_v051_package/
     README_먼저읽기.md
@@ -25,7 +25,7 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v086"
+VER = "v090"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)          # Cubicon Style NEO-A22C build volume [mm]
 
@@ -38,7 +38,7 @@ PRINTED = [
     ("P01", "top_deck", "상판 (아래 반원 혀 4개, 기둥과 같은 크기)", "BASE", 1, "윗면이 바닥(뒤집어서), 혀가 위로", "충전 25 %, 벽 3", 2),
     ("P02", "lower_deck", "하판 + 기둥 일체형", "BASE", 1, "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4, 리트랙션 켬", 2),
     ("P05", "pan_cage", "Pan 서보 케이지 (귀 4개: 뒤 2, 옆 2)", "BASE", 1, "바닥이 바닥", "충전 40 %, 벽 3", 3),
-    ("P08", "turntable", "턴테이블 (높이 14 mm, 넓은 혼 자리 240°, 케이블 구멍 120°, 밑면 너트 홈)", "PAN", 1, "윗면이 바닥(뒤집어서), 혼 고리가 위로", "충전 60 %, 벽 4, 서포트: 빌드 플레이트에서만(가운데 구멍 속 기둥 하나)", 3),
+    ("P08", "turntable", "턴테이블 (혼 고리 + 40° 기둥 + 50×49 테이블, 밑면 너트 홈)", "PAN", 1, "윗면이 바닥(뒤집어서), 혼 고리가 위로", "충전 60 %, 벽 4, 서포트: 모든 곳(트리, 혼 고리 아래 2 mm 틈)", 3),
     ("P09", "arm_servo", "서보쪽 팔 (서보 채널·받침판)", "PAN", 1, "발이 바닥(세워서), 브림", "충전 60 %, 벽 4, 받침판 아래 25 mm 브리지", 4),
     ("P10", "arm_idle", "부싱쪽 팔 (위에서 끼우는 축 자리)", "PAN", 1, "바깥면이 바닥(눕혀서)", "충전 60 %, 벽 4", 4),
     ("P11", "tilt_cradle", f"Tilt 크래들 (H형, 카메라 고정 {g.CAM_MOUNT})", "TILT", 1, "위쪽 끝이 바닥(뒤집어서)", "충전 60 %, 벽 4", 4),
@@ -60,7 +60,7 @@ PARAMS = [  # (name, description) -> value read from the generator
     ("DECK_T", "상판·하판 두께"), ("BASE_GAP", "상판 밑면 ~ 하판 윗면"), ("PILLAR_R", "기둥 반지름"),
     ("H_TILT", "Tilt축 높이 (상판 윗면 기준)"), ("DISC_R", "턴테이블 반지름"), ("DISC_T", "턴테이블 두께"),
     ("HORN_D", "혼 지름 (혼 게이지로 결정)"), ("HORN_T", "혼 두께 (혼 게이지로 결정)"), ("HORN_CLR", "혼 턱 반지름 여유"),
-    ("HORN_RIB", "혼 턱 돌기 높이 (net 0.2 눌림)"), ("AX_HOLE_R", "턴테이블 가운데 구멍 반지름"), ("AX_OPEN", "케이블 구멍 각도 [deg]"), ("AX_HUB_W", "넓은 혼 자리 반지름"), ("AX_SLOT", "케이블 틈 높이"),
+    ("HORN_RIB", "혼 턱 돌기 높이 (net 0.2 눌림)"), ("AX_HOLE_R", "턴테이블 가운데 구멍 반지름"), ("AX_POST", "기둥 각도 [deg]"), ("AX_RING_R", "혼 위 고리 반지름"), ("AX_SLOT", "케이블 틈 높이"),
     ("AX_RISE_X", "케이블이 올라오는 자리 (축에서 뒤로)"), ("DISC_Z0", "턴테이블 밑면 높이"), ("JOINT_H", "상판-기둥 겹침 높이"), ("JOINT_GAP", "혀-기둥 틈"),
     ("SV_H", "서보 높이 (뒷면~축 면, 실측)"), ("SV_BOSS_H", "톱니 돌출 (실측 2~3)"),
     ("PILOT_R", "M3 안내 구멍 반지름"), ("EAR_CLAMP", "케이지 귀 체결 두께"),

@@ -143,7 +143,7 @@ WEB_X1 = CAM_BACK_X - CAM_BOSS           # web front face
 WEB_X0 = WEB_X1 - 2.5                    # web back face (CRADLE_WALL)
 CRADLE_X0 = 2 * (WEB_X0 + WEB_X1) / 2 - CRADLE_X1     # symmetric about the web
 
-PAN_SOFT_LIMIT = 15.0                    # v0.8.3: 5 deg inside the +-20 where the hub edge meets the flat ribbon
+PAN_SOFT_LIMIT = 125.0                   # v0.9: inside the ~+-130 where the post meets the ribbon riser (checks)
 PAN_RANGE = 180.0                         # v0.7: cable loop sized for +-180 deg (+10 deg margin each side)
 CUP_R, CUP_WALL, CUP_H = 27.0, 2.0, 20.0  # v0.7: cable cup around the post (replaces the channel + stop)
 CUP_TAB_ANGLES = (45, 135, 225, 315)
@@ -152,9 +152,15 @@ CUP_TAB_R = CUP_R + CUP_WALL + 4.0
 AX_FLOOR = 5.0                             # hub floor over the horn (screw heads counterbored AX_CB deep, flush)
 AX_CB = 3.0
 AX_SLOT = 2.0                              # v0.8.2: flat ribbon passage between the hub floor and the disc
-AX_OPEN = 120.0                            # v0.8.3 (user: plan 2): cable opening behind, the rest (240 deg) joined
-AX_HUB_W = 24.0                            # wide hub radius, joined to the disc over the 240 deg
-AX_HUB_LOW_R = 17.5                        # below the floor the hub ring thickens to this radius (front 240 deg)
+AX_OPEN = 120.0                            # (v0.8.3 240-deg hub; kept for in_hub() of older variants)
+AX_HUB_W = 24.0
+AX_HUB_LOW_R = 17.5
+# v0.9 (user, 11-16: the ribbon bends easily -> pan range back to the earlier setting; the table need not be round):
+AX_RING_R = 15.8                           # full round ring on the horn (clear of the ribbon riser at r 16.7)
+AX_POST = 40.0                             # ONE post from the ring up to the table, in front, this wide [deg]
+AX_POST_R = (13.5, 30.0)                   # post radii below the floor (merges with the ring) ...
+AX_POST_R_UP = 17.6                        # ... and above it (clear of the flat ribbon leg, which ends at r 16.7)
+TABLE = (-19.0, 31.0, -26.0, 23.0, 6.0)    # table outline: x0, x1, y0, y1, corner radius (arm feet + post top)
 AX_FILL_R0 = 12.5                          # open inside (driver access to the horn screws through the centre hole)
 FPC_BUDGET = 250.0                         # user: 300 mm camera cable, plan with 250 mm
 AX_HOLE_R = 12.0                           # turntable centre hole: ribbon out + screwdriver to the horn screws
@@ -743,7 +749,7 @@ ARM_NUT_POCKET_DISC = 3.0   # ... and where only the 5 mm disc is (bolts in the 
 
 def arm_bolt_under(x, y):
     """Underside height and nut recess depth at an arm bolt."""
-    if STOP == "axial" and in_hub(x, y):
+    if STOP == "axial" and in_post(x, y):
         return PAN_HORN_Z + HORN_T + AX_FLOOR, ARM_NUT_POCKET
     return DISC_Z0, (ARM_NUT_POCKET_DISC if STOP == "axial" else ARM_NUT_POCKET)
 
@@ -780,6 +786,7 @@ def turntable_yoke():
         for b in fb.values():
             y = y.union(b)
     elif STOP == "axial":
+        disc = table_prism(DISC_Z0, z_disc_top)
         y = disc.union(axial_hub()).cut(cyl_z(AX_HOLE_R, DISC_Z0 - 1, z_disc_top + 1))
     else:
         # v0.6 (user): no bearing, no flexure, no separate hub. A post grows down from the disc onto the servo horn
@@ -862,7 +869,7 @@ def turntable_yoke():
         y = y.cut(gr.cut(lug))
     # lightening pockets in the disc (keep the ring under the arms solid)
     pr = min(7.0, ANNULUS / 2 - 1.0)
-    for a in (40, -40, 155, -140):          # (+-60 dropped in v0.5.1: arm nut slots run there)
+    for a in (() if STOP == "axial" else (40, -40, 155, -140)):          # (+-60 dropped in v0.5.1: arm nut slots run there)
         if abs(((a - HOLE_BUS[0]) + 180) % 360 - 180) < 25 or abs(((a - HOLE_FPC[0]) + 180) % 360 - 180) < 25:
             continue
         x, yy = polar(a, R_MID)
@@ -990,21 +997,40 @@ def in_hub(x, y):
 
 
 def axial_hub():
-    """v0.8.3 (user, 11-14: plan 2 of the 240-deg samples). The turntable is 14 mm high: horn ring (pocket, crush
-    ribs, radial slots, heads sunk), a wide hub (r 24) joined to the disc over the front 240 deg, and only the
-    cable opening (120 deg, behind) left open. The ribbon comes up beside the pan cage, bends flat into the 2 mm
-    slot over the hub floor, reaches the axis and bends up through the centre hole. Its 16 mm width takes most of
-    the opening near the axis: pan range about +-20 deg (measured in the checks)."""
+    """v0.9 (user, 11-16). Round ring on the horn (pocket, crush ribs, radial slots, heads sunk), and ONE 40-deg post
+    in front that carries the table. The flat ribbon comes up behind the cage end (r 16.7), lies in the 2 mm slot over
+    the ring and goes up the axis: the post is the only thing that turns through the ribbon's path, so pan is free
+    until the post meets the riser behind (about +-130 deg, measured in the checks)."""
     z0 = PAN_HORN_Z + HORN_T
     zf = z0 + AX_FLOOR
-    ring = cyl_z(HUB_R, z0 - HORN_DEPTH, zf)
+    ring = cyl_z(AX_RING_R, z0 - HORN_DEPTH, zf)
     ring = ring.cut(horn_pocket(z0 - HORN_DEPTH - 1, z0, "z"))
     ring = ring.cut(horn_slots(z0 - 1, zf + 1, zf - AX_CB, "z"))
     ring = ring.cut(cyl_z(3.25, z0 - 1, zf + 1))                                # spline screw access
-    hub = hub_sector(HUB_R - 0.6, AX_HUB_LOW_R, z0 - HORN_DEPTH, zf + 0.01).union(   # thick ring beside the horn
-        hub_sector(AX_FILL_R0, AX_HUB_W, zf - 0.3, DISC_Z0 + 0.01))                  # joined to the disc
-    out = ring.union(hub).clean()
+    h = AX_POST / 2
+    post = (sector_z(AX_POST_R[0], AX_POST_R[1], -h, h, z0 - HORN_DEPTH, zf + 0.01)
+            .union(sector_z(AX_POST_R_UP, AX_POST_R[1], -h, h, zf - 0.3, DISC_Z0 + 0.01)))
+    out = ring.union(post).clean()
     return cq.Workplane("XY").add(max(out.solids().vals(), key=lambda v: v.Volume()))
+
+
+def sector_z(r0, r1, a0, a1, z0, z1):
+    am = (a0 + a1) / 2
+    return (cq.Workplane("XY").moveTo(*polar(a0, r0)).lineTo(*polar(a0, r1))
+            .threePointArc(polar(am, r1), polar(a1, r1)).lineTo(*polar(a1, r0))
+            .threePointArc(polar(am, r0), polar(a0, r0)).close()
+            .extrude(z1 - z0).translate((0, 0, z0)))
+
+
+def table_prism(z0, z1):
+    """v0.9: the table keeps only the area it needs - arm feet, the post top and a frame round the cable hole."""
+    x0, x1, y0, y1, rc = TABLE
+    return box(x0, x1, y0, y1, z0, z1).edges("|Z").fillet(rc)
+
+
+def in_post(x, y):
+    a = math.degrees(math.atan2(y, x))
+    return abs(a) <= AX_POST / 2 and AX_POST_R_UP <= math.hypot(x, y) <= AX_POST_R[1]
 
 
 def fpc_fixed(t=0.4):
