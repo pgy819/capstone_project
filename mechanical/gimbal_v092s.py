@@ -33,16 +33,19 @@ import gimbal_print as gp
 import gimbal_v03 as g
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VER = "v092s"
+MODE = os.environ.get("V092S_MODE", "top")   # "top": STM32 upside down under the top deck (main), "L": plan B, on an L lobe
+assert MODE in ("top", "L")
+VER = "v092s" if MODE == "top" else "v092sb"
 PKG = os.path.join(HERE, f"gimbal_{VER}_package")
 BED = (220.0, 220.0, 200.0)
+DOC = "V092S_STANDALONE.md" if MODE == "top" else "V092SB_L_DECK.md"
 
 # ----------------------------------------------------------------------------- v0.9.2 parameters changed here
 g.AX_SLOT = 5.0          # ribbon gap over the hub: 2 -> 5 so the 5264 plug of the Pan -> Tilt cable passes (4.4 thick)
 g.EAR_CLAMP = 7.0        # cage ears 5 -> 7: M3 x 12 = ear 7 + deck 5 (there is no M3 x 10)
 g.CAGE_BOLT_L = 12.0
 g.CAM_SCREW_L = 6.0      # camera stop screws M2 x 6 (there is no M2 x 5)
-g.BASE_GAP = 75.0        # deck gap 55 -> 75: STM32 hangs between the top deck and the Pi stack; its lowest pins
+g.BASE_GAP = 75.0 if MODE == "top" else 55.0   # top: deck gap 55 -> 75: STM32 hangs between the top deck and the Pi stack; its lowest pins
                          # end 18 mm over the AI HAT+ (room for the jumpers on the Pi GPIO), its own plugged jumpers 8 mm over it
 g.LOWER_TOP = -g.DECK_T - g.BASE_GAP
 gp.configure()           # v0.9.2 variant (axial); DISC_Z0 and H_TILT follow AX_SLOT
@@ -54,7 +57,7 @@ DRV_HOLE = (28.8 / 2, 48.8 / 2)            # half spacing along x (board width) 
 DRV_X = -79.5                              # board centre on the deck (long side along y)
 FRAME_T, FRAME_BAR, FRAME_SO = 3.0, 8.0, 6.0   # frame base, bar width, standoff height above the base
 DRV_DECK_SCREWS = [(DRV_X - DRV_HOLE[0], 0.0), (DRV_X + DRV_HOLE[0], 0.0)]   # on the solid rib between the vent rows
-TOP_WIRE_HOLE = (DRV_X, 47.5, 20.0, 7.0)   # driver wires down through the top deck (x, y, w, h)
+TOP_WIRE_HOLE = (DRV_X, 47.5 if MODE == "top" else -47.5, 20.0, 7.0)   # driver wires down through the top deck (x, y, w, h)
 
 # NUCLEO-64 (MB1136): from ST's 3D model (NUCLEO-F411RE, same board): PCB x -43.89..26.11, y -2.5..80 (70 x 82.5),
 # M3 holes (oval 3.3 x 4.9 along y) at (0, 0), (15.24, 50.8), (-33.02, 52.07); mini USB at the y = 80 edge.
@@ -73,6 +76,11 @@ NUC_CX = -71.89         # deck x = NUC_CX - x_board  -> x -98.0 .. -28.0
 NUC_CY = -38.75         # deck y = y_board + NUC_CY  -> y -41.25 .. +41.25
 NUC_SO = 9.5            # standoffs under the deck (the board's back-side morpho pins stand 8.0 up)
 PLUG_ROOM = 21.0        # under the component face: header 9.3 + female jumper housing + bend
+# plan B (MODE "L", team's choice): the lower deck grows an L lobe on its -Y side (behind the Pi's PCIe end, away from
+# the HDMI plugs and the USB-A ports); the board lies on it component side up, long side along x, USB to the back
+NUC_L_C1, NUC_L_C2 = -18.0, -83.11   # deck x = C1 - y_board (-98 .. -15.5), deck y = x_board + C2 (-127 .. -57)
+NUC_L_SO = 10.0          # standoffs on the lobe (back-side morpho pins 8.0)
+LOBE = (-100.0, -12.0, -131.0)       # lobe x0, x1, outer y (inner side is the deck edge y = -55)
 
 # Pan -> Tilt bus cable
 BUS_T, BUS_W = 1.6, 3.8                      # 3-core servo cable
@@ -84,16 +92,22 @@ PLATE_NOTCH = (11.0, 3.5)                    # notch in the back edge of the loa
 
 def z_nuc_mid():
     """Board mid-plane (board z = 0)."""
+    if MODE == "L":
+        return g.LOWER_TOP + NUC_L_SO + 0.75
     return -g.DECK_T - NUC_SO - 0.75
 
 
 def nuc_to_deck(xb, yb):
+    if MODE == "L":
+        return NUC_L_C1 - yb, xb + NUC_L_C2
     return NUC_CX - xb, yb + NUC_CY
 
 
 def nuc_box(x0, x1, y0, y1, z0, z1):
     (xa, ya), (xb, yb) = nuc_to_deck(x0, y0), nuc_to_deck(x1, y1)
     zm = z_nuc_mid()
+    if MODE == "L":                                   # component side up
+        return g.box(min(xa, xb), max(xa, xb), min(ya, yb), max(ya, yb), zm + z0, zm + z1)
     return g.box(min(xa, xb), max(xa, xb), min(ya, yb), max(ya, yb), zm - z1, zm - z0)
 
 
@@ -104,7 +118,8 @@ def nuc_plug_keepout():
     for b in NUC_BLOCKS[:4]:
         x0, x1, y0, y1 = b[:4]
         (xa, ya), (xb, yb) = nuc_to_deck(x0 - 0.5, y0), nuc_to_deck(x1 + 0.5, y1)
-        bx = g.box(min(xa, xb), max(xa, xb), min(ya, yb), max(ya, yb), zm - 0.75 - PLUG_ROOM, zm - 0.75)
+        za, zb = (zm + 0.75, zm + 0.75 + PLUG_ROOM) if MODE == "L" else (zm - 0.75 - PLUG_ROOM, zm - 0.75)
+        bx = g.box(min(xa, xb), max(xa, xb), min(ya, yb), max(ya, yb), za, zb)
         k = bx if k is None else k.union(bx)
     return k
 
@@ -164,6 +179,8 @@ def top_deck_mod(deck):
     deck = deck.cut(g.box(x - w / 2, x + w / 2, y - h / 2, y + h / 2, -g.DECK_T - 1, 1).edges("|Z").fillet(h / 2 - 0.01))
     for x, y in DRV_DECK_SCREWS:
         deck = deck.cut(g.cyl_z(g.PILOT_R, -g.DECK_T - 1, 1, x, y))
+    if MODE == "L":
+        return deck
     # STM32 standoffs hanging from the underside (they print standing: the deck prints top face down); the vent slots
     # are filled back in round each standoff so it grows from solid deck
     zs = -g.DECK_T - NUC_SO
@@ -174,6 +191,22 @@ def top_deck_mod(deck):
         deck = deck.union(cq.Workplane("XY").workplane(offset=-g.DECK_T - 1.5).center(x, y).circle(3.5)
                           .workplane(offset=1.51).circle(5.0).loft())
         deck = deck.cut(g.cyl_z(g.PILOT_R, zs - 1, -1.0, x, y))                 # M3 self-taps, 1 mm top skin kept
+    return deck
+
+
+def lower_deck_L(deck):
+    """Plan B: L lobe on the lower deck's -Y side carrying the Nucleo (component side up) on 3 standoffs."""
+    zb = g.LOWER_TOP - g.LOWER_T
+    x0, x1, yo = LOBE
+    outline = g.box(g.DECK_X0, g.DECK_X1, -g.DECK_Y / 2, g.DECK_Y / 2, zb, g.LOWER_TOP).union(
+        g.box(x0, x1, yo, -g.DECK_Y / 2 + 1.0, zb, g.LOWER_TOP)).edges("|Z").fillet(6.0)
+    deck = deck.union(outline.cut(g.box(g.DECK_X0 - 1, g.DECK_X1 + 1, -g.DECK_Y / 2 + 0.5, g.DECK_Y / 2 + 1, zb - 1, g.LOWER_TOP + 1)))
+    zt = g.LOWER_TOP
+    for hx, hy in NUC_HOLES:
+        x, y = nuc_to_deck(hx, hy)
+        deck = deck.union(g.cyl_z(3.5, zt - 0.01, zt + NUC_L_SO, x, y))
+        deck = deck.union(cq.Workplane("XY").workplane(offset=zt - 0.01).center(x, y).circle(5.0).workplane(offset=1.5).circle(3.5).loft())
+        deck = deck.cut(g.cyl_z(g.PILOT_R, zb + 1.0, zt + NUC_L_SO + 1, x, y))       # M3 self-taps, 1 mm bottom skin kept
     return deck
 
 
@@ -210,10 +243,12 @@ def fasteners_sa():
     for sx in (1, -1):                                               # driver -> frame: M2.5 x 8
         for sy in (1, -1):
             out.append(screw((DRV_X + sx * DRV_HOLE[0], sy * DRV_HOLE[1], z_pcb_top), (0, 0, -1), 8.0, g.M25_HEAD_D, g.M25_HEAD_H, 1.25))
-    zp = z_nuc_mid() - 0.75
-    for hx, hy in NUC_HOLES:                                         # Nucleo -> deck standoffs: M3 x 12 from below (1.6 + 10.4)
+    for hx, hy in NUC_HOLES:                                         # Nucleo -> standoffs: M3 x 12 (1.6 + 10.4)
         x, y = nuc_to_deck(hx, hy)
-        out.append(screw((x, y, zp), (0, 0, 1), 12.0, 5.5, 3.0, 1.5))
+        if MODE == "L":                                              # from above, into the lobe standoffs
+            out.append(screw((x, y, z_nuc_mid() + 0.75), (0, 0, -1), 12.0, 5.5, 3.0, 1.5))
+        else:                                                        # from below, into the top-deck standoffs
+            out.append(screw((x, y, z_nuc_mid() - 0.75), (0, 0, 1), 12.0, 5.5, 3.0, 1.5))
     f = out[0]
     for s in out[1:]:
         f = f.union(s)
@@ -246,8 +281,10 @@ def routes():
     del R["tilt servo bus"]
     tx, ty, _, _ = TOP_WIRE_HOLE
     drv_port = (DRV_X, DRV_L / 2, FRAME_T + FRAME_SO + 6)
-    R["driver->Pan servo bus"] = [drv_port, (tx, ty, 2), (tx, ty, -g.DECK_T - 3), (tx, 49, -12), (-20, 30, -12),
-                                  (g.SV_L - g.SV_SHAFT_FROM_END + 6, 18, -20), (g.SV_L - g.SV_SHAFT_FROM_END + 6, 0, pan_conn[2]), pan_conn]
+    sg = 1 if ty > 0 else -1
+    drv_port = (DRV_X, sg * DRV_L / 2, FRAME_T + FRAME_SO + 6)
+    R["driver->Pan servo bus"] = [drv_port, (tx, ty, 2), (tx, ty, -g.DECK_T - 3), (tx, sg * 49, -12), (-20, sg * 30, -12),
+                                  (g.SV_L - g.SV_SHAFT_FROM_END + 6, sg * 18, -20), (g.SV_L - g.SV_SHAFT_FROM_END + 6, 0, pan_conn[2]), pan_conn]
     zh = z_nuc_mid() - 0.75 - 14.0                                  # jumper housing ends under the board
     zw = z_nuc_mid() - 0.75 - 18.0
     mx, my = nuc_to_deck(21.6, 40.0)                                 # CN10 (USART6 PC6/PC7)
@@ -259,6 +296,16 @@ def routes():
     R["STM32<->Pi UART"] = [(gx, gy, hat_top + 2), (gx, gy, hat_top + 6), (px, py, zw), (px, py, zh)]
     ux, uy = nuc_to_deck(3.2, 81.5)
     R["STM32 USB (ST-LINK)"] = [(ux, uy, z_nuc_mid() - 3), (ux, 50, z_nuc_mid() - 3), (ux, 52, hat_top - 6), (-80, 48, hat_top - 12)]
+    if MODE == "L":                                                  # board on the lobe, headers face up
+        zh = z_nuc_mid() + 0.75 + 14.0
+        zw = z_nuc_mid() + 0.75 + 18.0
+        cx10, cy10 = nuc_to_deck(21.6, 40.0)                         # CN10, the inner row (next to the deck edge)
+        R["STM32<->driver UART"] = [(cx10, cy10, zh), (cx10, cy10, zw), (tx, -58, -10), (tx, ty, -g.DECK_T - 3), (tx, ty, 2),
+                                    (DRV_X + 10, -DRV_L / 2, FRAME_T + FRAME_SO + 4)]
+        px, py = nuc_to_deck(21.6, 20.0)
+        R["STM32<->Pi UART"] = [(gx, gy, hat_top + 2), (gx, gy, hat_top + 8), (gx + 4, -50, hat_top + 6), (px, -58, zw), (px, py, zw), (px, py, zh)]
+        R["STM32 USB (ST-LINK)"] = [(ux, uy, z_nuc_mid() + 3), (g.DECK_X0 - 8, uy, z_nuc_mid() + 3), (g.DECK_X0 - 8, 60, hat_top - 6),
+                                    (-80, 60, hat_top - 12), (-80, 48, hat_top - 12)]
     del R["servo bus to STM32"], R["UART to STM32"]
     return R
 
@@ -275,7 +322,7 @@ def build():
         g.chamfer_holes = real_chamfer
     fsa = fasteners_sa()                                               # adds the new screws to g.SCREWS
     P = {}
-    P["lower_deck"] = (parts["lower_deck"][0], True, "base")
+    P["lower_deck"] = (lower_deck_L(parts["lower_deck"][0]) if MODE == "L" else parts["lower_deck"][0], True, "base")
     P["top_deck"] = (top_deck_mod(parts["top_deck"][0]), True, "base")
     P["pan_cage"] = (parts["pan_cage"][0], True, "base")
     P["driver_frame"] = (driver_frame(), True, "base")
@@ -316,7 +363,7 @@ EXPECTED = {
     ("fe_urt_1", "fasteners_sa"), ("driver_frame", "fasteners_sa"), ("top_deck", "fasteners_sa"),
     ("nucleo_f401re", "fasteners_sa"), ("nucleo_f401re", "keepout STM32 jumper plugs"), ("fasteners_sa", "keepout STM32 jumper plugs"),
     ("top_deck", "pan_cage"), ("top_deck", "driver_frame"), ("driver_frame", "fe_urt_1"),
-    ("top_deck", "nucleo_f401re"), ("lower_deck", "pi5_stack"),
+    ("top_deck", "nucleo_f401re"), ("lower_deck", "nucleo_f401re"), ("lower_deck", "fasteners_sa"), ("lower_deck", "pi5_stack"),
 }
 
 
@@ -381,9 +428,14 @@ def checks(P, K):
                          "H_TILT_over_deck": g.H_TILT, "DISC_Z0": g.DISC_Z0, "BASE_GAP": g.BASE_GAP}
     # STM32 envelope + plugged jumpers above the AI HAT+
     pi_top = g.LOWER_TOP + g.PI_STANDOFF + g.PI_STACK_H
-    res["stm32_plugs_to_hat_top_mm"] = round(float(KM["keepout STM32 jumper plugs"].bounds[0][2] - pi_top), 1)
-    res["stm32_board_to_hat_top_mm"] = round(float(M["nucleo_f401re"].bounds[0][2] - pi_top), 1)
-    res["pi_gpio_jumpers_mm"] = 18.0
+    if MODE == "top":
+        res["stm32_plugs_to_hat_top_mm"] = round(float(KM["keepout STM32 jumper plugs"].bounds[0][2] - pi_top), 1)
+        res["stm32_board_to_hat_top_mm"] = round(float(M["nucleo_f401re"].bounds[0][2] - pi_top), 1)
+        res["pi_gpio_jumpers_mm"] = 18.0
+    else:
+        bb = M["lower_deck"].bounds
+        res["footprint_mm"] = [round(float(v), 1) for v in bb[1][:2] - bb[0][:2]]
+        res["stm32_plugs_top_to_top_deck_underside_mm"] = None   # lobe is outside the top deck: open above
     res["screws"] = SCREW_TABLE
     res["chamfers"] = {k: v for k, v in g.CHAMFER_LOG.items()}
     res["volumes_cm3"] = {n: round(M[n].volume / 1000, 1) for n, v in P.items() if v[1]}
@@ -391,7 +443,7 @@ def checks(P, K):
 
 
 SCREW_TABLE = {   # every screw of this variant, all from the user's stock (M2 x 6, M2.5 x 8, M3 x 8/12/16, M3 nuts)
-    "M3 x 12": "cage 4 (ear 7 + deck 5), lap joints 4 (+nut), arms 4 (+nut), Nucleo 3 = 15",
+    "M3 x 12": "cage 4 (ear 7 + deck 5), lap joints 4 (+nut), arms 4 (+nut), Nucleo 3 = 15",   # same in plan B
     "M3 x 8": "driver frame -> top deck 2",
     "M3 nut": "lap joints 4, arms 4 = 8",
     "M2.5 x 8": "Pi 4, FE-URT-1 4 = 8",
@@ -402,6 +454,10 @@ SCREW_TABLE = {   # every screw of this variant, all from the user's stock (M2 x
 ORIENT = {"lower_deck": [], "top_deck": [((1, 0, 0), 180)], "pan_cage": [], "driver_frame": [],
           "turntable": [((1, 0, 0), 180)], "arm_servo": gp.ORIENT["arm_servo"], "arm_idle": gp.ORIENT["arm_idle"],
           "tilt_cradle": gp.ORIENT["tilt_cradle"]}
+PRINTED_B = {
+    "top_deck": ("P01", "top_deck", "상판 (v0.9.2 + 드라이버 받침틀 나사 구멍 2, 배선 구멍, 플러그 통과 홈)", "BASE", "윗면이 바닥(뒤집어서)", "충전 25 %, 벽 3", 2),
+    "lower_deck": ("P02", "lower_deck", "하판 + 기둥 (ㄴ자: -Y쪽 날개 88 × 76에 STM32 받침 3)", "BASE", "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4", 2),
+}
 PRINTED = [  # part no, name, Korean, group, orientation, settings, order
     ("P01", "top_deck", "상판 (v0.9.2 + 밑면 STM32 받침 3, 드라이버 받침틀 나사 구멍 2, 배선 구멍, 플러그 통과 홈)", "BASE", "윗면이 바닥(뒤집어서), 받침이 위로", "충전 25 %, 벽 3", 2),
     ("P02", "lower_deck", "하판 + 기둥 (기둥 55 → 75 mm)", "BASE", "하판 바닥이 바닥, 기둥 세워서", "충전 25 %, 벽 4", 2),
@@ -412,6 +468,10 @@ PRINTED = [  # part no, name, Korean, group, orientation, settings, order
     ("P10", "arm_idle", "부싱쪽 팔", "PAN", "바깥면이 바닥(눕혀서)", "충전 60 %, 벽 4", 4),
     ("P11", "tilt_cradle", "Tilt 크래들 (카메라 E)", "TILT", "위쪽 끝이 바닥(뒤집어서)", "충전 60 %, 벽 4", 4),
 ]
+
+
+if MODE == "L":
+    PRINTED = [PRINTED_B.get(r[1], r) for r in PRINTED]
 
 
 def export(P, res):
@@ -462,8 +522,8 @@ def export(P, res):
         for row in [
             ("서보", "Feetech STS3215", 2, "Pan ID 1, Tilt ID 2 (혼·동봉 혼 나사)"),
             ("서보 드라이버", "Feetech FE-URT-1", 1, "상판 위 받침틀"),
-            ("제어 보드", "NUCLEO-F401RE", 1, "상판 밑면에 거꾸로 (Pi 바로 위)"),
-            ("나사", "M3 × 12", 15, "케이지 4, 상판-기둥 4, 팔 4, Nucleo 3 (아래에서 상판 받침으로)"),
+            ("제어 보드", "NUCLEO-F401RE", 1, "상판 밑면에 거꾸로 (Pi 바로 위)" if MODE == "top" else "하판 ㄴ자 날개 위"),
+            ("나사", "M3 × 12", 15, "케이지 4, 상판-기둥 4, 팔 4, Nucleo 3"),
             ("너트", "M3", 8, "상판-기둥 4, 팔 4"),
             ("나사", "M3 × 8", 2, "드라이버 받침틀 → 상판"),
             ("나사", "M2.5 × 8", 8, "Pi 4, FE-URT-1 4"),
@@ -474,7 +534,7 @@ def export(P, res):
             ("점퍼선", "암-암 / 암-수", "6~8", "STM32 ↔ Pi UART, STM32 ↔ FE-URT-1 UART, GND"),
         ]:
             w.writerow(row)
-    shutil.copy(os.path.join(HERE, "docs", "V092S_STANDALONE.md"), os.path.join(PKG, "README_먼저읽기.md"))
+    shutil.copy(os.path.join(HERE, "docs", DOC), os.path.join(PKG, "README_먼저읽기.md"))
     img = os.environ.get("V092S_IMG")      # renders (made outside this script) copied in when given
     if img and os.path.isdir(img):
         os.makedirs(os.path.join(d_doc, "img"))
@@ -494,5 +554,5 @@ if __name__ == "__main__":
     res = checks(P, K)
     for k, v in res.items():
         print(k, v)
-    if os.path.exists(os.path.join(HERE, "docs", "V092S_STANDALONE.md")):
+    if os.path.exists(os.path.join(HERE, "docs", DOC)):
         print(export(P, res))
