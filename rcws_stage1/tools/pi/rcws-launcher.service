@@ -1,0 +1,12 @@
+# systemd user service for the RCWS start / stop page (installed by deploy.sh with paths filled in)
+[Unit]
+Description=RCWS Stage 1 launcher page (:8000)
+After=network-online.target
+
+[Service]
+ExecStart=@LAUNCHER@ --port 8000 --cmd @GO@ --log @LOG@
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

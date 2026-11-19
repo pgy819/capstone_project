@@ -22,7 +22,7 @@ namespace rcws {
 
 enum class StateReason : uint8_t {
   NONE = 0, DET_ACQUIRE, SPRT_ACCEPT, SPRT_REJECT, ACQ_TIMEOUT, NO_MEAS, NCC_ONLY, MEAS_BACK,
-  COAST_TIMEOUT, REACQ_DET, REACQ_TIMEOUT
+  COAST_TIMEOUT, REACQ_DET, REACQ_TIMEOUT, OPERATOR
 };
 
 // v4 (scenarios A-J) additions to the statistics
@@ -68,7 +68,24 @@ class Perception {
   const DetInputSnap& det_input() const { return shown_input_; }
   const NccDebug& ncc_debug() const { return ncc_.debug(); }
 
+  // Operator commands (web page). Queued and applied at the start of the next on_frame, on the
+  // logic clock, so a replay with the same commands takes the same decisions.
+  //   stop_target(id): stop following `id` (-1 = current lock) and never re-acquire that track id
+  //   select(id):      follow board track `id` next (released from the exclusions)
+  //   retarget():      target class changed: drop the lock and all operator choices
+  void op_stop_target(int id) { ops_.push_back({OpKind::STOP, id}); }
+  void op_select(int id) { ops_.push_back({OpKind::SELECT, id}); }
+  void op_clear_exclusions() { ops_.push_back({OpKind::CLEAR, -1}); }
+  void op_retarget() { ops_.push_back({OpKind::RETARGET, -1}); }
+
  private:
+  enum class OpKind : uint8_t { STOP, SELECT, CLEAR, RETARGET };
+  struct Op {
+    OpKind kind;
+    int id;
+  };
+  void apply_ops(int64_t now);
+  std::vector<Op> ops_;
   struct HistFrame {
     uint32_t seq = 0;
     int64_t t_sof = 0;

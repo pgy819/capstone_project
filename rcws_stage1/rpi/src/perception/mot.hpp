@@ -17,6 +17,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <set>
 #include <vector>
 
 #include "common/config.hpp"
@@ -83,6 +84,15 @@ class TrackBoard {
   // not jump to a different phone when its own leaves the view (scenario D).
   int designate(int locked, int64_t t);
 
+  // Operator (web page): an excluded id is never designated again ("stop tracking this object");
+  // a preferred id is designated as long as it exists and is not LOST ("track this one").
+  void exclude(int id);
+  void prefer(int id);
+  void clear_operator();
+  bool excluded(int id) const { return id >= 0 && excluded_.count(id) != 0; }
+  int preferred() const { return prefer_; }
+  const std::set<int>& excluded_ids() const { return excluded_; }
+
   const std::vector<MotTrack>& tracks() const { return tracks_; }
   const MotTrack* find(int id) const;
   // ids are never reused
@@ -105,6 +115,8 @@ class TrackBoard {
   double ego_du_ = 0, ego_dv_ = 0;
   int designated_ = -1;
   int64_t t_designated_ = 0;
+  std::set<int> excluded_;
+  int prefer_ = -1;
   int challenger_ = -1, challenger_n_ = 0;
   int64_t t_challenge_ = 0;
   uint64_t ambiguous_events_ = 0;

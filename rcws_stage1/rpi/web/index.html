@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RCWS 조작</title>
+<style>
+:root {
+  --bg: #0f1216; --panel: #171b21; --line: #262c35; --text: #e6e9ee; --muted: #8b95a3;
+  --ok: #3fb96b; --warn: #e2a33a; --bad: #e5484d; --accent: #4c8dff; --lock: #d65cf0;
+  --radius: 10px; --gap: 12px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+button { font: inherit; color: var(--text); background: #222833; border: 1px solid #323a46;
+  border-radius: 8px; padding: 8px 12px; cursor: pointer; touch-action: manipulation; }
+button:hover { border-color: #4a5566; }
+button:active { transform: translateY(1px); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.on { background: #2b3a55; border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+header { position: sticky; top: 0; z-index: 10; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 8px 14px; background: #0b0e12ee; border-bottom: 1px solid var(--line); backdrop-filter: blur(6px); }
+header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 650; letter-spacing: .2px; }
+.chip { padding: 3px 9px; border-radius: 99px; background: #1e242c; border: 1px solid var(--line);
+  font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip.ok { color: var(--ok); border-color: #2d5a3e; } .chip.warn { color: var(--warn); border-color: #6a5124; }
+.chip.bad { color: #fff; background: var(--bad); border-color: var(--bad); }
+.spacer { flex: 1; }
+#estop { background: var(--bad); border: 2px solid #ff8a8d; color: #fff; font-weight: 800; padding: 9px 18px;
+  letter-spacing: .5px; }
+#estop.clear { background: #3a2023; border-color: var(--bad); }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--gap); padding: var(--gap); max-width: 1500px; margin: 0 auto; }
+@media (max-width: 980px) { main { grid-template-columns: 1fr; padding: 8px; } }
+.col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-width: 0; }
+section h2 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 10px; text-transform: none; letter-spacing: .3px; }
+.view { position: relative; background: #000; border-radius: 8px; overflow: hidden; }
+.view img { display: block; width: 100%; height: auto; cursor: crosshair; }
+.view .hint { position: absolute; left: 8px; bottom: 8px; font-size: 12px; color: #cfd6df; background: #000a;
+  padding: 2px 8px; border-radius: 6px; pointer-events: none; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-variant-numeric: tabular-nums; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+@media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+/* capture prompt */
+#capture { display: none; border-color: var(--lock); box-shadow: 0 0 0 1px var(--lock) inset; }
+#capture.show { display: block; }
+#capture .imgs { display: grid; grid-template-columns: 160px 1fr; gap: 10px; align-items: start; }
+@media (max-width: 560px) { #capture .imgs { grid-template-columns: 110px 1fr; } }
+#capture img { width: 100%; border-radius: 6px; background: #000; display: block; }
+#capture .q { font-size: 16px; font-weight: 650; margin: 10px 0; }
+#capture .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#capture .btns button { padding: 12px; font-size: 15px; font-weight: 650; }
+#capture .more { color: var(--muted); font-size: 12px; margin-top: 6px; }
+/* candidates */
+#cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.cand { background: #12161b; border: 1px solid var(--line); border-radius: 8px; padding: 6px; font-size: 12.5px; }
+.cand.lock { border-color: var(--lock); } .cand.stopped { opacity: .55; }
+.cand img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #000; border-radius: 5px; display: block; }
+.cand .t { display: flex; justify-content: space-between; margin: 4px 0; }
+.cand button { width: 100%; padding: 5px; font-size: 12.5px; }
+.empty { color: var(--muted); font-size: 13px; }
+/* jog pad */
+.pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 56px); gap: 6px; justify-content: center; }
+.pad button { font-size: 20px; padding: 0; user-select: none; -webkit-user-select: none; }
+.pad .home { font-size: 12.5px; }
+.seg { display: inline-flex; border: 1px solid #323a46; border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: #1b2028; }
+.seg button.on { background: var(--accent); color: #fff; }
+/* servo bars */
+.bar { position: relative; height: 10px; background: #0d1014; border: 1px solid var(--line); border-radius: 99px; margin: 4px 0 10px; }
+.bar i { position: absolute; top: -3px; width: 4px; height: 14px; background: var(--accent); border-radius: 2px; transform: translateX(-2px); }
+.bar b { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: #3a4350; }
+/* log */
+#log { height: 220px; overflow: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #0c0f13;
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+#log div { white-space: pre-wrap; word-break: break-word; }
+#log .warn { color: var(--warn); } #log .err { color: var(--bad); } #log .state { color: #9fb8ff; } #log .cap { color: var(--lock); }
+table.check { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.check td { padding: 4px 2px; border-bottom: 1px solid var(--line); }
+table.check td:last-child { text-align: right; }
+.good { color: var(--ok); } .badt { color: var(--bad); } .mutedt { color: var(--muted); }
+#conn { position: fixed; inset: auto 12px 12px auto; z-index: 20; }
+small.note { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RCWS Stage 1</h1>
+  <span class="chip" id="c-state">연결 중…</span>
+  <span class="chip" id="c-op">-</span>
+  <span class="chip" id="c-guard">STM32 -</span>
+  <span class="chip" id="c-fps">- fps</span>
+  <span class="spacer"></span>
+  <button id="estop" title="소프트웨어 비상정지: 서보 토크를 끕니다 (단축키 Space)">비상정지</button>
+</header>
+
+<main>
+  <div class="col">
+    <section id="capture">
+      <h2>새 대상 포착</h2>
+      <div class="imgs">
+        <img id="cap-crop" alt="포착된 대상">
+        <img id="cap-full" alt="포착 순간 전체 화면">
+      </div>
+      <div class="q" id="cap-q">이 대상을 계속 추적할까요?</div>
+      <div class="btns">
+        <button class="primary" id="cap-keep">계속 추적</button>
+        <button id="cap-stop">추적 중지</button>
+      </div>
+      <div class="more" id="cap-more"></div>
+    </section>
+
+    <section>
+      <h2>실시간 화면 <small class="note">— 화면의 대상을 누르면 그 대상을 추적합니다</small></h2>
+      <div class="view">
+        <img id="live" alt="실시간 화면" src="/stream.mjpg">
+        <div class="hint" id="view-hint">-</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>후보 대상</h2>
+      <div id="cands"><div class="empty">화면에 대상이 없습니다.</div></div>
+      <div class="row" style="margin-top:10px">
+        <button id="clear-stops">추적 중지 목록 해제</button>
+        <small class="note" id="stopped-note"></small>
+      </div>
+    </section>
+
+    <section>
+      <h2>로그·이벤트</h2>
+      <div id="log"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section>
+      <h2>추적 대상</h2>
+      <dl class="kv" id="tgt">
+        <dt>상태</dt><dd id="t-state">-</dd>
+        <dt>대상 ID</dt><dd id="t-id">-</dd>
+        <dt>클래스</dt><dd id="t-cls">-</dd>
+        <dt>조준 출력</dt><dd id="t-aim">-</dd>
+        <dt>방위각 ψ</dt><dd id="t-psi">-</dd>
+        <dt>고각 θ</dt><dd id="t-theta">-</dd>
+        <dt>각속도</dt><dd id="t-rate">-</dd>
+        <dt>화면 좌표</dt><dd id="t-px">-</dd>
+        <dt>크기 / 거리</dt><dd id="t-size">-</dd>
+      </dl>
+      <div class="row" style="margin-top:10px">
+        <span class="note">검출 클래스</span>
+        <div class="seg" id="cls">
+          <button data-c="phone">휴대폰</button><button data-c="ball">공</button><button data-c="person">사람</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>조작</h2>
+      <div class="row" style="justify-content:space-between">
+        <div class="seg" id="mode">
+          <button data-m="auto">자동 추적</button><button data-m="manual">수동</button>
+        </div>
+        <span class="chip" id="c-act">-</span>
+      </div>
+      <div style="margin:12px 0 4px" class="pad" id="pad">
+        <span></span><button data-j="0,1" aria-label="위">▲</button><span></span>
+        <button data-j="-1,0" aria-label="왼쪽">◀</button><button class="home" id="home">홈</button><button data-j="1,0" aria-label="오른쪽">▶</button>
+        <span></span><button data-j="0,-1" aria-label="아래">▼</button><span></span>
+      </div>
+      <small class="note" id="jog-note">버튼을 누르고 있는 동안만 움직입니다 (키보드 방향키). 누르면 수동 모드로 바뀝니다.</small>
+    </section>
+
+    <section>
+      <h2>서보 각도 <small class="note">(STM32 목표값, 정면 = 0°)</small></h2>
+      <div class="row" style="justify-content:space-between"><span>Pan (ID 2)</span><b id="s-pan">-</b></div>
+      <div class="bar"><b></b><i id="s-pan-i" style="left:50%"></i></div>
+      <div class="row" style="justify-content:space-between"><span>Tilt (ID 1)</span><b id="s-tilt">-</b></div>
+      <div class="bar"><b></b><i id="s-tilt-i" style="left:50%"></i></div>
+      <dl class="kv"><dt>목표 count</dt><dd id="s-cnt">-</dd></dl>
+    </section>
+
+    <section>
+      <h2>상태</h2>
+      <dl class="kv">
+        <dt>카메라</dt><dd id="d-fps">-</dd>
+        <dt>처리 지연 (평균)</dt><dd id="d-proc">-</dd>
+        <dt>Hailo 검출 지연</dt><dd id="d-det">-</dd>
+        <dt>프레임 유실</dt><dd id="d-drop">-</dd>
+        <dt>화질 경고</dt><dd id="d-q">-</dd>
+        <dt>CPU 온도</dt><dd id="d-temp">-</dd>
+        <dt>전원 (저전압)</dt><dd id="d-thr">-</dd>
+        <dt>STM32 상태</dt><dd id="d-guard">-</dd>
+        <dt>Pi 송신 / 쓰기 오류</dt><dd id="d-tx">-</dd>
+        <dt>STM32 수신 정상 / 오류</dt><dd id="d-rx">-</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>연결 점검</h2>
+      <table class="check">
+        <tr><td>카메라</td><td id="k-camera" class="mutedt">-</td></tr>
+        <tr><td>Hailo 검출기</td><td id="k-detector" class="mutedt">-</td></tr>
+        <tr><td>STM32 링크</td><td id="k-link" class="mutedt">-</td></tr>
+        <tr><td>Pan 서보 (ID 2)</td><td id="k-pan" class="mutedt">-</td></tr>
+        <tr><td>Tilt 서보 (ID 1)</td><td id="k-tilt" class="mutedt">-</td></tr>
+        <tr><td>웹 연결</td><td id="k-web" class="mutedt">-</td></tr>
+      </table>
+      <div class="row" style="margin-top:10px">
+        <button id="selftest">다시 점검</button>
+        <small class="note">서보 응답은 STM32 부팅 때 확인한 값입니다.</small>
+      </div>
+    </section>
+
+    <section>
+      <h2>실행</h2>
+      <div class="row">
+        <button id="quit">추적 프로그램 종료</button>
+        <a id="launcher" style="color:var(--accent)" href="#">실행기 열기 (시작/종료)</a>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const AIM_KO = { FOLLOW: "추종", PREDICT: "예측 추종", HOLD: "정지 유지" };
+const STATE_KO = { SEARCH: "탐색", ACQUIRE: "확인 중", TRACK: "추적", COAST: "예측(가림)", REACQ: "재포착" };
+const ACT_KO = { AUTO: "자동 추적", MANUAL: "수동(정지)", JOG: "조그 이동", HOME: "홈 복귀", ESTOP: "비상정지" };
+const GUARD_KO = { RUN: "구동", HOLD: "정지 유지", TORQUE_OFF: "토크 끔", RAMP: "저속 복귀", ESTOP: "비상정지", "-": "-" };
+const CLS_KO = { phone: "휴대폰", ball: "공", person: "사람" };
+let ws = null, st = null, capQueue = [], answered = new Set(), jogTimer = null, jogVec = [0, 0];
+$("launcher").href = `${location.protocol}//${location.hostname}:8000/`;
+
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+function chip(el, text, cls) { el.textContent = text; el.className = "chip" + (cls ? " " + cls : ""); }
+function fmt(v, d = 1, u = "") { return v == null || Number.isNaN(v) ? "-" : v.toFixed(d) + u; }
+function clock(t) { const d = new Date(); return d.toTimeString().slice(0, 8); }
+function log(text, cls = "") {
+  const L = $("log"), atBottom = L.scrollTop + L.clientHeight >= L.scrollHeight - 4;
+  const div = document.createElement("div");
+  div.className = cls; div.textContent = `${clock()}  ${text}`;
+  L.appendChild(div);
+  while (L.childNodes.length > 400) L.removeChild(L.firstChild);
+  if (atBottom) L.scrollTop = L.scrollHeight;
+}
+
+// server messages carry state / guard names: show them in Korean
+function koEvent(t) {
+  return t.replace(/\b(SEARCH|ACQUIRE|TRACK|COAST|REACQ)\b/g, (w) => STATE_KO[w] || w)
+          .replace(/STM32 상태: (\w+)/, (_, g) => "STM32 상태: " + (GUARD_KO[g] || g))
+          .replace("(track #", "(대상 #");
+}
+
+function connect() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.onopen = () => { $("k-web").textContent = "연결됨"; $("k-web").className = "good"; log("웹 연결됨"); };
+  ws.onclose = () => {
+    chip($("c-state"), "연결 끊김 — 재연결 중", "bad");
+    $("k-web").textContent = "끊김"; $("k-web").className = "badt";
+    setTimeout(connect, 1500);
+  };
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === "status") onStatus(m);
+    else if (m.type === "event") log(koEvent(m.text), m.level === "warn" ? "warn" : m.level === "state" ? "state" : "");
+    else if (m.type === "capture") onCapture(m.capture, true);
+    else if (m.type === "hello") (m.captures || []).slice(-1).forEach((c) => onCapture(c, false));
+    else if (m.type === "sys") onSys(m);
+    else if (m.type === "selfcheck") onCheck(m);
+    else if (m.type === "answered") { capQueue = capQueue.filter((q) => q.track !== m.track); showCapture(); }
+  };
+}
+
+function onStatus(s) {
+  if (!s.state) return;
+  st = s;
+  const sc = s.state === "TRACK" ? "ok" : s.state === "SEARCH" ? "" : "warn";
+  chip($("c-state"), `${STATE_KO[s.state] || s.state}${s.lock >= 0 ? " #" + s.lock : ""}`, sc);
+  const act = s.op.activity;
+  chip($("c-op"), ACT_KO[act] || act, act === "ESTOP" ? "bad" : act === "AUTO" ? "ok" : "warn");
+  chip($("c-act"), ACT_KO[act] || act, act === "ESTOP" ? "bad" : act === "AUTO" ? "ok" : "warn");
+  chip($("c-fps"), `${fmt(s.fps, 0)} fps`, s.fps > 50 ? "" : "warn");
+  const L = s.link || {};
+  if (!L.open) chip($("c-guard"), "STM32 미연결", "warn");
+  else if (!L.fresh) chip($("c-guard"), "STM32 응답 없음", "bad");
+  else chip($("c-guard"), `STM32 ${GUARD_KO[L.guard] || L.guard}`, L.guard === "ESTOP" || L.guard === "TORQUE_OFF" ? "bad" : L.guard === "RUN" ? "ok" : "");
+  // emergency stop button
+  const e = $("estop");
+  if (s.op.estop) { e.textContent = "비상정지 해제"; e.classList.add("clear"); }
+  else { e.textContent = "비상정지"; e.classList.remove("clear"); }
+  // target
+  $("t-state").textContent = STATE_KO[s.state] || s.state;
+  $("t-id").textContent = s.lock >= 0 ? "#" + s.lock : "-";
+  $("t-cls").textContent = CLS_KO[s.cls] || s.cls;
+  $("t-aim").textContent = AIM_KO[s.aim] || s.aim;
+  const T = s.target;
+  $("t-psi").textContent = T ? fmt(T.psi, 2, "°") : "-";
+  $("t-theta").textContent = T ? fmt(T.theta, 2, "°") : "-";
+  $("t-rate").textContent = T ? `${fmt(T.psi_d, 1)} / ${fmt(T.theta_d, 1)} °/s` : "-";
+  $("t-px").textContent = T ? `(${fmt(T.u, 0)}, ${fmt(T.v, 0)}) px` : "-";
+  $("t-size").textContent = T ? `${fmt(T.w, 0)}×${fmt(T.h, 0)} px / ${fmt(T.range, 1, " m")}` : "-";
+  document.querySelectorAll("#cls button").forEach((b) => b.classList.toggle("on", b.dataset.c === s.cls));
+  document.querySelectorAll("#mode button").forEach((b) => b.classList.toggle("on", (b.dataset.m === "auto") === (s.op.mode === "AUTO")));
+  $("view-hint").textContent = `${AIM_KO[s.aim] || s.aim} · 프레임 ${s.frame}`;
+  // servo
+  if (L.open && L.guard !== "-") {
+    $("s-pan").textContent = fmt(L.pan_deg, 1, "°");
+    $("s-tilt").textContent = fmt(L.tilt_deg, 1, "°");
+    $("s-pan-i").style.left = `${50 + 50 * Math.max(-1, Math.min(1, L.pan_deg / 125))}%`;
+    $("s-tilt-i").style.left = `${50 + 50 * Math.max(-1, Math.min(1, L.tilt_deg / 45))}%`;
+    $("s-cnt").textContent = `${L.pan_goal} / ${L.tilt_goal}`;
+  }
+  // dashboard
+  $("d-fps").textContent = `${fmt(s.fps, 1)} fps`;
+  $("d-proc").textContent = fmt(s.proc_ms, 2, " ms");
+  $("d-det").textContent = s.det_ms > 0 ? fmt(s.det_ms, 1, " ms") : "-";
+  $("d-drop").textContent = String(s.drop);
+  $("d-q").textContent = s.quality ? ["어두움", "역광", "흐림"].filter((_, i) => s.quality & (1 << i)).join(", ") : "없음";
+  $("d-q").className = s.quality ? "badt" : "";
+  $("d-guard").textContent = L.open ? (L.fresh ? GUARD_KO[L.guard] || L.guard : "응답 없음") : "미연결";
+  $("d-tx").textContent = L.open ? `${L.sent} / ${L.werr}` : "-";
+  $("d-rx").textContent = L.open && L.fresh ? `${L.rx_ok} / ${L.rx_err}` : "-";
+  renderCands(s);
+}
+
+let lastCandKey = "", thumbTick = 0;
+function renderCands(s) {
+  const tracks = (s.tracks || []).filter((k) => k.st !== "TENT");
+  const key = tracks.map((k) => `${k.id}${k.lock ? "L" : ""}${k.stopped ? "S" : ""}`).join(",");
+  const now = Date.now();
+  const refresh = now - thumbTick > 1000;
+  if (key === lastCandKey && !refresh) return;
+  lastCandKey = key;
+  if (refresh) thumbTick = now;
+  const box = $("cands");
+  if (!tracks.length) { box.innerHTML = '<div class="empty">화면에 대상이 없습니다.</div>'; }
+  else {
+    box.innerHTML = "";
+    for (const k of tracks) {
+      const d = document.createElement("div");
+      d.className = "cand" + (k.lock ? " lock" : "") + (k.stopped ? " stopped" : "");
+      d.innerHTML = `<img src="/thumb/${k.id}.jpg?t=${thumbTick}" alt="대상 ${k.id}">
+        <div class="t"><b>#${k.id}</b><span>${k.lock ? "추적 중" : k.stopped ? "중지됨" : fmt(k.score, 2)}</span></div>`;
+      const b = document.createElement("button");
+      b.textContent = k.lock ? "추적 중지" : "이 대상 추적";
+      b.onclick = () => k.lock ? send({ cmd: "stop_track", id: k.id }) : send({ cmd: "select", id: k.id });
+      d.appendChild(b);
+      box.appendChild(d);
+    }
+  }
+  const stopped = s.stopped || [];
+  $("stopped-note").textContent = stopped.length ? `중지된 대상: ${stopped.map((i) => "#" + i).join(" ")}` : "";
+  $("clear-stops").disabled = !stopped.length;
+}
+
+// ---- capture prompt: one card at a time, newest last
+function onCapture(c, live) {
+  if (answered.has(c.n)) return;
+  if (live) log(`새 대상 포착: #${c.track} ${CLS_KO[c.cls] || c.cls} (신뢰도 ${fmt(c.score, 2)})`, "cap");
+  if (!capQueue.find((q) => q.n === c.n)) capQueue.push(c);
+  showCapture();
+}
+function showCapture() {
+  const box = $("capture");
+  if (!capQueue.length) { box.classList.remove("show"); return; }
+  const c = capQueue[0];
+  $("cap-crop").src = c.crop; $("cap-full").src = c.img;
+  $("cap-q").textContent = `#${c.track} ${CLS_KO[c.cls] || c.cls} 을(를) 포착했습니다. 계속 추적할까요?`;
+  $("cap-more").textContent = capQueue.length > 1 ? `대기 중인 포착 ${capQueue.length - 1}건` : "답하지 않으면 계속 추적합니다.";
+  box.classList.add("show");
+}
+function answer(stop) {
+  const c = capQueue.shift();
+  if (!c) return;
+  answered.add(c.n);
+  send({ cmd: stop ? "stop_track" : "keep", id: c.track });
+  showCapture();
+}
+$("cap-keep").onclick = () => answer(false);
+$("cap-stop").onclick = () => answer(true);
+
+function onSys(m) {
+  $("d-temp").textContent = m.temp_c == null ? "-" : fmt(m.temp_c, 1, " °C");
+  $("d-temp").className = m.temp_c > 80 ? "badt" : "";
+  if (m.throttled == null) { $("d-thr").textContent = "-"; return; }
+  const v = parseInt(m.throttled, 16);
+  const now = v & 0xF, past = (v >> 16) & 0xF;
+  $("d-thr").textContent = now & 1 ? "저전압!" : now ? "스로틀 중" : past & 1 ? "저전압 이력" : past ? "스로틀 이력" : "정상";
+  $("d-thr").className = now ? "badt" : past ? "" : "good";
+}
+
+function onCheck(m) {
+  const set = (id, ok, text) => { $(id).textContent = text; $(id).className = ok === true ? "good" : ok === false ? "badt" : "mutedt"; };
+  set("k-camera", m.camera, m.camera ? "정상" : "프레임 없음");
+  set("k-detector", m.detector, m.detector ? "정상" : "결과 없음");
+  set("k-link", m.link === "ok" ? true : m.link === "off" ? null : false, m.link === "ok" ? "정상" : m.link === "off" ? "사용 안 함 (--uart 없음)" : "응답 없음");
+  const sv = (v) => v === "ok" ? [true, "응답"] : v === "unknown" ? [null, "알 수 없음"] : [false, "응답 없음 (배선·ID 확인)"];
+  set("k-pan", ...sv(m.pan)); set("k-tilt", ...sv(m.tilt));
+  log(`연결 점검: 카메라 ${m.camera ? "OK" : "X"}, 검출기 ${m.detector ? "OK" : "X"}, STM32 ${m.link}, Pan ${m.pan}, Tilt ${m.tilt}`, m.camera && m.detector && m.link !== "silent" ? "" : "warn");
+}
+
+// ---- controls
+$("estop").onclick = () => {
+  if (st && st.op.estop) { if (confirm("비상정지를 해제할까요? 수동 모드로 돌아가고 서보는 천천히 다시 힘을 받습니다.")) send({ cmd: "estop_clear" }); }
+  else send({ cmd: "estop" });
+};
+document.querySelectorAll("#cls button").forEach((b) => b.onclick = () => send({ cmd: "class", name: b.dataset.c }));
+document.querySelectorAll("#mode button").forEach((b) => b.onclick = () => send({ cmd: "mode", value: b.dataset.m }));
+$("home").onclick = () => send({ cmd: "home" });
+$("clear-stops").onclick = () => send({ cmd: "clear_stops" });
+$("selftest").onclick = () => { ["k-camera", "k-detector", "k-link", "k-pan", "k-tilt"].forEach((i) => { $(i).textContent = "점검 중…"; $(i).className = "mutedt"; }); send({ cmd: "selftest" }); };
+$("quit").onclick = () => { if (confirm("추적 프로그램을 종료할까요? 서보는 정지 상태로 남습니다.")) send({ cmd: "quit" }); };
+
+function jogSend() { send({ cmd: "jog", pan: jogVec[0], tilt: jogVec[1] }); }
+function jogStart(v) { jogVec = v; jogSend(); clearInterval(jogTimer); jogTimer = setInterval(jogSend, 100); }
+function jogStop() { if (!jogTimer) return; clearInterval(jogTimer); jogTimer = null; jogVec = [0, 0]; jogSend(); }
+document.querySelectorAll("#pad button[data-j]").forEach((b) => {
+  const v = b.dataset.j.split(",").map(Number);
+  b.addEventListener("pointerdown", (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); jogStart(v); });
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach((n) => b.addEventListener(n, jogStop));
+});
+const KEYS = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+const held = new Set();
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); if (!e.repeat) $("estop").click(); return; }
+  if (!KEYS[e.key]) return;
+  e.preventDefault(); held.add(e.key);
+  const v = [0, 0]; held.forEach((k) => { v[0] += KEYS[k][0]; v[1] += KEYS[k][1]; });
+  if (!e.repeat) jogStart(v);
+});
+window.addEventListener("keyup", (e) => {
+  if (!KEYS[e.key]) return;
+  held.delete(e.key);
+  if (!held.size) jogStop();
+  else { const v = [0, 0]; held.forEach((k) => { v[0] += KEYS[k][0]; v[1] += KEYS[k][1]; }); jogStart(v); }
+});
+window.addEventListener("blur", jogStop);
+
+// click on the live view: select the nearest track under the pointer
+$("live").addEventListener("click", (e) => {
+  if (!st || !st.tracks) return;
+  const img = e.currentTarget, r = img.getBoundingClientRect();
+  const nw = img.naturalWidth || st.img.w, nh = img.naturalHeight || st.img.h;
+  const px = (e.clientX - r.left) / r.width * nw, py = (e.clientY - r.top) / r.height * nh;
+  if (px > st.img.w || py > st.img.h) return;            // "stack" view: right-hand panels
+  const sc = st.img.scale, x = px / sc, y = py / sc;
+  let best = null, bd = 1e9;
+  for (const k of st.tracks) {
+    const inside = Math.abs(x - k.u) <= k.w / 2 + 20 && Math.abs(y - k.v) <= k.h / 2 + 20;
+    const d = Math.hypot(x - k.u, y - k.v);
+    if (inside && d < bd) { best = k; bd = d; }
+  }
+  if (best) send({ cmd: "select", id: best.id });
+});
+$("live").onerror = () => setTimeout(() => { $("live").src = "/stream.mjpg?r=" + Date.now(); }, 2000);
+
+connect();
+</script>
+</body>
+</html>

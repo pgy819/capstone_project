@@ -17,8 +17,11 @@
  *    2  0x21  type AIM
  *    3  seq        u8   frame counter (wraps); echoed in the uplink
  *    4  mode       u8   0 HOLD / 1 FOLLOW / 2 PREDICT   (perception aim gate)
- *    5  flags      u8   bit0 OPERATOR_HOLD (web "stop tracking": brake and hold)
- *                       bit1 ESTOP_REQ (software emergency stop: torque off, latched until reset)
+ *                       3 JOG  (operator: rate_* is the commanded gimbal rate, err_* ignored)
+ *                       4 HOME (operator: slow return to the centre position 2048 / 2048)
+ *    5  flags      u8   bit0 OPERATOR_HOLD (web "manual": brake and hold, overrides FOLLOW/PREDICT)
+ *                       bit1 ESTOP_REQ   (software emergency stop: torque off, latched)
+ *                       bit2 ESTOP_CLEAR (release a software ESTOP; B1 ESTOP still needs RESET)
  *    6  err_pan    i16  target bearing relative to the camera axis, +right, [1/16 servo count]
  *    8  err_tilt   i16  target elevation relative to the camera axis, +up,  [1/16 servo count]
  *   10  rate_pan   i16  target angular rate, +right [servo count/s]  (feed-forward, U7)
@@ -30,7 +33,8 @@
  *    3  seq_echo   u8   seq of the last valid AIM frame
  *    4  guard      u8   GuardState_t: 0 RUN 1 HOLD 2 TORQUE_OFF 3 RAMP 4 ESTOP
  *    5  flags      u8   bit0 ESTOP_B1, bit1 COMM_LOST (>0.5 s without AIM), bit2 ESTOP_SW,
- *                       bit3 OPERATOR_HOLD active
+ *                       bit3 OPERATOR_HOLD active, bit4 PAN servo answered the boot PING,
+ *                       bit5 TILT servo answered, bit6 boot PING done
  *    6  pan_goal   u16  current goal [servo count]
  *    8  tilt_goal  u16
  *   10  rx_ok      u16  valid AIM frames (wraps)
@@ -63,16 +67,23 @@ extern "C" {
 #define LINK_MODE_HOLD        0u
 #define LINK_MODE_FOLLOW      1u
 #define LINK_MODE_PREDICT     2u
+#define LINK_MODE_JOG         3u
+#define LINK_MODE_HOME        4u
+#define LINK_MODE_MAX         LINK_MODE_HOME
 
 /* downlink flags */
 #define LINK_F_OPERATOR_HOLD  0x01u
 #define LINK_F_ESTOP_REQ      0x02u
+#define LINK_F_ESTOP_CLEAR    0x04u
 
 /* uplink flags */
 #define LINK_S_ESTOP_B1       0x01u
 #define LINK_S_COMM_LOST      0x02u
 #define LINK_S_ESTOP_SW       0x04u
 #define LINK_S_OPERATOR_HOLD  0x08u
+#define LINK_S_PAN_PING_OK    0x10u
+#define LINK_S_TILT_PING_OK   0x20u
+#define LINK_S_PING_DONE      0x40u
 
 typedef struct {
     uint8_t seq;

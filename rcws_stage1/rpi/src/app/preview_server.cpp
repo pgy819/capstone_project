@@ -7,13 +7,18 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #ifdef RCWS_HAVE_HIGHGUI
 #include <opencv2/highgui.hpp>
 #endif
 
+#include "app/web_util.hpp"
+#include "common/clock.hpp"
 #include "common/rt.hpp"
 
 namespace rcws {
@@ -111,18 +116,88 @@ void PreviewServer::stop() {
 }
 
 void PreviewServer::publish(const cv::Mat& gray, const PreviewOverlay& ov) {
+  WebFrame f;
+  gray.copyTo(f.y);
+  f.scale = ov.scale;
+  publish_frame(std::move(f), ov);
+}
+
+void PreviewServer::publish_frame(WebFrame&& f, const PreviewOverlay& ov) {
   std::unique_lock<std::mutex> lk(mu_, std::try_to_lock);
   if (!lk.owns_lock()) return;
-  gray.copyTo(pending_);
+  pending_ = std::move(f);
   pending_ov_ = ov;
   has_pending_ = true;
 }
 
+void PreviewServer::set_status(std::string json) {
+  std::lock_guard<std::mutex> lk(mu_);
+  status_ = std::move(json);
+  status_dirty_ = true;
+}
+
+void PreviewServer::push_event(std::string json) {
+  std::lock_guard<std::mutex> lk(mu_);
+  if (events_.size() < 256) events_.push_back(std::move(json));
+}
+
+void PreviewServer::push_capture(WebCapture&& c) {
+  std::lock_guard<std::mutex> lk(mu_);
+  if (captures_in_.size() < 8) captures_in_.push_back(std::move(c));
+}
+
+void PreviewServer::mark_answered(int track_id) {
+  std::lock_guard<std::mutex> lk(mu_);
+  if (answered_in_.size() < 64) answered_in_.push_back(track_id);
+}
+
+std::vector<std::string> PreviewServer::take_commands() {
+  std::lock_guard<std::mutex> lk(mu_);
+  std::vector<std::string> out;
+  out.swap(commands_);
+  return out;
+}
+
+WebFrame copy_web_frame(const FrameView& f) {
+  WebFrame w;
+  if (f.lo_y) {
+    cv::Mat(f.lo_h, f.lo_w, CV_8UC1, const_cast<uint8_t*>(f.lo_y), f.lo_stride).copyTo(w.y);
+    if (f.lo_u && f.lo_v) {
+      cv::Mat(f.lo_h / 2, f.lo_w / 2, CV_8UC1, const_cast<uint8_t*>(f.lo_u), f.lo_uv_stride).copyTo(w.u);
+      cv::Mat(f.lo_h / 2, f.lo_w / 2, CV_8UC1, const_cast<uint8_t*>(f.lo_v), f.lo_uv_stride).copyTo(w.v);
+    }
+    w.scale = float(f.lo_w) / float(f.main_w);
+  } else {
+    const cv::Mat y(f.main_h, f.main_w, CV_8UC1, const_cast<uint8_t*>(f.main_y), f.main_stride);
+    cv::resize(y, w.y, cv::Size(), 0.5, 0.5, cv::INTER_AREA);
+    w.scale = 0.5f;
+  }
+  return w;
+}
+
+cv::Mat web_frame_bgr(const WebFrame& f) {
+  cv::Mat bgr;
+  if (f.y.empty()) return bgr;
+  if (f.u.empty() || f.v.empty() || f.y.cols % 2 || f.y.rows % 2) {
+    cv::cvtColor(f.y, bgr, cv::COLOR_GRAY2BGR);
+    return bgr;
+  }
+  cv::Mat i420(f.y.rows * 3 / 2, f.y.cols, CV_8UC1);
+  f.y.copyTo(i420(cv::Rect(0, 0, f.y.cols, f.y.rows)));
+  const size_t q = size_t(f.y.cols / 2) * size_t(f.y.rows / 2);
+  uint8_t* pu = i420.ptr(f.y.rows);
+  for (int j = 0; j < f.u.rows; ++j) std::memcpy(pu + size_t(j) * f.u.cols, f.u.ptr(j), size_t(f.u.cols));
+  for (int j = 0; j < f.v.rows; ++j) std::memcpy(pu + q + size_t(j) * f.v.cols, f.v.ptr(j), size_t(f.v.cols));
+  cv::cvtColor(i420, bgr, cv::COLOR_YUV2BGR_I420);
+  return bgr;
+}
+
 namespace {
 
-cv::Mat render_frame(const cv::Mat& gray, const PreviewOverlay& ov, int clients) {
+cv::Mat render_frame(const cv::Mat& src, const PreviewOverlay& ov, int clients) {
   cv::Mat img;
-  cv::cvtColor(gray, img, cv::COLOR_GRAY2BGR);
+  if (src.channels() == 3) img = src.clone();
+  else cv::cvtColor(src, img, cv::COLOR_GRAY2BGR);
   const float s = ov.scale;
   // crosshair = camera boresight (image centre)
   const cv::Point c(img.cols / 2, img.rows / 2);
@@ -298,68 +373,265 @@ cv::Mat ncc_panel(const PreviewOverlay& ov, int H) {
 
 }  // namespace
 
-cv::Mat render_preview(const cv::Mat& gray, const PreviewOverlay& ov, bool stack, int clients) {
-  cv::Mat left = render_frame(gray, ov, clients);
+cv::Mat render_preview(const cv::Mat& img, const PreviewOverlay& ov, bool stack, int clients) {
+  cv::Mat left = render_frame(img, ov, clients);
   if (!stack) return left;
   cv::Mat out;
   cv::hconcat(std::vector<cv::Mat>{left, det_panel(ov, left.rows), ncc_panel(ov, left.rows)}, out);
   return out;
 }
 
+namespace {
+
+std::string read_file(const std::string& path) {
+  std::ifstream f(path, std::ios::binary);
+  if (!f) return "";
+  std::ostringstream o;
+  o << f.rdbuf();
+  return o.str();
+}
+
+bool send_http(int fd, const char* status, const char* type, const void* body, size_t n) {
+  char head[256];
+  const int hn = std::snprintf(head, sizeof head,
+                               "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nCache-Control: no-cache\r\n"
+                               "Connection: close\r\n\r\n",
+                               status, type, n);
+  return send_all(fd, head, size_t(hn)) && (n == 0 || send_all(fd, body, n));
+}
+
+std::string read_sys(const char* path) {
+  std::ifstream f(path);
+  std::string v;
+  if (f) std::getline(f, v);
+  return v;
+}
+
+// crop around a main-stream box (with margin) out of a preview-size image
+cv::Mat crop_box(const cv::Mat& img, const RectF& b, float scale, float margin = 0.25f) {
+  if (img.empty() || b.w <= 0 || b.h <= 0) return {};
+  const float mx = b.w * margin, my = b.h * margin;
+  cv::Rect r(int((b.x - mx) * scale), int((b.y - my) * scale), int((b.w + 2 * mx) * scale), int((b.h + 2 * my) * scale));
+  r &= cv::Rect(0, 0, img.cols, img.rows);
+  if (r.width < 4 || r.height < 4) return {};
+  cv::Mat c;
+  const double k = 160.0 / std::max(r.width, r.height);
+  cv::resize(img(r), c, cv::Size(), k, k, k < 1 ? cv::INTER_AREA : cv::INTER_LINEAR);
+  return c;
+}
+
+}  // namespace
+
+void PreviewServer::broadcast(const std::string& text, std::vector<Conn>& conns) {
+  const std::string f = web::ws_frame(text);
+  for (auto& c : conns)
+    if (c.kind == 2 && c.fd >= 0 && !send_all(c.fd, f.data(), f.size())) { ::close(c.fd); c.fd = -1; }
+}
+
+std::string PreviewServer::hello() const {
+  // a page opened later only gets the newest capture, and only while nobody has answered it
+  std::string j = "{\"type\":\"hello\",\"captures\":[";
+  if (!snaps_.empty() && !snaps_.back().answered) j += snaps_.back().meta;
+  return j + "]}";
+}
+
+void PreviewServer::store_capture(WebCapture& c, std::vector<Conn>& conns) {
+  const cv::Mat bgr = web_frame_bgr(c.frame);
+  if (bgr.empty()) return;
+  Snap s;
+  s.n = next_snap_++;
+  const std::vector<int> q{cv::IMWRITE_JPEG_QUALITY, 80};
+  cv::Mat full = bgr.clone();
+  const float k = c.frame.scale;
+  cv::rectangle(full, cv::Rect(int(c.box.x * k), int(c.box.y * k), int(c.box.w * k), int(c.box.h * k)), {255, 0, 255}, 2);
+  cv::imencode(".jpg", full, s.full, q);
+  const cv::Mat cr = crop_box(bgr, c.box, k, 0.35f);
+  if (!cr.empty()) cv::imencode(".jpg", cr, s.crop, q);
+  char m[320];
+  std::snprintf(m, sizeof m,
+                "{\"n\":%d,\"track\":%d,\"t\":%.3f,\"cls\":\"%s\",\"score\":%.2f,\"img\":\"/snap/%d.jpg\",\"crop\":\"/crop/%d.jpg\"}",
+                s.n, c.track_id, c.t_ns * 1e-9, web::json_escape(c.cls).c_str(), c.score, s.n, s.n);
+  s.meta = m;
+  s.track = c.track_id;
+  broadcast("{\"type\":\"capture\",\"capture\":" + s.meta + "}", conns);
+  snaps_.push_back(std::move(s));
+  if (snaps_.size() > 40) snaps_.erase(snaps_.begin());
+}
+
+void PreviewServer::handle_request(Conn& c, std::vector<Conn>& conns) {
+  const std::string path = web::http_path(c.in);
+  auto num_of = [&](const char* prefix) {
+    return std::atoi(path.c_str() + std::strlen(prefix));
+  };
+  if (path == "/ws" && !web::http_header(c.in, "Sec-WebSocket-Key").empty()) {
+    const std::string acc = web::ws_accept(web::http_header(c.in, "Sec-WebSocket-Key"));
+    const std::string resp = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                             "Sec-WebSocket-Accept: " + acc + "\r\n\r\n";
+    c.in.clear();
+    if (!send_all(c.fd, resp.data(), resp.size())) { ::close(c.fd); c.fd = -1; return; }
+    c.kind = 2;
+    const std::string h = web::ws_frame(hello());
+    const std::string st = web::ws_frame(last_status_sent_.empty() ? "{\"type\":\"status\"}" : last_status_sent_);
+    if (!send_all(c.fd, h.data(), h.size()) || !send_all(c.fd, st.data(), st.size())) { ::close(c.fd); c.fd = -1; }
+    return;
+  }
+  if (path == "/stream.mjpg") {
+    const char* hdr =
+        "HTTP/1.0 200 OK\r\nCache-Control: no-cache\r\nConnection: close\r\n"
+        "Content-Type: multipart/x-mixed-replace; boundary=rcwsframe\r\n\r\n";
+    c.in.clear();
+    if (send_all(c.fd, hdr, std::strlen(hdr))) c.kind = 1;
+    else { ::close(c.fd); c.fd = -1; }
+    return;
+  }
+  bool ok = false;
+  if (path == "/" || path == "/index.html") {
+    const std::string page = read_file(web_root_ + "/index.html");
+    if (!page.empty()) ok = send_http(c.fd, "200 OK", "text/html; charset=utf-8", page.data(), page.size());
+    else {
+      const std::string msg = "web/index.html not found (" + web_root_ + "). Live view: /stream.mjpg";
+      ok = send_http(c.fd, "404 Not Found", "text/plain; charset=utf-8", msg.data(), msg.size());
+    }
+  } else if (path.rfind("/snap/", 0) == 0 || path.rfind("/crop/", 0) == 0) {
+    const bool crop = path[1] == 'c';
+    const int n = num_of(crop ? "/crop/" : "/snap/");
+    for (const auto& sn : snaps_)
+      if (sn.n == n) {
+        const auto& b = crop ? sn.crop : sn.full;
+        ok = send_http(c.fd, "200 OK", "image/jpeg", b.data(), b.size());
+      }
+  } else if (path.rfind("/thumb/", 0) == 0) {
+    const int id = num_of("/thumb/");
+    for (const auto& k : last_ov_.tracks)
+      if (k.id == id) {
+        const cv::Mat cr = crop_box(last_bgr_, k.box, last_ov_.scale);
+        std::vector<uchar> jpg;
+        if (!cr.empty() && cv::imencode(".jpg", cr, jpg, {cv::IMWRITE_JPEG_QUALITY, 75}))
+          ok = send_http(c.fd, "200 OK", "image/jpeg", jpg.data(), jpg.size());
+      }
+  }
+  if (!ok) send_http(c.fd, "404 Not Found", "text/plain", "not found", 9);
+  ::close(c.fd);
+  c.fd = -1;
+}
+
 void PreviewServer::run(int cpu) {
   if (cpu >= 0) set_thread_rt(cpu, 0, "preview");
-  std::vector<int> clients;
+  std::vector<Conn> conns;
   const std::vector<int> params{cv::IMWRITE_JPEG_QUALITY, 70};
   std::vector<uchar> jpg;
+  int64_t t_sys = 0;
   while (!stop_) {
-    pollfd p{listen_fd_, POLLIN, 0};
-    if (listen_fd_ < 0) ::poll(nullptr, 0, 30);
-    else if (::poll(&p, 1, 30) > 0 && (p.revents & POLLIN)) {
-      const int fd = ::accept(listen_fd_, nullptr, nullptr);
-      if (fd >= 0) {
-        char req[1024];
-        ::recv(fd, req, sizeof req, MSG_DONTWAIT);  // request content is ignored
-        const char* hdr =
-            "HTTP/1.0 200 OK\r\nCache-Control: no-cache\r\nConnection: close\r\n"
-            "Content-Type: multipart/x-mixed-replace; boundary=rcwsframe\r\n\r\n";
-        if (send_all(fd, hdr, std::strlen(hdr))) clients.push_back(fd);
-        else ::close(fd);
+    // ---- network: accept, requests, WebSocket input
+    std::vector<pollfd> pf;
+    if (listen_fd_ >= 0) pf.push_back({listen_fd_, POLLIN, 0});
+    for (const auto& c : conns) pf.push_back({c.fd, POLLIN, 0});
+    if (pf.empty()) ::poll(nullptr, 0, 20);
+    else if (::poll(pf.data(), nfds_t(pf.size()), 20) > 0) {
+      size_t k = 0;
+      if (listen_fd_ >= 0) {
+        if (pf[0].revents & POLLIN) {
+          const int fd = ::accept(listen_fd_, nullptr, nullptr);
+          if (fd >= 0) {
+            timeval tv{0, 300000};   // a stalled browser must not block the server thread for long
+            setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
+            conns.push_back({fd, 0, "", now_ns()});
+          }
+        }
+        k = 1;
+      }
+      for (size_t i = 0; i + k < pf.size() && i < conns.size(); ++i) {
+        Conn& c = conns[i];
+        if (!(pf[i + k].revents & (POLLIN | POLLHUP | POLLERR))) continue;
+        char buf[2048];
+        const ssize_t n = ::recv(c.fd, buf, sizeof buf, MSG_DONTWAIT);
+        if (n <= 0) { ::close(c.fd); c.fd = -1; continue; }
+        if (c.kind == 1) continue;                       // MJPEG viewers send nothing useful
+        c.in.append(buf, size_t(n));
+        if (c.kind == 0) {
+          if (c.in.find("\r\n\r\n") != std::string::npos) handle_request(c, conns);
+          else if (c.in.size() > 16384) { ::close(c.fd); c.fd = -1; }
+          continue;
+        }
+        std::vector<web::WsMsg> msgs;
+        if (!web::ws_parse(&c.in, &msgs)) { ::close(c.fd); c.fd = -1; continue; }
+        for (auto& m : msgs) {
+          if (m.opcode == 8) { ::close(c.fd); c.fd = -1; break; }
+          if (m.opcode == 9) { const auto p = web::ws_frame(m.payload, 10); send_all(c.fd, p.data(), p.size()); }
+          if (m.opcode == 1) { std::lock_guard<std::mutex> lk(mu_); if (commands_.size() < 256) commands_.push_back(m.payload); }
+        }
       }
     }
-    cv::Mat gray;
+    const int64_t tnow = now_ns();
+    for (auto& c : conns)
+      if (c.kind == 0 && c.fd >= 0 && tnow - c.t0 > 3000000000LL) { ::close(c.fd); c.fd = -1; }
+
+    // ---- outgoing messages
+    std::string status;
+    std::vector<std::string> events;
+    std::vector<WebCapture> caps;
+    std::vector<int> answered;
+    WebFrame frame;
     PreviewOverlay ov;
+    bool have_frame = false;
     {
       std::lock_guard<std::mutex> lk(mu_);
-      if (!has_pending_) { n_clients_ = int(clients.size()); continue; }
-      gray = pending_.clone();
-      ov = pending_ov_;
-      has_pending_ = false;
+      if (status_dirty_) { status = status_; status_dirty_ = false; }
+      events.swap(events_);
+      caps.swap(captures_in_);
+      answered.swap(answered_in_);
+      if (has_pending_) { frame = std::move(pending_); ov = pending_ov_; has_pending_ = false; have_frame = true; }
     }
-    if (clients.empty() && !window_) continue;
-    const cv::Mat img = render_preview(gray, ov, stack_, n_clients_.load());
+    for (auto& c : caps) store_capture(c, conns);
+    for (int id : answered) {
+      for (auto& sn : snaps_)
+        if (sn.track == id) sn.answered = true;
+      broadcast("{\"type\":\"answered\",\"track\":" + std::to_string(id) + "}", conns);   // other open pages drop the prompt
+    }
+    for (const auto& e : events) broadcast(e, conns);
+    if (!status.empty()) { last_status_sent_ = status; broadcast(status, conns); }
+    if (tnow - t_sys > 2000000000LL) {   // board health for the dashboard
+      t_sys = tnow;
+      const std::string temp = read_sys("/sys/class/thermal/thermal_zone0/temp");
+      const std::string thr = read_sys("/sys/devices/platform/soc/soc:firmware/get_throttled");
+      char j[160];
+      std::snprintf(j, sizeof j, "{\"type\":\"sys\",\"temp_c\":%s,\"throttled\":%s%s%s}",
+                    temp.empty() ? "null" : std::to_string(std::atoi(temp.c_str()) / 1000.0).c_str(),
+                    thr.empty() ? "" : "\"", thr.empty() ? "null" : thr.c_str(), thr.empty() ? "" : "\"");
+      broadcast(j, conns);
+    }
+    conns.erase(std::remove_if(conns.begin(), conns.end(), [](const Conn& c) { return c.fd < 0; }), conns.end());
+    int nm = 0, nw = 0;
+    for (const auto& c : conns) { nm += c.kind == 1; nw += c.kind == 2; }
+    n_clients_ = nm;
+    n_ws_ = nw;
+
+    // ---- live view
+    if (!have_frame) continue;
+    last_bgr_ = web_frame_bgr(frame);
+    last_ov_ = ov;
+    if (nm == 0 && !window_) continue;
+    const cv::Mat img = render_preview(last_bgr_, ov, stack_, nm);
 #ifdef RCWS_HAVE_HIGHGUI
     if (window_) {
       cv::imshow("RCWS Stage 1", img);
       cv::waitKey(1);  // lets the window repaint; key presses are ignored (stop with Ctrl-C)
     }
 #endif
-    if (clients.empty()) continue;
+    if (nm == 0) continue;
     cv::imencode(".jpg", img, jpg, params);
     char head[128];
     const int hn = std::snprintf(head, sizeof head, "--rcwsframe\r\nContent-Type: image/jpeg\r\nContent-Length: %zu\r\n\r\n",
                                  jpg.size());
-    for (size_t i = 0; i < clients.size();) {
-      const int fd = clients[i];
-      if (send_all(fd, head, size_t(hn)) && send_all(fd, jpg.data(), jpg.size()) && send_all(fd, "\r\n", 2)) {
-        ++i;
-      } else {
-        ::close(fd);
-        clients.erase(clients.begin() + long(i));
+    for (auto& c : conns) {
+      if (c.kind != 1) continue;
+      if (!(send_all(c.fd, head, size_t(hn)) && send_all(c.fd, jpg.data(), jpg.size()) && send_all(c.fd, "\r\n", 2))) {
+        ::close(c.fd);
+        c.fd = -1;
       }
     }
-    n_clients_ = int(clients.size());
   }
-  for (int fd : clients) ::close(fd);
+  for (auto& c : conns) if (c.fd >= 0) ::close(c.fd);
 }
 
 }  // namespace rcws

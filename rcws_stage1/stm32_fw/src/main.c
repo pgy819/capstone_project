@@ -21,6 +21,7 @@
 #include "protocol.h"
 #include "feetech_sts.h"
 #include "servo_guard.h"
+#include <string.h>
 #ifdef RCWS_SYSID
 #include "sysid.h"
 #endif
@@ -68,6 +69,9 @@
 #define STS_RAMP_SPEED      300u      /* servo speed during RAMP [steps/s] ~ 26 deg/s */
 #define BOOT_SLOW_TICKS     1500u     /* first 3 s after boot: slow move to the centre goal */
 #define STATUS_PERIOD_MS    20u       /* uplink STATUS 50 Hz */
+#define JOG_MAX_DPS         60.0f     /* operator jog (web) rate limit */
+#define HOME_GAIN           0.01f     /* HOME: goal velocity = gain * (centre - goal) per tick */
+#define HOME_MAX_DPS        30.0f
 #define ESTOP_DEBOUNCE_MS   30u
 
 #define COMMISSION_OLD_ID   1u        /* factory ID */
@@ -108,6 +112,7 @@ static volatile uint8_t      g_comm_lost = 1u;              /* HOLD because of a
 static volatile uint8_t      g_operator_hold = 0u;
 static volatile uint16_t     g_pan_goal_u16 = 2048u;        /* published by TIM2 for the uplink */
 static volatile uint16_t     g_tilt_goal_u16 = 2048u;
+static uint8_t               g_ping_flags = 0u;             /* LINK_S_*_PING_OK | LINK_S_PING_DONE */
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -167,6 +172,18 @@ int main(void)
     /* PC13 held at boot -> rename servo ID 1 -> 2 = Pan (blocking, before TIM2 starts). */
     Commissioning_CheckAndRun();
 
+    /* Self-check: does each ID answer? (reported in every uplink STATUS, shown on the web page) */
+    {
+        uint16_t p0 = 0u, t0 = 0u;
+        const uint8_t ok = STS_BootPing(&p0, &t0);
+        g_ping_flags = (uint8_t)(LINK_S_PING_DONE | ((ok & 1u) ? LINK_S_PAN_PING_OK : 0u) |
+                                 ((ok & 2u) ? LINK_S_TILT_PING_OK : 0u));
+        static const char m_ok[]  = "servo self-check: Pan(ID2) OK, Tilt(ID1) OK\r\n";
+        static const char m_bad[] = "servo self-check: a servo did not answer (see web page)\r\n";
+        const char *m = (ok == 3u) ? m_ok : m_bad;
+        (void)HAL_UART_Transmit(&huart2, (const uint8_t *)m, (uint16_t)strlen(m), 50u);
+    }
+
     lim_pan  = Guard_Limits(PAN_MIN, PAN_MAX, V_MAX_DPS, A_MAX_DPS2, A_BRAKE_DPS2);
     lim_tilt = Guard_Limits(TILT_MIN, TILT_MAX, V_MAX_DPS, A_MAX_DPS2, A_BRAKE_DPS2);
     Guard_Init(&g_guard);
@@ -195,6 +212,7 @@ static void Servo_ControlStep(void)
 {
     uint8_t  mode, flags;
     float    pkt_err_x, pkt_err_y;
+    float    pkt_rate_pan, pkt_rate_tilt;
     uint8_t  new_flag;
     uint32_t watchdog;
 
@@ -205,6 +223,8 @@ static void Servo_ControlStep(void)
     flags     = g_vision_pkt.flags;
     pkt_err_x = (float)g_vision_pkt.err_pan;
     pkt_err_y = (float)g_vision_pkt.err_tilt;
+    pkt_rate_pan  = (float)g_vision_pkt.rate_pan;
+    pkt_rate_tilt = (float)g_vision_pkt.rate_tilt;
     new_flag  = g_new_pkt_flag;
     g_new_pkt_flag = 0u;
     if (g_comm_watchdog < 0xFFFFFFFFu) {
@@ -225,10 +245,14 @@ static void Servo_ControlStep(void)
     const uint8_t fresh = (watchdog <= COMM_WATCHDOG_LIMIT) ? 1u : 0u;
     if (fresh && (flags & LINK_F_ESTOP_REQ)) {
         g_estop_sw = 1u;
+    } else if (fresh && (flags & LINK_F_ESTOP_CLEAR) && g_estop_sw && !g_estop) {
+        g_estop_sw = 0u;                   /* web release: limp, then RAMP back (B1 stays latched) */
+        Guard_ClearEstop(&g_guard);
     }
     g_operator_hold = (fresh && (flags & LINK_F_OPERATOR_HOLD)) ? 1u : 0u;
+    const uint8_t operator_move = (mode == LINK_MODE_JOG || mode == LINK_MODE_HOME) ? 1u : 0u;
     const uint8_t target_valid =
-        ((mode == LINK_MODE_FOLLOW || mode == LINK_MODE_PREDICT) && !g_operator_hold) ? 1u : 0u;
+        (((mode == LINK_MODE_FOLLOW || mode == LINK_MODE_PREDICT) && !g_operator_hold) || operator_move) ? 1u : 0u;
     const GuardState_t st = Guard_Update(&g_guard, &k_guard_cfg, watchdog, target_valid,
                                          (uint8_t)(g_estop | g_estop_sw));
     g_servo_state = st;
@@ -256,7 +280,24 @@ static void Servo_ControlStep(void)
     }
 
     float v_pan = 0.0f, v_tilt = 0.0f;
-    if (st == GUARD_RUN) {
+    if (st == GUARD_RUN && operator_move) {
+        /* web operator: JOG = commanded rate (+right / +up), HOME = slow return to the centre */
+        if (mode == LINK_MODE_JOG) {
+            const float k = GUARD_TICK_S;                       /* count/s -> count/tick */
+            v_pan  = DIR_PAN * pkt_rate_pan * k;
+            v_tilt = -DIR_TILT * pkt_rate_tilt * k;             /* tilt: +up = -image y */
+            const float jmax = JOG_MAX_DPS * GUARD_STEPS_PER_DEG * GUARD_TICK_S;
+            v_pan  = v_pan  > jmax ? jmax : (v_pan  < -jmax ? -jmax : v_pan);
+            v_tilt = v_tilt > jmax ? jmax : (v_tilt < -jmax ? -jmax : v_tilt);
+        } else {
+            const float hmax = HOME_MAX_DPS * GUARD_STEPS_PER_DEG * GUARD_TICK_S;
+            v_pan  = HOME_GAIN * (SERVO_CENTER - ax_pan.goal);
+            v_tilt = HOME_GAIN * (SERVO_CENTER - ax_tilt.goal);
+            v_pan  = v_pan  > hmax ? hmax : (v_pan  < -hmax ? -hmax : v_pan);
+            v_tilt = v_tilt > hmax ? hmax : (v_tilt < -hmax ? -hmax : v_tilt);
+        }
+        is_first_track_frame = 1u;   /* no derivative kick when tracking resumes */
+    } else if (st == GUARD_RUN) {
         /* 4. Multi-rate incremental PD (velocity request in steps/tick). */
         if (new_flag) {
             float raw_dex, raw_dey;
@@ -339,7 +380,8 @@ static void Status_Task(void)
     s.seq_echo  = g_vision_pkt.seq;
     s.guard     = (uint8_t)g_servo_state;
     s.flags     = (uint8_t)((g_estop ? LINK_S_ESTOP_B1 : 0u) | (g_comm_lost ? LINK_S_COMM_LOST : 0u) |
-                            (g_estop_sw ? LINK_S_ESTOP_SW : 0u) | (g_operator_hold ? LINK_S_OPERATOR_HOLD : 0u));
+                            (g_estop_sw ? LINK_S_ESTOP_SW : 0u) | (g_operator_hold ? LINK_S_OPERATOR_HOLD : 0u) |
+                            g_ping_flags);
     s.pan_goal  = g_pan_goal_u16;
     s.tilt_goal = g_tilt_goal_u16;
     s.rx_ok     = (uint16_t)g_proto_ok_count;

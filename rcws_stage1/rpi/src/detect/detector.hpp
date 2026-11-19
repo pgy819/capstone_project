@@ -34,6 +34,10 @@ class IDetector {
   virtual int in_flight() const = 0;
   virtual bool submit(DetRequest&& req) = 0;          // false if it cannot accept now
   virtual std::optional<DetectionBatch> poll() = 0;   // completed results, in completion order
+  // Web page: which COCO class is the target (reported as ObjClass::Phone = "the target class").
+  // Thread-safe; takes effect for batches parsed afterwards. false: this detector has a fixed class.
+  virtual bool set_target_class(int coco_id) { (void)coco_id; return false; }
+  virtual int target_class() const { return 67; }
 };
 
 // Live-preview copy of a submitted request (the RGB buffer is shared, not copied: requests

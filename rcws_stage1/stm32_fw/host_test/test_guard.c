@@ -76,6 +76,14 @@ static void test_supervisor(void)
     CHECK(Guard_Update(&g, &c, 0, 1, 1) == GUARD_ESTOP && !g.torque_on);
     CHECK(Guard_Update(&g, &c, 0, 1, 0) == GUARD_ESTOP);               /* latched */
     CHECK(Guard_Update(&g, &c, 9000, 1, 0) == GUARD_ESTOP);
+    /* software ESTOP released from the web: limp, then the slow RAMP, never straight to RUN */
+    Guard_ClearEstop(&g);
+    CHECK(g.state == GUARD_TORQUE_OFF && !g.torque_on);
+    CHECK(Guard_Update(&g, &c, 0, 1, 0) == GUARD_RAMP && g.torque_on);
+    Guard_t h;
+    Guard_Init(&h);
+    Guard_ClearEstop(&h);                                              /* no effect outside ESTOP */
+    CHECK(h.state == GUARD_HOLD);
 }
 
 static void test_packets(void)
@@ -93,8 +101,30 @@ static void test_packets(void)
     CHECK(b[7] == 2 && b[8] == (626 & 0xFF) && b[14] == 1 && b[15] == (3470 & 0xFF));
 }
 
+static void test_read_pos_reply(void)
+{
+    uint8_t req[8], rx[24];
+    uint16_t pos = 0;
+    CHECK(STS_BuildReadPos(req, STS_PAN_ID) == 8);
+    CHECK(req[2] == 2 && req[3] == 4 && req[4] == 0x02 && req[5] == 0x38 && req[6] == 2);
+    /* echo only: no reply */
+    CHECK(!STS_ParseReadPosReply(req, 8, STS_PAN_ID, &pos));
+    /* echo, then the reply FF FF 02 04 00 L H ck (position 2100) */
+    for (int i = 0; i < 8; i++) { rx[i] = req[i]; }
+    const uint8_t r[8] = { 0xFF, 0xFF, 2, 4, 0, (uint8_t)(2100 & 0xFF), (uint8_t)(2100 >> 8),
+                           (uint8_t)~(2 + 4 + 0 + (2100 & 0xFF) + (2100 >> 8)) };
+    for (int i = 0; i < 8; i++) { rx[8 + i] = r[i]; }
+    CHECK(STS_ParseReadPosReply(rx, 16, STS_PAN_ID, &pos) && pos == 2100);
+    /* reply of the other servo is not ours */
+    CHECK(!STS_ParseReadPosReply(rx, 16, STS_TILT_ID, &pos));
+    /* corrupted checksum */
+    rx[15] ^= 1;
+    CHECK(!STS_ParseReadPosReply(rx, 16, STS_PAN_ID, &pos));
+}
+
 int main(void)
 {
+    test_read_pos_reply();
     test_limits_and_deadband();
     test_velocity_accel_limits();
     test_soft_limit_anti_windup();

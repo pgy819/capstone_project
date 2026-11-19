@@ -106,6 +106,37 @@ void Perception::set_state(TrackState s, StateReason why, int64_t t) {
   t_state_ = t;
 }
 
+void Perception::apply_ops(int64_t now) {
+  for (const Op& op : ops_) {
+    bool release = false;
+    switch (op.kind) {
+      case OpKind::STOP: {
+        const int id = op.id >= 0 ? op.id : lock_id_;
+        mot_.exclude(id);
+        release = id >= 0 && id == lock_id_;
+        break;
+      }
+      case OpKind::SELECT:
+        mot_.prefer(op.id);
+        release = lock_id_ != op.id;
+        break;
+      case OpKind::CLEAR:
+        mot_.clear_operator();
+        break;
+      case OpKind::RETARGET:
+        mot_.clear_operator();
+        release = true;
+        break;
+    }
+    if (release && state_ != TrackState::SEARCH) {
+      reset_track();
+      tgt_box_ = RectF{};
+      set_state(TrackState::SEARCH, StateReason::OPERATOR, now);
+    }
+  }
+  ops_.clear();
+}
+
 void Perception::reset_track() {
   est_.reset();
   ncc_.clear();
@@ -244,6 +275,7 @@ void Perception::handle_batch(const DetectionBatch& b, const FrameView& f, int64
     if (state_ == TrackState::SEARCH) {
       // the board's designated target (priority + hysteresis); before any track is confirmed,
       // the most confident detection as in v3
+      if (mot_.excluded(id_of(d))) continue;   // operator stopped tracking this object
       if (designated_ >= 0 && id_of(d) != designated_) continue;
       if (d.score >= tc.thr_acquire && d.score > best_key) { best = &d; best_m = m; best_key = d.score; }
       continue;
@@ -681,6 +713,7 @@ FrameControls Perception::on_frame(const FrameView& f) {
   push_hist(f);
   if (t_state_ == 0) t_state_ = now;
 
+  if (!ops_.empty()) apply_ops(now);
   if (det_)
     while (auto b = det_->poll()) handle_batch(*b, f, now);
 

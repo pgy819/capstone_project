@@ -69,8 +69,12 @@ else()
   message(STATUS "rcws: HailoRT detector OFF")
 endif()
 
-add_executable(rcws_vision src/app/main.cpp src/app/preview_server.cpp)
+add_executable(rcws_vision src/app/main.cpp src/app/preview_server.cpp src/app/web_util.cpp src/app/operator.cpp)
 target_link_libraries(rcws_vision PRIVATE rcws_core)
+# always-on start / stop page (systemd user service, tools/pi/)
+add_executable(rcws_launcher src/app/launcher.cpp src/app/web_util.cpp)
+target_include_directories(rcws_launcher PRIVATE src)
+
 find_package(OpenCV QUIET COMPONENTS highgui)
 if(OpenCV_highgui_FOUND OR TARGET opencv_highgui)
   target_link_libraries(rcws_vision PRIVATE opencv_highgui)
@@ -92,7 +96,10 @@ add_executable(rcws_tests
   tests/test_preview.cpp
   tests/test_scenarios.cpp
   tests/test_link.cpp
+  tests/test_web.cpp
   src/app/preview_server.cpp
+  src/app/web_util.cpp
+  src/app/operator.cpp
 )
 target_link_libraries(rcws_tests PRIVATE rcws_core util)   # util: openpty (link test)
 add_test(NAME rcws_tests COMMAND rcws_tests)

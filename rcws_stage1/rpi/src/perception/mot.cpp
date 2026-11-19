@@ -428,13 +428,39 @@ float TrackBoard::priority(const MotTrack& k, int64_t t) const {
          c_.w_conf * clamp01(k.score) + c_.w_age * clamp01(age);
 }
 
+void TrackBoard::exclude(int id) {
+  if (id < 0) return;
+  excluded_.insert(id);
+  if (prefer_ == id) prefer_ = -1;
+  if (designated_ == id) designated_ = -1;
+}
+
+void TrackBoard::prefer(int id) {
+  prefer_ = id;
+  excluded_.erase(id);
+}
+
+void TrackBoard::clear_operator() {
+  excluded_.clear();
+  prefer_ = -1;
+}
+
 int TrackBoard::designate(int locked, int64_t t) {
-  auto eligible = [](const MotTrack& k) { return k.st == MotState::CONFIRMED; };
+  auto eligible = [this](const MotTrack& k) { return k.st == MotState::CONFIRMED && !excluded(k.id); };
   for (auto& k : tracks_) k.priority = priority(k, t);
   if (locked >= 0) {   // Perception follows a track: never designate another one
     if (designated_ != locked) { designated_ = locked; t_designated_ = t; }
     challenger_ = -1;
     return locked;
+  }
+  if (prefer_ >= 0) {  // operator's choice wins while that object is in view
+    const MotTrack* p = find(prefer_);
+    if (p && p->st != MotState::LOST) {
+      if (designated_ != prefer_) { designated_ = prefer_; t_designated_ = t; }
+      challenger_ = -1;
+      return designated_;
+    }
+    if (!p) prefer_ = -1;   // deleted: back to automatic choice
   }
   const MotTrack* best = nullptr;
   for (const auto& k : tracks_)

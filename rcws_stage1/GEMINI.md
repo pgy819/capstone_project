@@ -9,9 +9,10 @@
 Single source of truth: `stm32_fw/include/link_proto.h` + `stm32_fw/src/link_proto.c`, compiled by BOTH the
 firmware and the Pi runtime (`rpi/CMakeLists.txt`). Never re-declare the layout elsewhere.
 - Downlink AIM (Pi -> STM32, every camera frame): `AA 55 | 0x21 | seq | mode | flags | err_pan i16 | err_tilt i16 | rate_pan i16 | rate_tilt i16 | crc16`
-  - `mode`: 0 HOLD / 1 FOLLOW / 2 PREDICT. `flags`: bit0 OPERATOR_HOLD, bit1 ESTOP_REQ (latched).
+  - `mode`: 0 HOLD / 1 FOLLOW / 2 PREDICT / 3 JOG (rate_* = commanded rate) / 4 HOME. `flags`: bit0 OPERATOR_HOLD, bit1 ESTOP_REQ (latched), bit2 ESTOP_CLEAR (software ESTOP only).
   - `err_*`: target angle off the camera axis, +right / +up, unit 1/16 servo count (2*pi/65536 rad). `rate_*`: servo count/s.
 - Uplink STATUS (STM32 -> Pi, 50 Hz): `AA 56 | 0x81 | seq_echo | guard | flags | pan_goal u16 | tilt_goal u16 | rx_ok u16 | rx_err u16 | crc16`
+  - status `flags`: bit0 ESTOP_B1, bit1 COMM_LOST, bit2 ESTOP_SW, bit3 OPERATOR_HOLD, bit4/5 Pan/Tilt answered the boot READ, bit6 boot check done.
 - CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) over bytes 2..13, little-endian. Parser = sliding-window frame finder (resynchronises after any slip).
 - The v1 8-byte packet (`FF FE status err_x err_y sum`) is retired.
 

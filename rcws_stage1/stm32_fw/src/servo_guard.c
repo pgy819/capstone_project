@@ -79,6 +79,15 @@ GuardState_t Guard_Update(Guard_t *g, const GuardCfg_t *c, uint32_t comm_gap_tic
     return next;
 }
 
+void Guard_ClearEstop(Guard_t *g)
+{
+    if (g->state == GUARD_ESTOP) {
+        g->state = GUARD_TORQUE_OFF;   /* limp until the next fresh packet, then RAMP (slow) */
+        g->ticks_in_state = 0u;
+        g->torque_on = 0u;
+    }
+}
+
 const char *Guard_Name(GuardState_t s)
 {
     switch (s) {

@@ -12,7 +12,8 @@
  *    HOLD       target lost / coasting too long / comm gap > 0.5 s  -> brake to a stop, hold the goal
  *    TORQUE_OFF comm gap > 10 s (Pi gone)                          -> torque off, servos go limp
  *    RAMP       packets back after TORQUE_OFF                      -> torque on at a low speed for 1 s
- *    ESTOP      B1 pressed (latched until reset)                   -> torque off, nothing else
+ *    ESTOP      B1 pressed (latched until reset) or software ESTOP  -> torque off, nothing else
+ *               (a software ESTOP can be released: Guard_ClearEstop -> TORQUE_OFF -> RAMP)
  *
  * Pure C, no HAL: build with -DRCWS_HOST_TEST for the host tests (host_test/test_guard.c).
  */
@@ -85,6 +86,11 @@ void Guard_Init(Guard_t *g);
  * frame can be skipped when the bus is busy.
  */
 GuardState_t Guard_Update(Guard_t *g, const GuardCfg_t *c, uint32_t comm_gap_ticks, uint8_t target_valid, uint8_t estop);
+
+/** Release a latched ESTOP (software ESTOP only: the caller keeps B1 latched). The supervisor goes to
+ *  TORQUE_OFF and comes back through RAMP (slow) on the next fresh packet. Must not be called while the
+ *  estop input is still asserted. */
+void Guard_ClearEstop(Guard_t *g);
 
 const char *Guard_Name(GuardState_t s);
 

@@ -21,6 +21,13 @@ using namespace hailort;
 
 class HailoDetector final : public IDetector {
  public:
+  bool set_target_class(int coco_id) override {
+    if (coco_id < 0 || coco_id >= 80) return false;
+    target_cls_ = coco_id;
+    return true;
+  }
+  int target_class() const override { return target_cls_.load(); }
+
   ~HailoDetector() override {
     // Callbacks touch mu_/done_; drain in-flight jobs before members are destroyed.
     const auto t0 = std::chrono::steady_clock::now();
@@ -130,8 +137,9 @@ class HailoDetector final : public IDetector {
     for (int c = 0; c < n_classes_ && p < end; ++c) {
       const int count = std::min(int(*p++), max_boxes_);
       ObjClass cls = ObjClass::Other;
-      if (c == cfg_.class_phone) cls = ObjClass::Phone;
-      else if (c == cfg_.class_person) cls = ObjClass::Person;
+      const int tgt = target_cls_.load(std::memory_order_relaxed);
+      if (c == tgt) cls = ObjClass::Phone;                          // the target class (web selectable)
+      else if (c == cfg_.class_person) cls = ObjClass::Person;      // context: phone-in-hand search
       for (int i = 0; i < count && p + 5 <= end; ++i, p += 5) {
         const float score = p[4];
         if (cls == ObjClass::Other || score < cfg_.score_min) continue;
@@ -141,6 +149,7 @@ class HailoDetector final : public IDetector {
     }
   }
 
+  std::atomic<int> target_cls_{67};
   DetectorCfg cfg_;
   std::unique_ptr<VDevice> vdev_;
   std::shared_ptr<InferModel> model_;
@@ -159,6 +168,7 @@ class HailoDetector final : public IDetector {
 std::unique_ptr<IDetector> make_hailo_detector(const DetectorCfg& cfg, std::string* err) {
   auto d = std::make_unique<HailoDetector>();
   if (!d->open(cfg, err)) return nullptr;
+  d->set_target_class(cfg.class_phone);
   return d;
 }
 

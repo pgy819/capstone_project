@@ -25,6 +25,8 @@
 #include "record/clip.hpp"
 #include "sim/synthetic.hpp"
 #include "app/preview_server.hpp"
+#include "app/operator.hpp"
+#include "app/web_util.hpp"
 #include "link/uart_link.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -54,6 +56,8 @@ struct Args {
   std::string uart;                    // STM32 link device (packet v2), empty = off
   int uart_baud = LINK_BAUD_DEFAULT;
   double link_lead_ms = 0;             // extra prediction of the sent aim beyond the processing time
+  std::string web_root = "web";        // operator web page (index.html) served with --preview
+  double jog_dps = 20;                 // web jog rate at full deflection
 };
 
 void usage() {
@@ -67,7 +71,8 @@ void usage() {
                "                   [--record DIR]                       (annotated frames, 30 fps of scene time:\n"
                "                                                         ffmpeg -framerate 30 -i DIR/f_%05d.jpg demo.mp4)\n"
                "                   [--uart /dev/serial0] [--uart-baud 115200] [--link-lead-ms 0]\n"
-               "                                                        (drive the STM32: packet v2 AIM frames)\n";
+               "                                                        (drive the STM32: packet v2 AIM frames)\n"
+               "                   [--web-root DIR] [--jog-dps 20]      (operator page at http://<pi>:PORT/)\n";
 }
 
 bool parse(int argc, char** argv, Args* a) {
@@ -90,6 +95,8 @@ bool parse(int argc, char** argv, Args* a) {
     if (k == "--uart" && val(&a->uart)) continue;
     if (k == "--uart-baud" && val(&v)) { a->uart_baud = std::stoi(v); continue; }
     if (k == "--link-lead-ms" && val(&v)) { a->link_lead_ms = std::stod(v); continue; }
+    if (k == "--web-root" && val(&a->web_root)) continue;
+    if (k == "--jog-dps" && val(&v)) { a->jog_dps = std::stod(v); continue; }
     if (k == "--preview-view" && val(&a->preview_view)) {
       if (a->preview_view != "plain" && a->preview_view != "stack") return false;
       continue;
@@ -100,6 +107,35 @@ bool parse(int argc, char** argv, Args* a) {
 }
 
 double deg(double r) { return r * 180.0 / M_PI; }
+
+// web page target classes (COCO ids of the fixed YOLOv8s HEF)
+struct WebClass {
+  const char* name;
+  int coco;
+};
+constexpr WebClass kClasses[] = {{"phone", 67}, {"ball", 32}, {"person", 0}};
+const char* class_name(int coco) {
+  for (const auto& c : kClasses) if (c.coco == coco) return c.name;
+  return "other";
+}
+const char* guard_name(uint8_t g) {
+  static const char* k[] = {"RUN", "HOLD", "TORQUE_OFF", "RAMP", "ESTOP"};
+  return g < 5 ? k[g] : "?";
+}
+double goal_deg(uint16_t g) { return (int(g) - 2048) * 360.0 / 4096.0; }
+
+std::string event_json(const char* level, const std::string& text) {
+  char t[32];
+  std::snprintf(t, sizeof t, "%.3f", now_ns() * 1e-9);
+  return std::string("{\"type\":\"event\",\"t\":") + t + ",\"level\":\"" + level + "\",\"text\":\"" +
+         web::json_escape(text) + "\"}";
+}
+
+// Self-check for the web page (connection check): camera, detector, STM32 link, servo answers.
+struct SelfCheck {
+  int64_t t_start = 0;     // 0 = idle
+  uint64_t frames0 = 0, batches0 = 0;
+};
 
 }  // namespace
 
@@ -181,6 +217,18 @@ int main(int argc, char** argv) {
   }
   uint8_t link_seq = 0;
   uint32_t link_rx_logged = 0;
+  OperatorCfg ocfg;
+  ocfg.jog_dps = args.jog_dps;
+  Operator op(ocfg);
+  int target_coco = det ? det->target_class() : 67;
+  int last_capture_lock = -1;
+  TrackState prev_state = TrackState::SEARCH;
+  int prev_guard = -1;
+  bool prev_link_fresh = false;
+  SelfCheck check;
+  check.t_start = now_ns();
+  double det_ms = 0;
+  uint32_t last_det_seq = 0;
   PreviewServer preview;
   const bool want_view = args.preview_port > 0 || args.window;
   if (want_view) {
@@ -190,9 +238,10 @@ int main(int argc, char** argv) {
     }
     const bool stack = args.preview_view == "stack";
     preview.set_stack(stack);
+    preview.set_web_root(args.web_root);
     per.set_preview_capture(stack);
     if (preview.start(args.preview_port, args.window, cfg.rt.logger_cpu, &err)) {
-      if (args.preview_port > 0) std::cerr << "preview: open http://<pi-address>:" << args.preview_port << "/ in a browser\n";
+      if (args.preview_port > 0) std::cerr << "web page: open http://<pi-address>:" << args.preview_port << "/ in a browser\n";
       if (args.window) std::cerr << "preview: popup window 'RCWS Stage 1' on the Pi desktop\n";
     } else {
       std::cerr << "preview disabled: " << err << "\n";
@@ -221,9 +270,48 @@ int main(int argc, char** argv) {
     }
     dropped += fr.dropped;
     const int64_t t0 = now_ns();
+    // ---- operator commands from the web page (applied between frames)
+    for (const std::string& cmd : preview.take_commands()) {
+      const int64_t tc = now_ns();
+      const std::string k = web::json_str(cmd, "cmd").value_or("");
+      const int id = int(web::json_num(cmd, "id").value_or(-1));
+      std::string say;
+      if (k == "stop_track" || k == "keep") preview.mark_answered(id);
+      if (k == "stop_track") { per.op_stop_target(id); say = "#" + std::to_string(id) + " 추적 중지 (다시 잡지 않음)"; }
+      else if (k == "keep") { say = "#" + std::to_string(id) + " 계속 추적"; }
+      else if (k == "select") { per.op_select(id); op.set_mode(OpMode::AUTO, tc); say = "#" + std::to_string(id) + " 대상으로 전환"; }
+      else if (k == "clear_stops") { per.op_clear_exclusions(); say = "추적 중지 목록 해제 (다시 잡을 수 있음)"; }
+      else if (k == "mode") {
+        const bool aut = web::json_str(cmd, "value").value_or("") == "auto";
+        say = op.set_mode(aut ? OpMode::AUTO : OpMode::MANUAL, tc) ? (aut ? "자동 추적 모드" : "수동 모드 (정지 유지)")
+                                                                   : "모드 변경 거부: 먼저 비상정지를 해제하세요";
+      } else if (k == "jog") {
+        op.jog(web::json_num(cmd, "pan").value_or(0), web::json_num(cmd, "tilt").value_or(0), tc);
+      } else if (k == "home") { op.home(tc); say = "홈 위치(정면)로 복귀"; }
+      else if (k == "estop") { op.estop(tc); say = "비상정지(소프트웨어): 서보 토크 끔"; }
+      else if (k == "estop_clear") { op.estop_clear(tc); say = "비상정지 해제: 수동 모드, 서보는 천천히 다시 힘을 받음"; }
+      else if (k == "class") {
+        const std::string nm = web::json_str(cmd, "name").value_or("");
+        int coco = -1;
+        for (const auto& wc : kClasses) if (nm == wc.name) coco = wc.coco;
+        if (coco >= 0 && det && det->set_target_class(coco)) {
+          target_coco = coco;
+          per.op_retarget();
+          last_capture_lock = -1;
+          say = std::string("검출 클래스 변경: ") + nm + (coco == 67 ? "" : " (휴대폰 기준으로 조정된 추적기라 성능이 낮을 수 있음)");
+        } else {
+          say = "이 검출기는 클래스 변경을 지원하지 않음 (합성/재생 시험)";
+        }
+      } else if (k == "selftest") { check.t_start = tc; say = "연결 점검 시작 (3초)"; }
+      else if (k == "quit") { say = "웹에서 종료 요청"; g_stop = true; }
+      if (!say.empty()) preview.push_event(event_json("info", say));
+    }
+    if (check.t_start && check.frames0 == 0) { check.frames0 = n + 1; check.batches0 = per.stats().det_batches; }
+
     const FrameControls c = per.on_frame(fr.view);
     if (link.is_open()) {   // U1: aim to the STM32 right after the frame is processed
-      const LinkAim_t la = make_link_aim(per.aim(), link_seq++, 0, args.link_lead_ms * 1e-3);
+      const LinkStatusView ls0 = link.status();
+      const LinkAim_t la = op.frame(per.aim(), link_seq++, args.link_lead_ms * 1e-3, now_ns(), &ls0);
       link.send(la);
       if (log.is_open()) {
         RecLinkTx r{per.aim().t, fr.view.seq, la.seq, la.mode, la.flags, 0, la.err_pan, la.err_tilt, la.rate_pan, la.rate_tilt};
@@ -240,6 +328,61 @@ int main(int argc, char** argv) {
     proc_max_ms = std::max(proc_max_ms, ms);
     proc_sum_ms += ms;
     if (clip.active()) clip.push(fr.view);
+    // ---- web page: events, captures, status (cheap: strings and plane copies only)
+    if (want_view && args.preview_port > 0) {
+      const int64_t tw = now_ns();
+      const TrackState st = per.state();
+      if (st != prev_state) {
+        preview.push_event(event_json("state", std::string(to_string(prev_state)) + " -> " + to_string(st) +
+                                                   (per.lock_id() >= 0 ? "  (track #" + std::to_string(per.lock_id()) + ")" : "")));
+        prev_state = st;
+      }
+      if (st == TrackState::TRACK && per.lock_id() >= 0 && per.lock_id() != last_capture_lock) {
+        last_capture_lock = per.lock_id();
+        WebCapture cap;
+        cap.track_id = per.lock_id();
+        cap.t_ns = tw;
+        cap.cls = class_name(target_coco);
+        if (const MotTrack* k = per.board().find(per.lock_id())) cap.score = k->score;
+        if (auto b = per.target_box()) cap.box = *b;
+        cap.frame = copy_web_frame(fr.view);
+        preview.push_capture(std::move(cap));
+      }
+      const auto& lb0 = per.last_detections();
+      if (lb0.frame_seq != last_det_seq && lb0.t_done_ns > lb0.t_submit_ns) {
+        last_det_seq = lb0.frame_seq;
+        det_ms = det_ms == 0 ? (lb0.t_done_ns - lb0.t_submit_ns) * 1e-6 : 0.9 * det_ms + 0.1 * (lb0.t_done_ns - lb0.t_submit_ns) * 1e-6;
+      }
+      if (link.is_open()) {
+        const LinkStatusView ls = link.status();
+        const bool fresh = ls.valid && tw - ls.t_ns < 300000000LL;
+        if (fresh != prev_link_fresh) {
+          preview.push_event(event_json(fresh ? "info" : "warn", fresh ? "STM32 링크 연결됨" : "STM32 응답 없음 (0.3초 이상)"));
+          prev_link_fresh = fresh;
+        }
+        if (fresh && int(ls.s.guard) != prev_guard) {
+          preview.push_event(event_json(ls.s.guard == 4 ? "warn" : "info", std::string("STM32 상태: ") + guard_name(ls.s.guard)));
+          prev_guard = ls.s.guard;
+        }
+      }
+      if (check.t_start && tw - check.t_start > 3000000000LL) {   // connection check result
+        const bool cam_ok = n + 1 > check.frames0 + 30;
+        const bool det_ok = per.stats().det_batches > check.batches0;
+        const LinkStatusView ls = link.status();
+        const bool link_ok = link.is_open() && ls.valid && tw - ls.t_ns < 300000000LL;
+        const bool ping = link_ok && (ls.s.flags & LINK_S_PING_DONE);
+        char j[512];
+        std::snprintf(j, sizeof j,
+                      "{\"type\":\"selfcheck\",\"camera\":%s,\"detector\":%s,\"link\":\"%s\",\"pan\":\"%s\",\"tilt\":\"%s\","
+                      "\"web\":true}",
+                      cam_ok ? "true" : "false", det_ok ? "true" : "false",
+                      !link.is_open() ? "off" : link_ok ? "ok" : "silent",
+                      !ping ? "unknown" : (ls.s.flags & LINK_S_PAN_PING_OK) ? "ok" : "no answer",
+                      !ping ? "unknown" : (ls.s.flags & LINK_S_TILT_PING_OK) ? "ok" : "no answer");
+        preview.push_event(j);
+        check = SelfCheck{};
+      }
+    }
     {
       const int64_t t = now_ns();
       if (t_prev_frame) last_fps = 0.9 * last_fps + 0.1 * (1e9 / std::max<int64_t>(1, t - t_prev_frame));
@@ -290,7 +433,68 @@ int main(int argc, char** argv) {
           ov.rate_psi = deg(e.psi_d); ov.rate_theta = deg(e.theta_d);
           ov.range_m = e.range_m;
         }
-        if (view_due) preview.publish(gray, ov);
+        if (view_due && args.preview_port > 0) {
+          preview.publish_frame(copy_web_frame(fr.view), ov);
+          std::string j;
+          j.reserve(2048);
+          char b[640];
+          const int64_t tw = now_ns();
+          std::snprintf(b, sizeof b,
+                        "{\"type\":\"status\",\"t\":%.3f,\"frame\":%u,\"fps\":%.1f,\"proc_ms\":%.2f,\"det_ms\":%.1f,"
+                        "\"drop\":%llu,\"state\":\"%s\",\"lock\":%d,\"designated\":%d,\"cls\":\"%s\",\"aim\":\"%s\","
+                        "\"aim_text\":\"%s\",\"quality\":%u,\"img\":{\"w\":%d,\"h\":%d,\"scale\":%.5f},",
+                        tw * 1e-9, fr.view.seq, last_fps, last_proc, det_ms, (unsigned long long)dropped, to_string(per.state()),
+                        per.lock_id(), per.designated_id(), class_name(target_coco), to_string(per.aim().mode),
+                        web::json_escape(to_string(per.aim().mode)).c_str(), unsigned(per.quality_flags()), gray.cols, gray.rows, scale);
+          j += b;
+          const EstState e2 = per.estimate(fr.view.t_sof_ns);
+          if (e2.valid && per.lock_id() >= 0) {
+            const auto tb = per.target_box();
+            std::snprintf(b, sizeof b,
+                          "\"target\":{\"id\":%d,\"psi\":%.3f,\"theta\":%.3f,\"psi_d\":%.2f,\"theta_d\":%.2f,\"range\":%.2f,"
+                          "\"u\":%.1f,\"v\":%.1f,\"w\":%.1f,\"h\":%.1f},",
+                          per.lock_id(), deg(e2.psi), deg(e2.theta), deg(e2.psi_d), deg(e2.theta_d), e2.range_m,
+                          tb ? tb->cx() : 0.f, tb ? tb->cy() : 0.f, tb ? tb->w : 0.f, tb ? tb->h : 0.f);
+            j += b;
+          } else {
+            j += "\"target\":null,";
+          }
+          j += "\"tracks\":[";
+          bool first = true;
+          for (const auto& k : per.board().tracks()) {
+            if (k.st == MotState::LOST) continue;
+            const RectF bx = k.box();
+            std::snprintf(b, sizeof b,
+                          "%s{\"id\":%d,\"st\":\"%s\",\"prio\":%.2f,\"score\":%.2f,\"lock\":%s,\"stopped\":%s,"
+                          "\"u\":%.0f,\"v\":%.0f,\"w\":%.0f,\"h\":%.0f}",
+                          first ? "" : ",", k.id, to_string(k.st), k.priority, k.score, k.id == per.lock_id() ? "true" : "false",
+                          per.board().excluded(k.id) ? "true" : "false", bx.cx(), bx.cy(), bx.w, bx.h);
+            j += b;
+            first = false;
+          }
+          j += "],\"stopped\":[";
+          first = true;
+          for (int id : per.board().excluded_ids()) { j += (first ? "" : ",") + std::to_string(id); first = false; }
+          std::snprintf(b, sizeof b, "],\"op\":{\"mode\":\"%s\",\"activity\":\"%s\",\"estop\":%s,\"preferred\":%d,\"jog_dps\":%.0f},",
+                        to_string(op.mode()), op.activity(tw), op.estopped() ? "true" : "false", per.board().preferred(), args.jog_dps);
+          j += b;
+          if (link.is_open()) {
+            const LinkStatusView ls = link.status();
+            const bool fresh = ls.valid && tw - ls.t_ns < 300000000LL;
+            std::snprintf(b, sizeof b,
+                          "\"link\":{\"open\":true,\"fresh\":%s,\"guard\":\"%s\",\"flags\":%u,\"pan_deg\":%.2f,\"tilt_deg\":%.2f,"
+                          "\"pan_goal\":%u,\"tilt_goal\":%u,\"rx_ok\":%u,\"rx_err\":%u,\"sent\":%llu,\"werr\":%llu,\"crc_err\":%u}}",
+                          fresh ? "true" : "false", ls.valid ? guard_name(ls.s.guard) : "-", unsigned(ls.s.flags),
+                          goal_deg(ls.s.pan_goal), goal_deg(ls.s.tilt_goal), ls.s.pan_goal, ls.s.tilt_goal, ls.s.rx_ok, ls.s.rx_err,
+                          (unsigned long long)link.sent(), (unsigned long long)link.write_errors(), ls.crc_err);
+            j += b;
+          } else {
+            j += "\"link\":{\"open\":false}}";
+          }
+          preview.set_status(std::move(j));
+        } else if (view_due) {
+          preview.publish(gray, ov);
+        }
         if (rec_due) {   // demo recording: rendered on this thread (not for live camera runs)
           char fn[64];
           std::snprintf(fn, sizeof fn, "/f_%05d.jpg", n_rec++);

@@ -62,3 +62,14 @@ capstone_project/
   * STM32 `PA10 (USART1_RX)` ← FE-URT-1 시리얼 버스 보드
   * 서보 ID: Pan = 2, Tilt = 1 (팀 배정). 부팅 때 두 서보를 위치 모드(모드 0)로 되돌림
 * 서보 구동 범위 제한 (v1): Pan `1024 ~ 3072` (±90°), Tilt `1365 ~ 2730` (±60°)
+
+## Pi 배포와 웹 조작 화면
+
+* 배포: `ssh -t <사용자>@rcwspi.local "curl -fsSL https://raw.githubusercontent.com/pgy819/capstone_project/preview-stack/rcws_stage1/tools/pi/deploy.sh | bash -s preview-stack"` → `~/rcws_live`에 빌드·시험, UART 점검, 실행기 서비스 설치
+* 실행기 `http://<pi>:8000/`: 추적 시작/종료 (부팅 시 자동 실행, systemd 사용자 서비스)
+* 조작 화면 `http://<pi>:8080/` (추적 실행 중, 휴대폰 화면 대응). WebSocket으로 상태를 받고 명령을 보냄
+  * 새 대상 포착 시 사진 1장 + "계속 추적 / 추적 중지" (중지한 트랙은 다시 잡지 않음)
+  * 후보 대상 썸네일에서 대상 바꾸기, 화면의 대상 클릭으로 선택, 검출 클래스(휴대폰/공/사람)
+  * 자동/수동 모드, 조그(누르고 있는 동안만, 방향키), 홈 복귀, 비상정지(Space)와 해제
+  * 대상 ID·각도·각속도·화면 좌표, 서보 목표 각도, 상태(fps, 지연, 온도, 저전압, STM32 상태, 링크 오류), 로그·이벤트, 연결 점검(카메라·Hailo·STM32·서보 응답)
+  * 인증이 없으므로 같은 LAN에서만 쓸 것 (인터넷에 노출하지 않음)

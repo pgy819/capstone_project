@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 /* Instructions */
+#define STS_INST_READ           0x02u
 #define STS_INST_WRITE          0x03u
 #define STS_INST_SYNC_WRITE     0x83u
 #define STS_BROADCAST_ID        0xFEu
@@ -32,6 +33,7 @@ extern "C" {
 #define STS_ADDR_GOAL_POSITION  0x2Au   /* pos(2) + time(2) + speed(2) */
 #define STS_ADDR_LOCK           0x37u   /* EEPROM lock: 0 = unlocked, 1 = locked */
 #define STS_ADDR_TORQUE_ENABLE  0x28u   /* 40: 0 = limp, 1 = holding */
+#define STS_ADDR_PRESENT_POS    0x38u   /* 56: present position (2 bytes) */
 #define STS_ADDR_MODE           0x21u   /* 33: 0 = position, 1 = wheel (team firmware used 1) */
 
 /* Bus layout */
@@ -59,6 +61,17 @@ uint8_t STS_BuildSyncTorque(uint8_t *buf, uint8_t enable);
 /** Pure builder: single-byte WRITE (0x03) packet into buf[8]. Returns 8. */
 uint8_t STS_BuildWriteByte(uint8_t *buf, uint8_t id, uint8_t addr, uint8_t value);
 
+#define STS_READ_POS_LEN        8u
+/** Pure builder: READ present position (2 bytes) of one servo into buf[8]. Returns 8. */
+uint8_t STS_BuildReadPos(uint8_t *buf, uint8_t id);
+
+/**
+ * Pure parser: find the status reply of `id` to STS_BuildReadPos in bytes received from the bus.
+ * The FE-URT-1 adapter may echo the request on RX; a frame identical to the request is skipped.
+ * Returns 1 and the position when a checksum-valid reply is found.
+ */
+int STS_ParseReadPosReply(const uint8_t *rx, uint32_t n, uint8_t id, uint16_t *pos);
+
 #ifndef RCWS_HOST_TEST
 extern UART_HandleTypeDef huart1;
 #define STS_HUART               huart1
@@ -83,6 +96,13 @@ HAL_StatusTypeDef STS_Assign_ID(uint8_t old_id, uint8_t new_id);
  * goes to RAM only (EEPROM stays locked), so it is repeated at every boot.
  */
 HAL_StatusTypeDef STS_InitPositionMode(void);
+
+/**
+ * Blocking boot self-check (thread mode, before TIM2 starts): reads the present position of each
+ * servo. Returns a bit mask (bit0 Pan answered, bit1 Tilt answered); positions in *pan / *tilt.
+ * Not used in the sysid build (its RX callback owns the bus receiver).
+ */
+uint8_t STS_BootPing(uint16_t *pan, uint16_t *tilt);
 
 /** Called after PA4 returns low at the end of every bus transmission (weak no-op). */
 void STS_TxDoneHook(void);

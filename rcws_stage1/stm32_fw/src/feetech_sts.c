@@ -79,6 +79,45 @@ uint8_t STS_BuildWriteByte(uint8_t *buf, uint8_t id, uint8_t addr, uint8_t value
     return (uint8_t)STS_WRITE_BYTE_LEN;
 }
 
+uint8_t STS_BuildReadPos(uint8_t *buf, uint8_t id)
+{
+    buf[0] = 0xFFu;
+    buf[1] = 0xFFu;
+    buf[2] = id;
+    buf[3] = 0x04u;               /* inst + addr + count + checksum */
+    buf[4] = STS_INST_READ;
+    buf[5] = STS_ADDR_PRESENT_POS;
+    buf[6] = 0x02u;
+    buf[7] = (uint8_t)(~(uint32_t)(buf[2] + buf[3] + buf[4] + buf[5] + buf[6]) & 0xFFu);
+    return (uint8_t)STS_READ_POS_LEN;
+}
+
+int STS_ParseReadPosReply(const uint8_t *rx, uint32_t n, uint8_t id, uint16_t *pos)
+{
+    uint8_t req[STS_READ_POS_LEN];
+    (void)STS_BuildReadPos(req, id);
+    for (uint32_t i = 0u; i + 8u <= n; i++) {
+        const uint8_t *f = &rx[i];
+        if (f[0] != 0xFFu || f[1] != 0xFFu || f[2] != id || f[3] != 0x04u) {
+            continue;
+        }
+        const uint8_t ck = (uint8_t)(~(uint32_t)(f[2] + f[3] + f[4] + f[5] + f[6]) & 0xFFu);
+        if (ck != f[7]) {
+            continue;
+        }
+        uint32_t same = 1u;
+        for (uint32_t k = 0u; k < 8u; k++) {
+            if (f[k] != req[k]) { same = 0u; break; }
+        }
+        if (same) {
+            continue;                 /* our own request echoed by the adapter */
+        }
+        *pos = (uint16_t)(f[5] | ((uint16_t)f[6] << 8));
+        return 1;
+    }
+    return 0;
+}
+
 #ifndef RCWS_HOST_TEST
 /* ------------------------------------------------------------------------- */
 /* Target-only transport                                                     */
@@ -157,6 +196,35 @@ HAL_StatusTypeDef STS_InitPositionMode(void)
         HAL_Delay(2);
     }
     return st;
+}
+
+uint8_t STS_BootPing(uint16_t *pan, uint16_t *tilt)
+{
+    static const uint8_t ids[2] = { STS_PAN_ID, STS_TILT_ID };
+    uint16_t *out[2] = { pan, tilt };
+    uint8_t ok = 0u;
+    for (uint32_t i = 0u; i < 2u; i++) {
+        uint8_t req[STS_READ_POS_LEN];
+        static uint8_t rx[32];
+        (void)STS_BuildReadPos(req, ids[i]);
+        (void)HAL_UART_AbortReceive(&STS_HUART);
+        /* armed before transmitting: catches an adapter echo and the reply (~16 B at 1 Mbps) */
+        if (HAL_UART_Receive_IT(&STS_HUART, rx, (uint16_t)sizeof(rx)) != HAL_OK) {
+            continue;
+        }
+        HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
+        (void)HAL_UART_Transmit(&STS_HUART, req, (uint16_t)sizeof(req), 5u);
+        HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
+        HAL_Delay(4);                 /* reply: return delay (<= 0.5 ms) + 8 bytes at 1 Mbps */
+        const uint32_t n = (uint32_t)sizeof(rx) - (uint32_t)STS_HUART.RxXferCount;
+        (void)HAL_UART_AbortReceive(&STS_HUART);
+        uint16_t pos = 0u;
+        if (STS_ParseReadPosReply(rx, n, ids[i], &pos)) {
+            ok |= (uint8_t)(1u << i);
+            *out[i] = pos;
+        }
+    }
+    return ok;
 }
 
 /* Overridden by sysid.c to arm the status-packet reception (weak: no-op in tracking mode). */

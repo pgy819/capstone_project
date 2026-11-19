@@ -74,7 +74,7 @@ int Link_DecodeAim(const uint8_t f[LINK_FRAME_LEN], LinkAim_t *a)
     if (f[0] != LINK_SYNC0 || f[1] != LINK_SYNC1_DOWN || f[2] != LINK_TYPE_AIM || !crc_ok(f)) {
         return 0;
     }
-    if (f[4] > LINK_MODE_PREDICT) {
+    if (f[4] > LINK_MODE_MAX) {
         return 0;
     }
     a->seq       = f[3];
