@@ -85,10 +85,12 @@ static void test_packets(void)
     uint32_t sum = 0;
     for (int i = 2; i <= 10; i++) { sum += b[i]; }
     CHECK(b[0] == 0xFF && b[1] == 0xFF && b[2] == 0xFE && b[3] == 0x08 && b[4] == 0x83 && b[5] == 0x28);
-    CHECK(b[7] == 1 && b[8] == 0 && b[9] == 2 && b[10] == 0 && b[11] == (uint8_t)~sum);
+    CHECK(b[7] == STS_PAN_ID && b[8] == 0 && b[9] == STS_TILT_ID && b[10] == 0 && b[11] == (uint8_t)~sum);
     STS_BuildSyncTorque(b, 1);
     CHECK(b[8] == 1 && b[10] == 1);
     CHECK(STS_BuildSyncWritePosSpeed(b, 626, 300, 3470, 300) == 22);
+    CHECK(STS_PAN_ID == 2 && STS_TILT_ID == 1);              /* team assignment */
+    CHECK(b[7] == 2 && b[8] == (626 & 0xFF) && b[14] == 1 && b[15] == (3470 & 0xFF));
 }
 
 int main(void)

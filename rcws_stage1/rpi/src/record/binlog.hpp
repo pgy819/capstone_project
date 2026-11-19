@@ -17,7 +17,8 @@
 namespace rcws {
 
 enum class RecType : uint16_t { FRAME = 1, DETBATCH = 2, MEAS = 3, EST = 4, STATE = 5, NCC = 6, NOTE = 7, TRUTH = 8,
-                               MOT = 9, AIM = 10, QUAL = 11, TRUTH2 = 12 };
+                               MOT = 9, AIM = 10, QUAL = 11, TRUTH2 = 12,
+                               LINK_TX = 13, LINK_RX = 14 };
 
 #pragma pack(push, 1)
 struct RecFrame {
@@ -97,6 +98,18 @@ struct RecTruth2 {              // extra synthetic objects (multi-target scenari
   int32_t obj;
   float u, v, w, h;
   uint8_t visible, pad[3];
+};
+struct RecLinkTx {              // AIM frame sent to the STM32 (packet v2), every frame with --uart
+  int64_t t;
+  uint32_t seq;                 // camera frame
+  uint8_t lseq, mode, flags, pad;
+  int16_t err_pan, err_tilt;    // 1/16 servo count
+  int16_t rate_pan, rate_tilt;  // servo count/s
+};
+struct RecLinkRx {              // STATUS frame from the STM32 (logged when a new one arrived)
+  int64_t t;                    // reception time
+  uint8_t seq_echo, guard, flags, pad;
+  uint16_t pan_goal, tilt_goal, rx_ok, rx_err;
 };
 #pragma pack(pop)
 

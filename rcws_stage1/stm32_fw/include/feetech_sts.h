@@ -1,8 +1,11 @@
 /**
- * feetech_sts.h — Feetech STS3215 bus driver (USART6, 1 Mbps, half-duplex via PA4)
+ * feetech_sts.h — Feetech STS3215 bus driver (USART1, 1 Mbps)
  *
- * USART6: PC6 (TX) / PC7 (RX), TX DMA = DMA2_Stream6 / DMA_CHANNEL_5 (normal mode)
- * PA4   : half-duplex direction (HIGH = transmit, LOW = receive / idle)
+ * Team wiring (hyunjinscode ball5_2_best.ino): USART1 PA9 (TX) / PA10 (RX) to the bus adapter
+ * (FE-URT-1, automatic direction). TX DMA = DMA2_Stream7 / DMA_CHANNEL_4 (normal mode).
+ * PA4   : half-duplex direction for a manual-direction adapter (HIGH = transmit, LOW = receive /
+ *         idle); still driven, harmless when not connected.
+ * IDs   : team assignment, Pan = 2, Tilt = 1.
  *
  * Define RCWS_HOST_TEST to build only the pure packet builders on a PC.
  */
@@ -29,10 +32,11 @@ extern "C" {
 #define STS_ADDR_GOAL_POSITION  0x2Au   /* pos(2) + time(2) + speed(2) */
 #define STS_ADDR_LOCK           0x37u   /* EEPROM lock: 0 = unlocked, 1 = locked */
 #define STS_ADDR_TORQUE_ENABLE  0x28u   /* 40: 0 = limp, 1 = holding */
+#define STS_ADDR_MODE           0x21u   /* 33: 0 = position, 1 = wheel (team firmware used 1) */
 
 /* Bus layout */
-#define STS_PAN_ID              1u
-#define STS_TILT_ID             2u
+#define STS_PAN_ID              2u      /* team assignment: ID 2 = Pan (left-right) */
+#define STS_TILT_ID             1u      /* ID 1 = Tilt (up-down) */
 #define STS_DEFAULT_SPEED       3400u
 #define STS_POS_MAX             4095u
 
@@ -56,7 +60,9 @@ uint8_t STS_BuildSyncTorque(uint8_t *buf, uint8_t enable);
 uint8_t STS_BuildWriteByte(uint8_t *buf, uint8_t id, uint8_t addr, uint8_t value);
 
 #ifndef RCWS_HOST_TEST
-extern UART_HandleTypeDef huart6;
+extern UART_HandleTypeDef huart1;
+#define STS_HUART               huart1
+#define STS_USART               USART1
 
 /** Non-blocking DMA SYNC WRITE (ISR-safe). Skips if the previous frame is still in flight. */
 void STS_SyncWrite_PosSpeed(uint16_t pan_pos, uint16_t pan_speed,
@@ -71,7 +77,14 @@ void STS_SyncWrite_Torque(uint8_t enable);
  */
 HAL_StatusTypeDef STS_Assign_ID(uint8_t old_id, uint8_t new_id);
 
-/** Called after PA4 returns low at the end of every USART6 transmission (weak no-op). */
+/**
+ * Blocking boot step (thread mode, before TIM2 starts): torque off, operating mode 0 (position)
+ * on both servos, torque on. The team firmware left the servos in wheel mode (mode 1); the write
+ * goes to RAM only (EEPROM stays locked), so it is repeated at every boot.
+ */
+HAL_StatusTypeDef STS_InitPositionMode(void);
+
+/** Called after PA4 returns low at the end of every bus transmission (weak no-op). */
 void STS_TxDoneHook(void);
 #endif
 

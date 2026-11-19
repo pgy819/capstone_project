@@ -91,26 +91,26 @@ void STS_SyncWrite_PosSpeed(uint16_t pan_pos, uint16_t pan_speed,
                             uint16_t tilt_pos, uint16_t tilt_speed)
 {
     /* Previous DMA frame still in flight -> never touch tx_buf. */
-    if (huart6.gState != HAL_UART_STATE_READY) {
+    if (STS_HUART.gState != HAL_UART_STATE_READY) {
         return;
     }
 
     (void)STS_BuildSyncWritePosSpeed(tx_buf, pan_pos, pan_speed, tilt_pos, tilt_speed);
 
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);      /* TX enable */
-    if (HAL_UART_Transmit_DMA(&huart6, tx_buf, (uint16_t)STS_SYNC_WRITE_LEN) != HAL_OK) {
+    if (HAL_UART_Transmit_DMA(&STS_HUART, tx_buf, (uint16_t)STS_SYNC_WRITE_LEN) != HAL_OK) {
         HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
     }
 }
 
 void STS_SyncWrite_Torque(uint8_t enable)
 {
-    if (huart6.gState != HAL_UART_STATE_READY) {
+    if (STS_HUART.gState != HAL_UART_STATE_READY) {
         return;
     }
     (void)STS_BuildSyncTorque(tx_buf, enable);   /* tx_buf (22 B) is large enough for 12 B */
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
-    if (HAL_UART_Transmit_DMA(&huart6, tx_buf, (uint16_t)STS_SYNC_TORQUE_LEN) != HAL_OK) {
+    if (HAL_UART_Transmit_DMA(&STS_HUART, tx_buf, (uint16_t)STS_SYNC_TORQUE_LEN) != HAL_OK) {
         HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
     }
 }
@@ -122,7 +122,7 @@ static HAL_StatusTypeDef sts_write_byte_blocking(uint8_t id, uint8_t addr, uint8
 
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
     /* Blocking transmit returns only after UART_FLAG_TC (last stop bit shifted out). */
-    HAL_StatusTypeDef st = HAL_UART_Transmit(&huart6, pkt, (uint16_t)sizeof(pkt), 20u);
+    HAL_StatusTypeDef st = HAL_UART_Transmit(&STS_HUART, pkt, (uint16_t)sizeof(pkt), 20u);
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
     return st;
 }
@@ -144,6 +144,21 @@ HAL_StatusTypeDef STS_Assign_ID(uint8_t old_id, uint8_t new_id)
     return st;
 }
 
+HAL_StatusTypeDef STS_InitPositionMode(void)
+{
+    static const uint8_t ids[2] = { STS_PAN_ID, STS_TILT_ID };
+    HAL_StatusTypeDef st = HAL_OK;
+    for (uint32_t i = 0u; i < 2u; i++) {
+        if (sts_write_byte_blocking(ids[i], STS_ADDR_TORQUE_ENABLE, 0u) != HAL_OK) { st = HAL_ERROR; }
+        HAL_Delay(2);
+        if (sts_write_byte_blocking(ids[i], STS_ADDR_MODE, 0u) != HAL_OK) { st = HAL_ERROR; }
+        HAL_Delay(2);
+        if (sts_write_byte_blocking(ids[i], STS_ADDR_TORQUE_ENABLE, 1u) != HAL_OK) { st = HAL_ERROR; }
+        HAL_Delay(2);
+    }
+    return st;
+}
+
 /* Overridden by sysid.c to arm the status-packet reception (weak: no-op in tracking mode). */
 __attribute__((weak)) void STS_TxDoneHook(void)
 {
@@ -152,7 +167,7 @@ __attribute__((weak)) void STS_TxDoneHook(void)
 /* PA4 back to LOW once the last byte has physically left the shift register. */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART6) {
+    if (huart->Instance == STS_USART) {
         HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
         STS_TxDoneHook();
     }

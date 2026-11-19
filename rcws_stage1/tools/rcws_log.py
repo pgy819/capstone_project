@@ -39,8 +39,16 @@ QUAL = np.dtype([("t", "<i8"), ("seq", "<u4"), ("mean_luma", "<f4"), ("sat_frac"
 TRUTH2 = np.dtype([("t", "<i8"), ("seq", "<u4"), ("obj", "<i4"), ("u", "<f4"), ("v", "<f4"), ("w", "<f4"), ("h", "<f4"),
                    ("visible", "u1"), ("pad", "u1", 3)])
 
+# packet v2 link to the STM32 (U1): AIM frames sent, STATUS frames received
+LINK_TX = np.dtype([("t", "<i8"), ("seq", "<u4"), ("lseq", "u1"), ("mode", "u1"), ("flags", "u1"), ("pad", "u1"),
+                    ("err_pan", "<i2"), ("err_tilt", "<i2"), ("rate_pan", "<i2"), ("rate_tilt", "<i2")])
+LINK_RX = np.dtype([("t", "<i8"), ("seq_echo", "u1"), ("guard", "u1"), ("flags", "u1"), ("pad", "u1"),
+                    ("pan_goal", "<u2"), ("tilt_goal", "<u2"), ("rx_ok", "<u2"), ("rx_err", "<u2")])
+
 TYPES = {1: ("frame", FRAME), 3: ("meas", MEAS), 4: ("est", EST), 5: ("state", STATE), 6: ("ncc", NCC), 8: ("truth", TRUTH),
-         9: ("mot", MOT), 10: ("aim", AIM), 11: ("qual", QUAL), 12: ("truth2", TRUTH2)}
+         9: ("mot", MOT), 10: ("aim", AIM), 11: ("qual", QUAL), 12: ("truth2", TRUTH2), 13: ("link_tx", LINK_TX),
+         14: ("link_rx", LINK_RX)}
+GUARD_STATES = ["RUN", "HOLD", "TORQUE_OFF", "RAMP", "ESTOP"]
 MOT_STATES = ["TENT", "CONF", "OVERLAP", "OCCL", "EXIT", "AMBIG", "LOST"]
 AIM_MODES = ["HOLD", "FOLLOW", "PREDICT"]
 AIM_REASONS = ["NO_TARGET", "ACQUIRING", "COAST_LONG", "REACQ", "QUALITY", "AMBIGUOUS", "OVERLAP", "EXITING", "NO_ESTIMATE"]
@@ -149,6 +157,23 @@ def summary_v4(log):
     if len(q):
         parts = [f"{n} {100 * np.count_nonzero(q['flags'] & (1 << b)) / len(q):.1f}%" for b, n in enumerate(QUAL_FLAGS)]
         print(f"image quality ({len(q)} evaluations): mean luma median {np.median(q['mean_luma']):.0f}, flagged " + ", ".join(parts))
+    summary_link(log)
+
+
+def summary_link(log):
+    """Packet v2 link: frames sent, STM32 guard states and link error counters."""
+    tx, rx = log["link_tx"], log["link_rx"]
+    if not len(tx) and not len(rx):
+        return
+    print(f"STM32 link: {len(tx)} AIM frames sent, {len(rx)} STATUS frames received")
+    if len(rx):
+        g = np.bincount(np.minimum(rx["guard"], 4), minlength=5) / len(rx)
+        print("  STM32 guard: " + "  ".join(f"{GUARD_STATES[i]} {100 * g[i]:.1f}%" for i in range(5) if g[i] > 0))
+        ok = (int(rx["rx_ok"][-1]) - int(rx["rx_ok"][0])) % 65536
+        err = (int(rx["rx_err"][-1]) - int(rx["rx_err"][0])) % 65536
+        print(f"  STM32 received {ok} valid AIM frames, {err} rejected during the run")
+        if np.any(rx["flags"] & 5):
+            print("  !! emergency stop seen (B1 or software)")
 
 
 if __name__ == "__main__":

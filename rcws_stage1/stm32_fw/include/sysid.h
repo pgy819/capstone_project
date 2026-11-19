@@ -3,15 +3,15 @@
  *
  * Replaces the vision servo loop with a 500 Hz excitation + measurement loop:
  *   TIM2 tick (2 ms): goal position for the test axis (step / PRBS / chirp), the other axis held
- *                     at centre, one DMA frame on USART6 = SYNC WRITE(22 B) + READ(8 B) of
+ *                     at centre, one DMA frame on USART1 (bus) = SYNC WRITE(22 B) + READ(8 B) of
  *                     Present Position/Speed/Load of the test servo.
- *   USART6 RX       : status packet received with ReceiveToIdle after PA4 goes low, timestamped
+ *   USART1 (bus) RX       : status packet received with ReceiveToIdle after PA4 goes low, timestamped
  *                     with TIM5 (1 us, 32-bit free-running).
  *   USART2 (VCP)    : 24-byte binary records at 921600 bps, sent from thread mode out of a ring
  *                     buffer (never from an ISR). '#'-prefixed text lines for acknowledgements.
  *
  * PC commands on the VCP (one ASCII byte):
- *   'p' / 't'  select pan (ID 1) / tilt (ID 2) as the test axis
+ *   'p' / 't'  select pan (ID 2) / tilt (ID 1) as the test axis
  *   'S'        step series   (+-25/50/100/200/400 counts, 0.6 s each phase)       ~12 s
  *   'R'        PRBS          (9-bit LFSR, 20 ms bit, +-60 counts, 2 periods)       ~21 s
  *   'C'        log chirp     (+-60 counts, 0.2 -> 12 Hz)                            30 s

@@ -2,16 +2,20 @@
  * main.c — RCWS Stage 1: 500 Hz 2-axis visual-servoing firmware (NUCLEO-F401RE)
  *
  *  Clock  : HSI 16 MHz -> PLL -> SYSCLK 84 MHz (APB1 42 MHz / TIM 84 MHz, APB2 84 MHz)
- *  USART1 : PA9/PA10 115200 8N1, RX DMA2_Stream2 / CH4 circular  (Pi 5 vision packets)
+ *  Pin map inherited from the team firmware (hyunjinscode ball5_2_best.ino):
+ *  USART1 : PA9 TX / PA10 RX 1 Mbps 8N1, TX DMA2_Stream7 / CH4 normal  (Feetech STS3215 bus,
+ *           Pan = ID 2, Tilt = ID 1)
+ *  USART6 : PC6 TX / PC7 RX 115200 8N1, RX DMA2_Stream1 / CH5 circular, TX DMA2_Stream6 / CH5
+ *           (Pi 5 link, packet v2: link_proto.h)
  *  USART2 : PA2/PA3  115200 8N1 (ST-LINK VCP, boot banner only)
- *  USART6 : PC6/PC7  1 Mbps 8N1, TX DMA2_Stream6 / CH5 normal    (Feetech STS3215 bus)
- *  PA4    : half-duplex direction, PA5: LD2 status LED
+ *  PA4    : half-duplex direction (harmless with the auto-direction adapter), PA5: LD2 status LED
  *  PC13   : B1 — held at boot: servo ID commissioning; pressed while running: EMERGENCY STOP
  *           (torque off, latched until the black RESET button)
  *  TIM2   : 500 Hz (PSC 83, ARR 1999) -> PD servo loop inside TIM2_IRQHandler
  *  Build env "sysid" (-DRCWS_SYSID): servo identification test mode instead (see sysid.h)
  *
- *  NVIC priorities (group 4): USART6/DMA2_S6 = 1, TIM2 = 2, USART1/DMA2_S2 = 3, SysTick = 15
+ *  NVIC priorities (group 4): USART1/DMA2_S7 (bus) = 1, TIM2 = 2, USART6/DMA2_S1/DMA2_S6 (Pi) = 3,
+ *  SysTick = 15
  */
 #include "stm32f4xx_hal.h"
 #include "protocol.h"
@@ -36,6 +40,12 @@
 #define DIR_PAN         1.0f
 #define DIR_TILT        (-1.0f)
 
+/* Packet v2 carries the angle error in 1/16 servo count. The PD gains above were tuned on the v1
+   virtual-pixel error (1920 px across the HFOV, 0.8145 mrad/px), so the error is converted back:
+   1 count = 2*pi/4096 rad = 1.534 mrad = 1.883 v1 px. v1 err_y was +down, packet v2 tilt is +up. */
+#define V1PX_PER_COUNT  1.883f
+#define LINK_TO_V1PX    (V1PX_PER_COUNT / (float)LINK_ERR_SCALE)
+
 #define D_LPF_KEEP      0.6f
 #define D_LPF_NEW       0.4f
 #define D_DECAY_SUBTICK 0.85f
@@ -56,19 +66,22 @@
 #define COMM_TORQUE_OFF_LIMIT 5000u   /* 10 s without packets: torque off (Pi gone) */
 #define RAMP_TICKS          500u      /* 1 s of slow motion after the torque comes back */
 #define STS_RAMP_SPEED      300u      /* servo speed during RAMP [steps/s] ~ 26 deg/s */
+#define BOOT_SLOW_TICKS     1500u     /* first 3 s after boot: slow move to the centre goal */
+#define STATUS_PERIOD_MS    20u       /* uplink STATUS 50 Hz */
 #define ESTOP_DEBOUNCE_MS   30u
 
-#define COMMISSION_OLD_ID   1u
-#define COMMISSION_NEW_ID   2u
+#define COMMISSION_OLD_ID   1u        /* factory ID */
+#define COMMISSION_NEW_ID   STS_PAN_ID /* 2 = Pan (team assignment) */
 #define DEBOUNCE_MS         50u
 
 /* ------------------------------------------------------------------------- */
 /* Peripheral handles                                                         */
 /* ------------------------------------------------------------------------- */
-UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart2;
-UART_HandleTypeDef huart6;
-DMA_HandleTypeDef  hdma_usart1_rx;
+UART_HandleTypeDef huart1;          /* servo bus */
+UART_HandleTypeDef huart2;          /* ST-LINK VCP */
+UART_HandleTypeDef huart6;          /* Pi 5 link */
+DMA_HandleTypeDef  hdma_usart1_tx;
+DMA_HandleTypeDef  hdma_usart6_rx;
 DMA_HandleTypeDef  hdma_usart6_tx;
 TIM_HandleTypeDef  htim2;
 
@@ -82,14 +95,19 @@ static AxisLimits_t lim_pan, lim_tilt;
 static Guard_t      g_guard;
 static const GuardCfg_t k_guard_cfg = { COMM_WATCHDOG_LIMIT, COMM_TORQUE_OFF_LIMIT, RAMP_TICKS };
 static volatile uint8_t g_estop = 0u;          /* set by the main loop (B1), read by TIM2 */
+static volatile uint8_t g_estop_sw = 0u;       /* set by TIM2 from the link flag, latched */
 static float   d_ex_lpf = 0.0f;
 static float   d_ey_lpf = 0.0f;
-static int16_t prev_err_x = 0;
-static int16_t prev_err_y = 0;
+static float   prev_err_x = 0.0f;
+static float   prev_err_y = 0.0f;
 static uint8_t is_first_track_frame = 1u;
+static uint32_t boot_ticks = 0u;
 
-static volatile GuardState_t g_servo_state = GUARD_HOLD;    /* read by LED task */
+static volatile GuardState_t g_servo_state = GUARD_HOLD;    /* read by LED / uplink */
 static volatile uint8_t      g_comm_lost = 1u;              /* HOLD because of a comm gap */
+static volatile uint8_t      g_operator_hold = 0u;
+static volatile uint16_t     g_pan_goal_u16 = 2048u;        /* published by TIM2 for the uplink */
+static volatile uint16_t     g_tilt_goal_u16 = 2048u;
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -107,6 +125,7 @@ static void Commissioning_CheckAndRun(void);
 static void Servo_ControlStep(void);
 static void Led_Task(void);
 static void Estop_Task(void);
+static void Status_Task(void);
 #endif
 void Error_Handler(void);
 
@@ -123,6 +142,11 @@ int main(void)
     MX_USART6_UART_Init();
     MX_TIM2_Init();
 
+    /* The team firmware ran the servos in wheel mode: back to position mode (RAM, every boot). */
+    HAL_Delay(100);   /* servo power-up */
+    const HAL_StatusTypeDef mode_st = STS_InitPositionMode();
+    (void)mode_st;
+
 #ifdef RCWS_SYSID
     /* System-identification test mode: no vision link, PC drives the excitation over the VCP. */
     SysId_Init();
@@ -135,15 +159,19 @@ int main(void)
 #else
     static const char banner[] = "\r\nRCWS Stage1 FW: 500Hz 2-axis visual servo\r\n";
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)banner, (uint16_t)(sizeof(banner) - 1u), 50u);
+    if (mode_st != HAL_OK) {
+        static const char m[] = "warning: position-mode write failed on the servo bus\r\n";
+        (void)HAL_UART_Transmit(&huart2, (uint8_t *)m, (uint16_t)(sizeof(m) - 1u), 50u);
+    }
 
-    /* PC13 held at boot -> rename servo ID 1 -> 2 (blocking, before TIM2 starts). */
+    /* PC13 held at boot -> rename servo ID 1 -> 2 = Pan (blocking, before TIM2 starts). */
     Commissioning_CheckAndRun();
 
     lim_pan  = Guard_Limits(PAN_MIN, PAN_MAX, V_MAX_DPS, A_MAX_DPS2, A_BRAKE_DPS2);
     lim_tilt = Guard_Limits(TILT_MIN, TILT_MAX, V_MAX_DPS, A_MAX_DPS2, A_BRAKE_DPS2);
     Guard_Init(&g_guard);
 
-    if (Protocol_StartRx(&huart1) != HAL_OK) {
+    if (Protocol_StartRx(&huart6) != HAL_OK) {
         Error_Handler();
     }
     if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK) {
@@ -151,8 +179,9 @@ int main(void)
     }
 
     while (1) {
-        Protocol_Poll();    /* drain USART1 DMA ring -> FSM parser */
+        Protocol_Poll();    /* drain USART6 DMA ring -> packet v2 frame finder */
         Estop_Task();
+        Status_Task();      /* 50 Hz uplink */
         Led_Task();
     }
 #endif
@@ -164,17 +193,18 @@ int main(void)
 /* ========================================================================= */
 static void Servo_ControlStep(void)
 {
-    uint8_t  status;
-    int16_t  pkt_err_x, pkt_err_y;
+    uint8_t  mode, flags;
+    float    pkt_err_x, pkt_err_y;
     uint8_t  new_flag;
     uint32_t watchdog;
 
     /* 1. Snapshot shared data and clear the new-packet flag atomically.
        2. Increment the communication watchdog. */
     __disable_irq();
-    status    = g_vision_pkt.status;
-    pkt_err_x = g_vision_pkt.err_x;
-    pkt_err_y = g_vision_pkt.err_y;
+    mode      = g_vision_pkt.mode;
+    flags     = g_vision_pkt.flags;
+    pkt_err_x = (float)g_vision_pkt.err_pan;
+    pkt_err_y = (float)g_vision_pkt.err_tilt;
     new_flag  = g_new_pkt_flag;
     g_new_pkt_flag = 0u;
     if (g_comm_watchdog < 0xFFFFFFFFu) {
@@ -183,9 +213,24 @@ static void Servo_ControlStep(void)
     watchdog = g_comm_watchdog;
     __enable_irq();
 
-    /* 3. Safety supervisor (servo_guard.h): RUN / HOLD / TORQUE_OFF / RAMP / ESTOP. */
-    const uint8_t target_valid = (status == VISION_STATUS_DETECTED || status == VISION_STATUS_COASTING) ? 1u : 0u;
-    const GuardState_t st = Guard_Update(&g_guard, &k_guard_cfg, watchdog, target_valid, g_estop);
+    /* v1 pixel units for the PD below: +right, +down */
+    pkt_err_x *= LINK_TO_V1PX;
+    pkt_err_y *= -LINK_TO_V1PX;
+    if (boot_ticks < 0xFFFFFFFFu) {
+        boot_ticks++;
+    }
+
+    /* 3. Safety supervisor (servo_guard.h): RUN / HOLD / TORQUE_OFF / RAMP / ESTOP.
+          Web "stop tracking" (OPERATOR_HOLD) = target invalid; software ESTOP latches like B1. */
+    const uint8_t fresh = (watchdog <= COMM_WATCHDOG_LIMIT) ? 1u : 0u;
+    if (fresh && (flags & LINK_F_ESTOP_REQ)) {
+        g_estop_sw = 1u;
+    }
+    g_operator_hold = (fresh && (flags & LINK_F_OPERATOR_HOLD)) ? 1u : 0u;
+    const uint8_t target_valid =
+        ((mode == LINK_MODE_FOLLOW || mode == LINK_MODE_PREDICT) && !g_operator_hold) ? 1u : 0u;
+    const GuardState_t st = Guard_Update(&g_guard, &k_guard_cfg, watchdog, target_valid,
+                                         (uint8_t)(g_estop | g_estop_sw));
     g_servo_state = st;
     g_comm_lost = (watchdog > COMM_WATCHDOG_LIMIT) ? 1u : 0u;
 
@@ -220,8 +265,8 @@ static void Servo_ControlStep(void)
                 raw_dey = 0.0f;
                 is_first_track_frame = 0u;
             } else {
-                raw_dex = (float)(pkt_err_x - prev_err_x);
-                raw_dey = (float)(pkt_err_y - prev_err_y);
+                raw_dex = pkt_err_x - prev_err_x;
+                raw_dey = pkt_err_y - prev_err_y;
             }
             prev_err_x = pkt_err_x;
             prev_err_y = pkt_err_y;
@@ -231,8 +276,8 @@ static void Servo_ControlStep(void)
             d_ex_lpf *= D_DECAY_SUBTICK;   /* sub-ticks between camera frames */
             d_ey_lpf *= D_DECAY_SUBTICK;
         }
-        const float ex = Guard_Deadband((float)pkt_err_x, DEADBAND_PX);
-        const float ey = Guard_Deadband((float)pkt_err_y, DEADBAND_PX);
+        const float ex = Guard_Deadband(pkt_err_x, DEADBAND_PX);
+        const float ey = Guard_Deadband(pkt_err_y, DEADBAND_PX);
         v_pan  = DIR_PAN  * (KP_PAN  * ex + KD_PAN  * d_ex_lpf);
         v_tilt = DIR_TILT * (KP_TILT * ey + KD_TILT * d_ey_lpf);
     }
@@ -242,8 +287,12 @@ static void Servo_ControlStep(void)
     const float pan_goal  = Guard_AxisStep(&ax_pan,  &lim_pan,  v_pan,  braking);
     const float tilt_goal = Guard_AxisStep(&ax_tilt, &lim_tilt, v_tilt, braking);
 
-    /* 6. 22-byte SYNC WRITE via DMA (non-blocking). Slow servo speed while ramping back. */
-    const uint16_t speed = (st == GUARD_RAMP) ? STS_RAMP_SPEED : STS_DEFAULT_SPEED;
+    g_pan_goal_u16  = (uint16_t)(pan_goal + 0.5f);
+    g_tilt_goal_u16 = (uint16_t)(tilt_goal + 0.5f);
+
+    /* 6. 22-byte SYNC WRITE via DMA (non-blocking). Slow servo speed while ramping back and right
+          after boot (the first goal is the centre, wherever the gimbal was left). */
+    const uint16_t speed = (st == GUARD_RAMP || boot_ticks < BOOT_SLOW_TICKS) ? STS_RAMP_SPEED : STS_DEFAULT_SPEED;
     STS_SyncWrite_PosSpeed((uint16_t)(pan_goal + 0.5f), speed, (uint16_t)(tilt_goal + 0.5f), speed);
 }
 
@@ -276,6 +325,29 @@ static void Estop_Task(void)
 }
 
 /* ========================================================================= */
+/* Uplink STATUS to the Pi, 50 Hz (thread mode, DMA, never blocks)            */
+/* ========================================================================= */
+static void Status_Task(void)
+{
+    static uint32_t last = 0u;
+    const uint32_t now = HAL_GetTick();
+    if ((now - last) < STATUS_PERIOD_MS) {
+        return;
+    }
+    last = now;
+    LinkStatus_t s;
+    s.seq_echo  = g_vision_pkt.seq;
+    s.guard     = (uint8_t)g_servo_state;
+    s.flags     = (uint8_t)((g_estop ? LINK_S_ESTOP_B1 : 0u) | (g_comm_lost ? LINK_S_COMM_LOST : 0u) |
+                            (g_estop_sw ? LINK_S_ESTOP_SW : 0u) | (g_operator_hold ? LINK_S_OPERATOR_HOLD : 0u));
+    s.pan_goal  = g_pan_goal_u16;
+    s.tilt_goal = g_tilt_goal_u16;
+    s.rx_ok     = (uint16_t)g_proto_ok_count;
+    s.rx_err    = (uint16_t)g_proto_err_count;
+    Protocol_SendStatus(&s);
+}
+
+/* ========================================================================= */
 /* Servo ID commissioning (PC13 held at boot)                                */
 /* ========================================================================= */
 static void Commissioning_CheckAndRun(void)
@@ -288,7 +360,7 @@ static void Commissioning_CheckAndRun(void)
         HAL_Delay(1);
     }
 
-    static const char msg[] = "Commissioning: servo ID 1 -> 2 (connect ONLY that servo)\r\n";
+    static const char msg[] = "Commissioning: servo ID 1 -> 2 = Pan (connect ONLY that servo)\r\n";
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1u), 50u);
 
     HAL_Delay(100);   /* let the servo finish its own power-up */
@@ -403,16 +475,18 @@ static void MX_DMA_Init(void)
 {
     __HAL_RCC_DMA2_CLK_ENABLE();
 
-    HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 3, 0);
-    HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
-    HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 1, 0);   /* USART1 TX: servo bus */
+    HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
+    HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 3, 0);   /* USART6 RX: Pi link */
+    HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+    HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 3, 0);   /* USART6 TX: Pi link uplink */
     HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
 }
 
 static void MX_USART1_UART_Init(void)
 {
     huart1.Instance          = USART1;
-    huart1.Init.BaudRate     = 115200;
+    huart1.Init.BaudRate     = 1000000;   /* 84 MHz / (16 * 5.25) = exactly 1 Mbps */
     huart1.Init.WordLength   = UART_WORDLENGTH_8B;
     huart1.Init.StopBits     = UART_STOPBITS_1;
     huart1.Init.Parity       = UART_PARITY_NONE;
@@ -442,7 +516,7 @@ static void MX_USART2_UART_Init(void)
 static void MX_USART6_UART_Init(void)
 {
     huart6.Instance          = USART6;
-    huart6.Init.BaudRate     = 1000000;   /* 84 MHz / (16 * 5.25) = exactly 1 Mbps */
+    huart6.Init.BaudRate     = LINK_BAUD_DEFAULT;   /* 115200 (team), 0.08 % error at 84 MHz */
     huart6.Init.WordLength   = UART_WORDLENGTH_8B;
     huart6.Init.StopBits     = UART_STOPBITS_1;
     huart6.Init.Parity       = UART_PARITY_NONE;
@@ -490,29 +564,31 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     g.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 
     if (huart->Instance == USART1) {
+        /* servo bus: PA9 TX / PA10 RX */
         __HAL_RCC_USART1_CLK_ENABLE();
         __HAL_RCC_GPIOA_CLK_ENABLE();
         g.Pin       = GPIO_PIN_9 | GPIO_PIN_10;
         g.Alternate = GPIO_AF7_USART1;
         HAL_GPIO_Init(GPIOA, &g);
 
-        /* USART1_RX: DMA2_Stream2 / Channel 4, circular (never DMA1 on F401) */
-        hdma_usart1_rx.Instance                 = DMA2_Stream2;
-        hdma_usart1_rx.Init.Channel             = DMA_CHANNEL_4;
-        hdma_usart1_rx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
-        hdma_usart1_rx.Init.PeriphInc           = DMA_PINC_DISABLE;
-        hdma_usart1_rx.Init.MemInc              = DMA_MINC_ENABLE;
-        hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-        hdma_usart1_rx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
-        hdma_usart1_rx.Init.Mode                = DMA_CIRCULAR;
-        hdma_usart1_rx.Init.Priority            = DMA_PRIORITY_HIGH;
-        hdma_usart1_rx.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
-        if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK) {
+        /* USART1_TX: DMA2_Stream7 / Channel 4, normal */
+        hdma_usart1_tx.Instance                 = DMA2_Stream7;
+        hdma_usart1_tx.Init.Channel             = DMA_CHANNEL_4;
+        hdma_usart1_tx.Init.Direction           = DMA_MEMORY_TO_PERIPH;
+        hdma_usart1_tx.Init.PeriphInc           = DMA_PINC_DISABLE;
+        hdma_usart1_tx.Init.MemInc              = DMA_MINC_ENABLE;
+        hdma_usart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+        hdma_usart1_tx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+        hdma_usart1_tx.Init.Mode                = DMA_NORMAL;
+        hdma_usart1_tx.Init.Priority            = DMA_PRIORITY_MEDIUM;
+        hdma_usart1_tx.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
+        if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK) {
             Error_Handler();
         }
-        __HAL_LINKDMA(huart, hdmarx, hdma_usart1_rx);
+        __HAL_LINKDMA(huart, hdmatx, hdma_usart1_tx);
 
-        HAL_NVIC_SetPriority(USART1_IRQn, 3, 0);
+        /* Required so HAL_UART_TxCpltCallback fires on UART_FLAG_TC (PA4 release, sysid RX). */
+        HAL_NVIC_SetPriority(USART1_IRQn, 1, 0);
         HAL_NVIC_EnableIRQ(USART1_IRQn);
     } else if (huart->Instance == USART2) {
         __HAL_RCC_USART2_CLK_ENABLE();
@@ -521,13 +597,30 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
         g.Alternate = GPIO_AF7_USART2;
         HAL_GPIO_Init(GPIOA, &g);
     } else if (huart->Instance == USART6) {
+        /* Pi link: PC6 TX -> Pi GPIO15 (RXD), PC7 RX <- Pi GPIO14 (TXD) */
         __HAL_RCC_USART6_CLK_ENABLE();
         __HAL_RCC_GPIOC_CLK_ENABLE();
         g.Pin       = GPIO_PIN_6 | GPIO_PIN_7;
         g.Alternate = GPIO_AF8_USART6;
         HAL_GPIO_Init(GPIOC, &g);
 
-        /* USART6_TX: DMA2_Stream6 / Channel 5, normal */
+        /* USART6_RX: DMA2_Stream1 / Channel 5, circular (never DMA1 on F401) */
+        hdma_usart6_rx.Instance                 = DMA2_Stream1;
+        hdma_usart6_rx.Init.Channel             = DMA_CHANNEL_5;
+        hdma_usart6_rx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
+        hdma_usart6_rx.Init.PeriphInc           = DMA_PINC_DISABLE;
+        hdma_usart6_rx.Init.MemInc              = DMA_MINC_ENABLE;
+        hdma_usart6_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+        hdma_usart6_rx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+        hdma_usart6_rx.Init.Mode                = DMA_CIRCULAR;
+        hdma_usart6_rx.Init.Priority            = DMA_PRIORITY_HIGH;
+        hdma_usart6_rx.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
+        if (HAL_DMA_Init(&hdma_usart6_rx) != HAL_OK) {
+            Error_Handler();
+        }
+        __HAL_LINKDMA(huart, hdmarx, hdma_usart6_rx);
+
+        /* USART6_TX: DMA2_Stream6 / Channel 5, normal (uplink STATUS) */
         hdma_usart6_tx.Instance                 = DMA2_Stream6;
         hdma_usart6_tx.Init.Channel             = DMA_CHANNEL_5;
         hdma_usart6_tx.Init.Direction           = DMA_MEMORY_TO_PERIPH;
@@ -536,15 +629,14 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
         hdma_usart6_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
         hdma_usart6_tx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
         hdma_usart6_tx.Init.Mode                = DMA_NORMAL;
-        hdma_usart6_tx.Init.Priority            = DMA_PRIORITY_MEDIUM;
+        hdma_usart6_tx.Init.Priority            = DMA_PRIORITY_LOW;
         hdma_usart6_tx.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
         if (HAL_DMA_Init(&hdma_usart6_tx) != HAL_OK) {
             Error_Handler();
         }
         __HAL_LINKDMA(huart, hdmatx, hdma_usart6_tx);
 
-        /* Required so HAL_UART_TxCpltCallback fires on UART_FLAG_TC. */
-        HAL_NVIC_SetPriority(USART6_IRQn, 1, 0);
+        HAL_NVIC_SetPriority(USART6_IRQn, 3, 0);
         HAL_NVIC_EnableIRQ(USART6_IRQn);
     }
 }
@@ -558,12 +650,14 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim)
     }
 }
 
-/* UART error: USART1 -> deferred DMA restart; USART6 -> release the bus. */
+/* UART error: Pi link (USART6) -> deferred DMA restart; servo bus (USART1) -> release the bus. */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == USART6) {
+#ifndef RCWS_SYSID
         Protocol_RequestRxRestart();
-    } else if (huart->Instance == USART6) {
+#endif
+    } else if (huart->Instance == STS_USART) {
         HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
     }
 }
@@ -589,9 +683,14 @@ void TIM2_IRQHandler(void)
     }
 }
 
-void DMA2_Stream2_IRQHandler(void)
+void DMA2_Stream7_IRQHandler(void)
 {
-    HAL_DMA_IRQHandler(&hdma_usart1_rx);
+    HAL_DMA_IRQHandler(&hdma_usart1_tx);
+}
+
+void DMA2_Stream1_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&hdma_usart6_rx);
 }
 
 void DMA2_Stream6_IRQHandler(void)

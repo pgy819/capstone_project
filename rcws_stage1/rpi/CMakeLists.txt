@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(rcws_rpi CXX)
+project(rcws_rpi C CXX)
+set(CMAKE_C_STANDARD 99)
 
 set(CMAKE_CXX_STANDARD 20)   # libcamera >= 0.5 headers use std::span
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,8 +35,10 @@ add_library(rcws_core STATIC
   src/record/binlog.cpp
   src/record/clip.cpp
   src/sim/synthetic.cpp
+  src/link/uart_link.cpp
+  ../stm32_fw/src/link_proto.c   # packet v2: one source shared with the STM32 firmware
 )
-target_include_directories(rcws_core PUBLIC src ${OpenCV_INCLUDE_DIRS})
+target_include_directories(rcws_core PUBLIC src ../stm32_fw/include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(rcws_core PUBLIC ${OpenCV_LIBS} Threads::Threads)
 
 # ---- libcamera source (Pi 5)
@@ -88,7 +91,8 @@ add_executable(rcws_tests
   tests/test_preproc.cpp
   tests/test_preview.cpp
   tests/test_scenarios.cpp
+  tests/test_link.cpp
   src/app/preview_server.cpp
 )
-target_link_libraries(rcws_tests PRIVATE rcws_core)
+target_link_libraries(rcws_tests PRIVATE rcws_core util)   # util: openpty (link test)
 add_test(NAME rcws_tests COMMAND rcws_tests)

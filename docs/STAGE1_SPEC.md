@@ -1,5 +1,7 @@
 # Stage 1 Detailed Engineering Specification
 
+> **2026-11-20 개정 안내:** 이 문서의 v1 통신(8 B 패킷, USART1=Pi / USART6=서보)은 폐기됐다. 현재 규격은 패킷 v2(`rcws_stage1/stm32_fw/include/link_proto.h`)와 팀 배선(USART1=서보 버스 PA9/PA10, USART6=Pi PC6/PC7, Pan ID 2 / Tilt ID 1)이다. 정리본은 `rcws_stage1/GEMINI.md` §2–3. 아래 v1 본문은 이력으로 남긴다.
+
 ## Module A: Raspberry Pi 5 Vision & Kalman Predictor (`rpi5_vision/`)
 
 ### 1. Coordinate System & Error Definition (`tracker_node.py`)

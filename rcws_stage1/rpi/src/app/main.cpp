@@ -25,6 +25,7 @@
 #include "record/clip.hpp"
 #include "sim/synthetic.hpp"
 #include "app/preview_server.hpp"
+#include "link/uart_link.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #ifdef RCWS_HAVE_HAILO
@@ -50,6 +51,9 @@ struct Args {
   std::string preview_view = "plain";  // plain | stack
   std::string scenario = "sine";       // synthetic source only (v4 scenario set)
   std::string record;                  // directory: annotated frames at 30 fps of scene time (demo video)
+  std::string uart;                    // STM32 link device (packet v2), empty = off
+  int uart_baud = LINK_BAUD_DEFAULT;
+  double link_lead_ms = 0;             // extra prediction of the sent aim beyond the processing time
 };
 
 void usage() {
@@ -61,7 +65,9 @@ void usage() {
                "                   [--preview-view plain|stack]         (stack: + detector input + NCC map)\n"
                "                   [--scenario NAME]                    (synthetic: " << scenario_names() << ")\n"
                "                   [--record DIR]                       (annotated frames, 30 fps of scene time:\n"
-               "                                                         ffmpeg -framerate 30 -i DIR/f_%05d.jpg demo.mp4)\n";
+               "                                                         ffmpeg -framerate 30 -i DIR/f_%05d.jpg demo.mp4)\n"
+               "                   [--uart /dev/serial0] [--uart-baud 115200] [--link-lead-ms 0]\n"
+               "                                                        (drive the STM32: packet v2 AIM frames)\n";
 }
 
 bool parse(int argc, char** argv, Args* a) {
@@ -81,6 +87,9 @@ bool parse(int argc, char** argv, Args* a) {
     if (k == "--window") { a->window = true; continue; }
     if (k == "--scenario" && val(&a->scenario)) continue;
     if (k == "--record" && val(&a->record)) continue;
+    if (k == "--uart" && val(&a->uart)) continue;
+    if (k == "--uart-baud" && val(&v)) { a->uart_baud = std::stoi(v); continue; }
+    if (k == "--link-lead-ms" && val(&v)) { a->link_lead_ms = std::stod(v); continue; }
     if (k == "--preview-view" && val(&a->preview_view)) {
       if (a->preview_view != "plain" && a->preview_view != "stack") return false;
       continue;
@@ -165,6 +174,13 @@ int main(int argc, char** argv) {
   Perception per(cfg, cam, det.get(), log.is_open() ? &log : nullptr,
                  [](int64_t) { return GimbalPose{0, 0}; });  // Step 1: gimbal fixed
   ClipRecorder clip;
+  UartLink link;
+  if (!args.uart.empty()) {
+    if (!link.open(args.uart, args.uart_baud, &err)) { std::cerr << "uart: " << err << "\n"; return 1; }
+    std::cerr << "uart: STM32 link on " << args.uart << " @ " << args.uart_baud << " (packet v2)\n";
+  }
+  uint8_t link_seq = 0;
+  uint32_t link_rx_logged = 0;
   PreviewServer preview;
   const bool want_view = args.preview_port > 0 || args.window;
   if (want_view) {
@@ -206,6 +222,20 @@ int main(int argc, char** argv) {
     dropped += fr.dropped;
     const int64_t t0 = now_ns();
     const FrameControls c = per.on_frame(fr.view);
+    if (link.is_open()) {   // U1: aim to the STM32 right after the frame is processed
+      const LinkAim_t la = make_link_aim(per.aim(), link_seq++, 0, args.link_lead_ms * 1e-3);
+      link.send(la);
+      if (log.is_open()) {
+        RecLinkTx r{per.aim().t, fr.view.seq, la.seq, la.mode, la.flags, 0, la.err_pan, la.err_tilt, la.rate_pan, la.rate_tilt};
+        log.write(RecType::LINK_TX, r);
+        const LinkStatusView ls = link.status();
+        if (ls.valid && ls.frames != link_rx_logged) {
+          link_rx_logged = ls.frames;
+          RecLinkRx q{ls.t_ns, ls.s.seq_echo, ls.s.guard, ls.s.flags, 0, ls.s.pan_goal, ls.s.tilt_goal, ls.s.rx_ok, ls.s.rx_err};
+          log.write(RecType::LINK_RX, q);
+        }
+      }
+    }
     const double ms = (now_ns() - t0) * 1e-6;
     proc_max_ms = std::max(proc_max_ms, ms);
     proc_sum_ms += ms;
@@ -302,6 +332,16 @@ int main(int argc, char** argv) {
       if (e.valid)
         std::fprintf(stderr, "  psi %+7.3f th %+7.3f deg  rate %+6.1f %+6.1f deg/s  R %.1f m", deg(e.psi), deg(e.theta),
                      deg(e.psi_d), deg(e.theta_d), e.range_m);
+      if (link.is_open()) {
+        static const char* kGuard[] = {"RUN", "HOLD", "TORQUE_OFF", "RAMP", "ESTOP", "?"};
+        const LinkStatusView ls = link.status();
+        if (ls.valid && now_ns() - ls.t_ns < 200000000LL)
+          std::fprintf(stderr, "  stm32 %s pan %u tilt %u rx ok/err %u/%u%s", kGuard[std::min<int>(ls.s.guard, 5)],
+                       ls.s.pan_goal, ls.s.tilt_goal, ls.s.rx_ok, ls.s.rx_err,
+                       (ls.s.flags & (LINK_S_ESTOP_B1 | LINK_S_ESTOP_SW)) ? " ESTOP" : "");
+        else
+          std::fprintf(stderr, "  stm32 silent");
+      }
       if (synth) {
         if (auto tr = synth->truth(fr.view.seq); tr && tr->visible) {
           const Los g = cam.pixel_to_los(tr->box.cx(), tr->box.cy(), 0, 0, 0);
@@ -316,6 +356,16 @@ int main(int argc, char** argv) {
     if (args.frames > 0 && n >= uint64_t(args.frames)) break;
   }
   std::cerr << "stopping...\n";
+  if (link.is_open()) {   // last word to the STM32: hold where you are
+    LinkAim_t h{};
+    h.seq = link_seq++;
+    for (int i = 0; i < 3; ++i) link.send(h);
+    usleep(20000);
+    std::fprintf(stderr, "STM32 link: AIM sent %llu  write errors %llu  stale flushes %llu  STATUS received %u (crc err %u)\n",
+                 (unsigned long long)link.sent(), (unsigned long long)link.write_errors(),
+                 (unsigned long long)link.stale_flushes(), link.status().frames, link.status().crc_err);
+    link.close();
+  }
   preview.stop();
   src->stop();
   if (clip.active()) {

@@ -139,7 +139,6 @@ int16_t SysId_Profile(uint8_t prof, uint32_t k, uint8_t *done)
 #include "stm32f4xx_hal.h"
 
 extern UART_HandleTypeDef huart2;
-extern UART_HandleTypeDef huart6;
 
 #define CENTER          2048
 #define PAN_LIM         1536      /* +-135 deg around centre */
@@ -194,7 +193,7 @@ static HAL_StatusTypeDef write_byte_blocking(uint8_t id, uint8_t addr, uint8_t v
     uint8_t pkt[STS_WRITE_BYTE_LEN];
     (void)STS_BuildWriteByte(pkt, id, addr, value);
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
-    const HAL_StatusTypeDef st = HAL_UART_Transmit(&huart6, pkt, (uint16_t)sizeof(pkt), 20u);
+    const HAL_StatusTypeDef st = HAL_UART_Transmit(&STS_HUART, pkt, (uint16_t)sizeof(pkt), 20u);
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
     return st;
 }
@@ -211,7 +210,7 @@ void SysId_Init(void)
     uint8_t pkt[STS_SYNC_WRITE_LEN];
     (void)STS_BuildSyncWritePosSpeed(pkt, CENTER, 500u, CENTER, 500u);
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
-    (void)HAL_UART_Transmit(&huart6, pkt, (uint16_t)sizeof(pkt), 20u);
+    (void)HAL_UART_Transmit(&STS_HUART, pkt, (uint16_t)sizeof(pkt), 20u);
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
     HAL_Delay(1500);
 
@@ -258,7 +257,7 @@ void SysId_Tick(void)
     if (s_rx_pending || s_rx_wanted) {
         s_rx_wanted = 0u;
         if (s_rx_pending) {
-            (void)HAL_UART_AbortReceive(&huart6);
+            (void)HAL_UART_AbortReceive(&STS_HUART);
             s_rx_pending = 0u;
         }
         flags |= 0x02u;
@@ -298,12 +297,12 @@ void SysId_Tick(void)
     }
 
     /* 3. one DMA frame: SYNC WRITE + READ(present pos/speed/load) */
-    if (huart6.gState == HAL_UART_STATE_READY) {
+    if (STS_HUART.gState == HAL_UART_STATE_READY) {
         (void)STS_BuildSyncWritePosSpeed(s_tx, pan, spd, tilt, spd);
         (void)SysId_BuildRead(&s_tx[STS_SYNC_WRITE_LEN], s_axis, STS_ADDR_PRESENT, SYSID_READ_N);
         s_rx_wanted = 1u;
         HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
-        if (HAL_UART_Transmit_DMA(&huart6, s_tx, (uint16_t)sizeof(s_tx)) != HAL_OK) {
+        if (HAL_UART_Transmit_DMA(&STS_HUART, s_tx, (uint16_t)sizeof(s_tx)) != HAL_OK) {
             HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
             s_rx_wanted = 0u;
             flags |= 0x08u;
@@ -330,14 +329,14 @@ void SysId_Tick(void)
     }
 }
 
-/* Called from HAL_UART_TxCpltCallback (USART6) after PA4 went low. */
+/* Called from HAL_UART_TxCpltCallback (bus UART) after PA4 went low. */
 void STS_TxDoneHook(void)
 {
     if (!s_rx_wanted) {
         return;
     }
     s_rx_wanted = 0u;
-    if (HAL_UARTEx_ReceiveToIdle_IT(&huart6, s_rx, (uint16_t)sizeof(s_rx)) == HAL_OK) {
+    if (HAL_UARTEx_ReceiveToIdle_IT(&STS_HUART, s_rx, (uint16_t)sizeof(s_rx)) == HAL_OK) {
         s_rx_pending = 1u;
     } else {
         s_sticky_flags |= 0x02u;
@@ -346,7 +345,7 @@ void STS_TxDoneHook(void)
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
-    if (huart->Instance != USART6) {
+    if (huart->Instance != STS_USART) {
         return;
     }
     const uint32_t t = now_us();
@@ -369,8 +368,8 @@ static void handle_cmd(uint8_t c)
 {
     const uint8_t idle = (s_prof == SYSID_PROF_IDLE && s_start_req == SYSID_PROF_IDLE);
     switch (c) {
-    case 'p': if (idle) { s_axis = STS_PAN_ID;  vcp_text("# axis pan (ID 1)\r\n"); }  break;
-    case 't': if (idle) { s_axis = STS_TILT_ID; vcp_text("# axis tilt (ID 2)\r\n"); } break;
+    case 'p': if (idle) { s_axis = STS_PAN_ID;  vcp_text("# axis pan (ID 2)\r\n"); }  break;
+    case 't': if (idle) { s_axis = STS_TILT_ID; vcp_text("# axis tilt (ID 1)\r\n"); } break;
     case 'M':
         if (idle) {
             s_max_speed = (uint8_t)!s_max_speed;

@@ -1,7 +1,9 @@
 /**
- * protocol.c — 64-byte DMA ring buffer + Byte-Slip / Sticky-0xFF immune FSM parser
+ * protocol.c — 128-byte DMA ring + packet v2 frame finder (link_proto.c) + uplink STATUS
  */
 #include "protocol.h"
+
+#include <stdlib.h>
 
 #ifdef RCWS_HOST_TEST
 #define __disable_irq() ((void)0)
@@ -13,7 +15,7 @@
 /* ------------------------------------------------------------------------- */
 uint8_t dma_rx_buf[PROTO_RX_BUF_SIZE] __attribute__((aligned(4)));
 
-volatile VisionPacket_t g_vision_pkt     = { VISION_STATUS_LOST, 0, 0 };
+volatile VisionPacket_t g_vision_pkt     = { 0u, LINK_MODE_HOLD, 0u, 0, 0, 0, 0 };
 volatile uint8_t        g_new_pkt_flag   = 0u;
 /* Start in "timed-out" state: no motion until the first valid packet. */
 volatile uint32_t       g_comm_watchdog  = COMM_WATCHDOG_LIMIT + 1u;
@@ -22,76 +24,50 @@ volatile uint32_t g_proto_ok_count  = 0u;
 volatile uint32_t g_proto_err_count = 0u;
 
 /* ------------------------------------------------------------------------- */
-/* FSM state (main-loop context only)                                        */
+/* Frame finder (main-loop context only)                                     */
 /* ------------------------------------------------------------------------- */
-static ProtoState_t s_state = STATE_WAIT_FF;
-static uint8_t      s_payload[PROTO_PAYLOAD_SIZE];
-static uint8_t      s_payload_idx = 0u;
+static LinkParser_t s_parser;
+static uint32_t     s_crc_err_seen = 0u;
 
 void Protocol_Reset(void)
 {
-    s_state = STATE_WAIT_FF;
-    s_payload_idx = 0u;
+    Link_ParserInit(&s_parser, LINK_SYNC1_DOWN);
+    s_crc_err_seen = 0u;
 }
 
 void Protocol_ParseByte(uint8_t b)
 {
-    switch (s_state) {
-    case STATE_WAIT_FF:
-        if (b == PROTO_HEADER1) {
-            s_state = STATE_WAIT_FE;
-        }
-        break;
-
-    case STATE_WAIT_FE:
-        if (b == PROTO_HEADER2) {
-            s_state = STATE_PAYLOAD;
-            s_payload_idx = 0u;
-        } else if (b == PROTO_HEADER1) {
-            /* Sticky 0xFF: "FF FF FE ..." -> the latest 0xFF may be the real header. */
-            s_state = STATE_WAIT_FE;
-        } else {
-            s_state = STATE_WAIT_FF;
-        }
-        break;
-
-    case STATE_PAYLOAD:
-        s_payload[s_payload_idx++] = b;
-        if (s_payload_idx >= PROTO_PAYLOAD_SIZE) {
-            const uint8_t sum = (uint8_t)((s_payload[0] + s_payload[1] + s_payload[2] +
-                                           s_payload[3] + s_payload[4]) & 0xFFu);
-            if (sum == s_payload[5]) {
-                const uint8_t status = s_payload[0];
-                const int16_t ex = (int16_t)((uint16_t)s_payload[1] | ((uint16_t)s_payload[2] << 8));
-                const int16_t ey = (int16_t)((uint16_t)s_payload[3] | ((uint16_t)s_payload[4] << 8));
-
-                /* Extra sanity gate against checksum false-positives on slipped bytes. */
-                if (status <= VISION_STATUS_COASTING &&
-                    ex >= -VISION_ERR_X_LIMIT && ex <= VISION_ERR_X_LIMIT &&
-                    ey >= -VISION_ERR_Y_LIMIT && ey <= VISION_ERR_Y_LIMIT) {
-                    __disable_irq();
-                    g_vision_pkt.status = status;
-                    g_vision_pkt.err_x  = ex;
-                    g_vision_pkt.err_y  = ey;
-                    g_new_pkt_flag      = 1u;
-                    g_comm_watchdog     = 0u;
-                    __enable_irq();
-                    g_proto_ok_count++;
-                } else {
-                    g_proto_err_count++;
-                }
-            } else {
-                g_proto_err_count++;
-            }
-            s_state = STATE_WAIT_FF;
-            s_payload_idx = 0u;
-        }
-        break;
-
-    default:
-        Protocol_Reset();
-        break;
+    uint8_t f[LINK_FRAME_LEN];
+    if (s_parser.sync1 != LINK_SYNC1_DOWN) {
+        Protocol_Reset();     /* first call before StartRx (host tests) */
     }
+    const int got = Link_ParseByte(&s_parser, b, f);
+    if (s_parser.crc_err != s_crc_err_seen) {
+        g_proto_err_count += s_parser.crc_err - s_crc_err_seen;
+        s_crc_err_seen = s_parser.crc_err;
+    }
+    if (!got) {
+        return;
+    }
+    LinkAim_t a;
+    if (!Link_DecodeAim(f, &a) ||
+        abs(a.err_pan) > VISION_ERR_LIMIT || abs(a.err_tilt) > VISION_ERR_LIMIT ||
+        abs(a.rate_pan) > VISION_RATE_LIMIT || abs(a.rate_tilt) > VISION_RATE_LIMIT) {
+        g_proto_err_count++;
+        return;
+    }
+    __disable_irq();
+    g_vision_pkt.seq       = a.seq;
+    g_vision_pkt.mode      = a.mode;
+    g_vision_pkt.flags     = a.flags;
+    g_vision_pkt.err_pan   = a.err_pan;
+    g_vision_pkt.err_tilt  = a.err_tilt;
+    g_vision_pkt.rate_pan  = a.rate_pan;
+    g_vision_pkt.rate_tilt = a.rate_tilt;
+    g_new_pkt_flag         = 1u;
+    g_comm_watchdog        = 0u;
+    __enable_irq();
+    g_proto_ok_count++;
 }
 
 #ifndef RCWS_HOST_TEST
@@ -101,6 +77,7 @@ void Protocol_ParseByte(uint8_t b)
 static UART_HandleTypeDef *s_huart = 0;
 static uint32_t            s_tail = 0u;
 static volatile uint8_t    s_restart_req = 0u;
+static uint8_t             s_tx[LINK_FRAME_LEN];   /* static: valid during the DMA transfer */
 
 HAL_StatusTypeDef Protocol_StartRx(UART_HandleTypeDef *huart)
 {
@@ -122,7 +99,8 @@ void Protocol_Poll(void)
         return;
     }
 
-    /* HAL aborts circular DMA on UART errors (ORE/FE/NE) — restart from thread mode. */
+    /* HAL aborts circular DMA on UART errors (ORE/FE/NE) — restart from thread mode.
+       AbortReceive leaves an uplink transmission in flight untouched. */
     if (s_restart_req || s_huart->RxState != HAL_UART_STATE_BUSY_RX) {
         (void)HAL_UART_AbortReceive(s_huart);
         (void)Protocol_StartRx(s_huart);
@@ -137,18 +115,31 @@ void Protocol_Poll(void)
         s_tail = (s_tail + 1u) & PROTO_RX_BUF_MASK;
     }
 }
+
+void Protocol_SendStatus(const LinkStatus_t *s)
+{
+    if (s_huart == 0 || s_huart->gState != HAL_UART_STATE_READY) {
+        return;
+    }
+    Link_EncodeStatus(s_tx, s);
+    (void)HAL_UART_Transmit_DMA(s_huart, s_tx, (uint16_t)LINK_FRAME_LEN);
+}
 #else
 /* ------------------------------------------------------------------------- */
 /* Host test helper                                                          */
 /* ------------------------------------------------------------------------- */
-uint8_t Protocol_HostTakePacket(uint8_t *status, int16_t *err_x, int16_t *err_y)
+uint8_t Protocol_HostTakePacket(VisionPacket_t *out)
 {
     if (!g_new_pkt_flag) {
         return 0u;
     }
-    *status = g_vision_pkt.status;
-    *err_x  = g_vision_pkt.err_x;
-    *err_y  = g_vision_pkt.err_y;
+    out->seq       = g_vision_pkt.seq;
+    out->mode      = g_vision_pkt.mode;
+    out->flags     = g_vision_pkt.flags;
+    out->err_pan   = g_vision_pkt.err_pan;
+    out->err_tilt  = g_vision_pkt.err_tilt;
+    out->rate_pan  = g_vision_pkt.rate_pan;
+    out->rate_tilt = g_vision_pkt.rate_tilt;
     g_new_pkt_flag = 0u;
     return 1u;
 }
