@@ -190,6 +190,16 @@ double TrackBoard::cost(const MotTrack& k, const Detection& d, const AppHist* h,
   return c;
 }
 
+bool TrackBoard::outside_image(const MotTrack& k, float* dx, float* dy) const {
+  const float ex = k.x[0] < 0 ? -1.f : k.x[0] > W_ ? 1.f : 0.f;
+  const float ey = k.x[1] < 0 ? -1.f : k.x[1] > H_ ? 1.f : 0.f;
+  if (ex == 0 && ey == 0) return false;
+  const float n = std::hypot(ex, ey);
+  *dx = ex / n;
+  *dy = ey / n;
+  return true;
+}
+
 bool TrackBoard::near_edge(const MotTrack& k, float* dx, float* dy) const {
   const float mx = c_.edge_margin * W_, my = c_.edge_margin * H_;
   const RectF b = k.box();
@@ -324,7 +334,18 @@ MotUpdate TrackBoard::update(const DetectionBatch& b, const FrameView* f, float 
       else if (k.st == MotState::OCCLUDED || k.st == MotState::EXITING) set_state(k, MotState::CONFIRMED, t);
       continue;
     }
-    if (k.st == MotState::LOST || !observable(k)) continue;
+    if (k.st == MotState::LOST) continue;
+    if (!observable(k)) {
+      // Its predicted centre left the image: no crop can ever cover it again, so it would never
+      // collect a miss and would time out as a plain LOST without the exit side (seen on Pi 5,
+      // where batch timing put no crop over the edge in the last frames). Mark the exit here.
+      float dx = 0, dy = 0;
+      if ((k.st == MotState::CONFIRMED || k.st == MotState::OVERLAP) && outside_image(k, &dx, &dy)) {
+        k.exit_dx = dx; k.exit_dy = dy;
+        set_state(k, MotState::EXITING, t);
+      }
+      continue;
+    }
     k.misses++;
     if (k.st == MotState::TENTATIVE) continue;   // removed in tick()
     float dx = 0, dy = 0;
@@ -401,7 +422,14 @@ void TrackBoard::tick(int64_t t) {
         break;
       case MotState::CONFIRMED:
       case MotState::OVERLAP:
-        if (unseen > c_.unseen_s) set_state(k, MotState::LOST, t);
+        if (unseen > c_.unseen_s) {
+          // never seen again by any crop: if it was last at an edge moving out, it left the view
+          MotTrack p = k;
+          predict(p, t);
+          float dx = 0, dy = 0;
+          if (outside_image(p, &dx, &dy) || near_edge(k, &dx, &dy)) { k.exited = true; k.exit_dx = dx; k.exit_dy = dy; }
+          set_state(k, MotState::LOST, t);
+        }
         break;
       default: break;
     }

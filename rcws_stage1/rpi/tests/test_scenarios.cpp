@@ -211,6 +211,38 @@ TEST(board_lock_is_never_redesignated) {
   CHECK(fresh.designate(-1, b.t_sof_ns) == fresh.tracks()[1].id);
 }
 
+TEST(board_exit_without_edge_crop) {
+  // Pi 5 run of the "exit" scenario: while the phone left through the right edge, no detector crop
+  // covered it, so it collected no miss, stayed CONFIRMED and timed out as a plain LOST (no exit
+  // side -> no search hint). Two crop patterns: crops that never reach the edge, and none at all.
+  for (int pattern = 0; pattern < 2; ++pattern) {
+    MotCfg mc;
+    TrackBoard tb(mc, 1536, 864);
+    DetectionBatch b;
+    b.crop = {0, 0, 1536, 864};
+    int64_t t = 1000000000LL;
+    const double v = 900;   // px/s to the right
+    double x = 1200;
+    int id = -1;
+    for (int k = 0; k < 120; ++k, t += 8333333LL) {   // seen while x < 1450
+      x += v / 120;
+      b.t_sof_ns = t;
+      Detection d;
+      d.box = {float(x - 18), 400, 36, 74}; d.score = 0.9f; d.cls = ObjClass::Phone;
+      if (x < 1450) b.dets = {d};
+      else { b.dets.clear(); b.crop = pattern == 0 ? RectF{0, 0, 900, 864} : RectF{300, 200, 400, 400}; }
+      tb.update(b, nullptr, 0.3f, 0.15f);
+      tb.tick(t);
+      if (id < 0 && !tb.tracks().empty()) id = tb.tracks()[0].id;
+    }
+    const MotTrack* k = tb.find(id);
+    CHECK(k != nullptr);
+    if (!k) continue;
+    std::printf("  pattern %d: %s exited %d exit_dx %.2f\n", pattern, to_string(k->st), int(k->exited), k->exit_dx);
+    CHECK(k->st == MotState::LOST && k->exited && k->exit_dx > 0.5f);
+  }
+}
+
 TEST(quality_flags_dark_with_hysteresis) {
   QualityCfg qc;
   QualityMonitor q(qc);

@@ -105,6 +105,7 @@ class TrackBoard {
   double cost(const MotTrack& k, const Detection& d, const AppHist* h, bool use_iou_only) const;
   void set_state(MotTrack& k, MotState s, int64_t t);
   bool near_edge(const MotTrack& k, float* dx, float* dy) const;
+  bool outside_image(const MotTrack& k, float* dx, float* dy) const;   // predicted centre left the image
   void check_separation(int64_t t);
   float priority(const MotTrack& k, int64_t t) const;
 
