@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # RCWS Stage 1 - Raspberry Pi 5 deploy: packet v2 link to the STM32 + operator web page + launcher.
 #
+#   UART: /dev/ttyAMA0 (GPIO14/15, needs dtparam=uart0=on). Override: RCWS_UART=/dev/xxx bash deploy.sh
 #   PC:  ssh -t pgy819@rcwspi.local "curl -fsSL https://raw.githubusercontent.com/pgy819/capstone_project/preview-stack/rcws_stage1/tools/pi/deploy.sh | bash -s preview-stack"
 #   Pi:  bash deploy.sh [branch]        (default: preview-stack)
 #
@@ -68,17 +69,20 @@ fi
 
 # ------------------------------------------------------------------ 5. UART to the STM32
 say "5/6 STM32 UART 점검 (팀 배선: Pi GPIO14 TXD -> STM32 PC7, GPIO15 RXD <- PC6, GND 공통)"
-UART=""
-if [ -e /dev/serial0 ]; then
-  UART=/dev/serial0
-  say "UART: /dev/serial0 -> $(readlink -f /dev/serial0)"
+# Pi 5: GPIO14/15 = PL011 UART0 = /dev/ttyAMA0, only with 'dtparam=uart0=on'.
+#        /dev/serial0 defaults to /dev/ttyAMA10 = the 3-pin DEBUG connector, NOT the GPIO header.
+UART="${RCWS_UART:-}"
+if [ -z "$UART" ] && [ -e /dev/ttyAMA0 ]; then UART=/dev/ttyAMA0; fi
+if [ -n "$UART" ]; then
+  say "UART: $UART (GPIO14/15)"
 else
-  warn "/dev/serial0 없음. /boot/firmware/config.txt 에 'enable_uart=1' (Pi 5는 'dtparam=uart0=on'도) 추가,"
-  warn "sudo raspi-config > Interface > Serial Port: 로그인 셸 '아니오', 하드웨어 포트 '예' 후 재부팅."
+  warn "/dev/ttyAMA0(GPIO14/15)이 없습니다. /dev/serial0은 $(readlink -f /dev/serial0 2>/dev/null || echo 없음) 로,"
+  warn "Pi 5에서는 GPIO가 아니라 디버그 커넥터(ttyAMA10)입니다. 다음을 한 뒤 재부팅하고 deploy를 다시 실행하세요:"
+  warn "  echo 'dtparam=uart0=on' | sudo tee -a /boot/firmware/config.txt && sudo reboot"
   warn "그때까지 go.sh는 STM32 없이(서보 구동 없이) 실행됩니다."
 fi
-if [ -n "$UART" ] && grep -q "console=serial0" /proc/cmdline; then
-  warn "직렬 콘솔이 serial0을 쓰고 있습니다(부팅 메시지가 STM32로 감). raspi-config에서 로그인 셸을 끄고 재부팅하세요."
+if [ -n "$UART" ] && grep -Eq "console=(ttyAMA0|$(basename "$UART"))" /proc/cmdline; then
+  warn "직렬 콘솔이 $UART 를 쓰고 있습니다(부팅 메시지가 STM32로 감). /boot/firmware/cmdline.txt 에서 console=ttyAMA0,... 를 지우고 재부팅하세요."
 fi
 id -nG | grep -qw dialout || { warn "사용자가 dialout 그룹이 아닙니다: sudo usermod -aG dialout $USER 후 재로그인."; }
 
