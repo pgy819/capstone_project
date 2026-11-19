@@ -14,3 +14,8 @@ gimbal_v*_package.zip
 sample_turntable_240/
 gimbal_v100_candidate/
 gimbal_v100_candidate.zip
+stage2/stage2_v*_package/
+stage2/stage2_v*_package.zip
+stage2/viewer_meshes/
+stage2/run.log
+viewer/stage2_viewer*.html

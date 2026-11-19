@@ -1,0 +1,395 @@
+<title>하단부 Stage 2 v0.1</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same drawing-sheet feel as the Stage 1 viewers - sticky 3D viewport left, ruled spec column right. */
+:root {
+  --bg: #f3f5f4; --panel: #ffffff; --ink: #18201d; --muted: #5d6b66; --rule: #d5dcd9; --soft: #e8eeeb;
+  --accent: #0f7a5c; --accent-ink: #ffffff; --old: #8a6d3b; --warn: #b4531f; --view: #e9eeec;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121715; --panel: #18201d; --ink: #e4ece8; --muted: #93a39d; --rule: #2b3632; --soft: #1f2925;
+  --accent: #3fc79b; --accent-ink: #0b1411; --old: #d1aa66; --warn: #f08a55; --view: #1a2220; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121715; --panel: #18201d; --ink: #e4ece8; --muted: #93a39d; --rule: #2b3632; --soft: #1f2925;
+  --accent: #3fc79b; --accent-ink: #0b1411; --old: #d1aa66; --warn: #f08a55; --view: #1a2220; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.55; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+header { max-width: 1320px; margin: 0 auto 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+h1 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0; max-width: 72ch; }
+.badge { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: 1px 7px; border-radius: 3px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.viewer { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); background: var(--view); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+#view { display: block; width: 100%; height: min(70vh, 620px); touch-action: none; }
+.hud { position: absolute; left: 12px; top: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); display: grid; gap: 2px; pointer-events: none; }
+.hud b { color: var(--ink); font-weight: 500; }
+.hud .ok { color: var(--accent); }
+.hud .bad { color: var(--warn); }
+#loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+#loading[hidden] { display: none; }
+.controls { display: grid; gap: 10px; padding: 12px 14px 14px; border-top: 1px solid var(--rule); background: var(--panel); }
+.slider { display: grid; grid-template-columns: 86px minmax(0, 1fr) 58px; align-items: center; gap: 10px; }
+.slider label { font-weight: 600; font-size: 13px; }
+.slider output { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 13px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: inherit; font-size: 12.5px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.col { display: grid; gap: 14px; min-width: 0; }
+section { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px 16px; min-width: 0; }
+h2 { font-size: 13px; font-weight: 600; margin: 0 0 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0 0 8px; max-width: 66ch; }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.new { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.parts { display: grid; gap: 2px; }
+.parts label { display: grid; grid-template-columns: 18px 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px 2px; border-bottom: 1px dashed var(--soft); cursor: pointer; }
+.sw { width: 12px; height: 12px; border-radius: 2px; }
+.tag { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+ol, ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+li { max-width: 66ch; }
+.warn li::marker { color: var(--warn); }
+.note { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); }
+  .viewer { position: relative; top: 0; }
+  #view { height: 58vh; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<header>
+  <span class="badge">Stage 2 · v0.1 · 3-RRS</span>
+  <h1>하단부 3축 수평 유지 플랫폼</h1>
+  <p class="sub">받침판을 손으로 기울여도 STS3215 세 개(ID 3·4·5)가 플랫폼을 수평으로 되돌려, 위에 볼트로 고정한 상단부 2축 짐벌(v0.9.2-S 플랜 B)을 평평하게 유지합니다. 수평 센서 BNO085는 플랫폼 아래에 붙습니다. 슬라이더로 받침판을 기울여 보세요.</p>
+</header>
+
+<div class="wrap">
+  <div class="viewer">
+    <canvas id="view" aria-label="Stage 2 3D 모델"></canvas>
+    <div class="hud">
+      <span>받침판 기울기 <b id="hud-base">0.0°</b></span>
+      <span>플랫폼 기울기 (세상 기준) <b id="hud-plat">0.0°</b></span>
+      <span>크랭크 ID3 / ID4 / ID5 <b id="hud-cr">0 / 0 / 0°</b></span>
+      <span>볼 소켓 꺾임 최대 <b id="hud-phi">0°</b></span>
+      <span id="hud-state"></span>
+    </div>
+    <div id="loading">3D 모델을 불러오는 중…</div>
+    <div class="controls">
+      <div class="slider"><label for="rx">앞뒤 기울임</label><input type="range" id="rx" min="-25" max="25" step="0.5" value="0"><output id="rx-o">0°</output></div>
+      <div class="slider"><label for="ry">좌우 기울임</label><input type="range" id="ry" min="-25" max="25" step="0.5" value="0"><output id="ry-o">0°</output></div>
+      <div class="btns">
+        <button type="button" id="comp" class="on">수평 보정 켬</button>
+        <button type="button" id="shake">손 흔들기 (자동)</button>
+        <button type="button" data-tilt="15,0">앞 15°</button>
+        <button type="button" data-tilt="0,-15">옆 15°</button>
+        <button type="button" data-tilt="14,14">대각 20°</button>
+        <button type="button" data-tilt="0,0">수평</button>
+        <button type="button" id="xray">플랫폼 투명</button>
+        <button type="button" id="hidetop">상단부 숨기기</button>
+        <button type="button" id="home">전체 보기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <section>
+      <h2>구조</h2>
+      <ol>
+        <li><strong>3-RRS 병렬 플랫폼:</strong> 서보 3개가 120° 간격으로 서서(축은 수평, 접선 방향) 35 mm 크랭크를 돌리고, 60 mm 로드가 플랫폼의 볼 조인트를 밀어 올립니다. 플랫폼은 Roll·Pitch·높이 3자유도를 가집니다. Yaw는 상단부 Pan이 맡습니다.</li>
+        <li><strong>서보 받침:</strong> 받침판과 한 몸인 요람에 서보를 위에서 꽂고, 위 끈판을 M3 × 12 두 개로 누릅니다. 커넥터는 뒤쪽 창으로 나옵니다.</li>
+        <li><strong>크랭크:</strong> Stage 1 턴테이블과 같은 혼 주머니(누름 리브) + 방사형 홈 4개로 서보 원판 혼에 고정합니다.</li>
+        <li><strong>로드:</strong> 아래 눈(eye)은 크랭크 끝 M3 × 16 핀(크랭크에 셀프 탭 고정, 바깥에 너트 2개로 잠금) 위에서 돌고, 위에는 지름 16 mm 출력 볼이 있습니다.</li>
+        <li><strong>볼 소켓:</strong> 플랫폼 보스의 반구 컵 + 아래 고정링(M3 × 12 두 개). 간극 0.15 mm, 링 아래 모서리를 45°로 깎아 받침판 기울기 약 22°까지 걸리지 않습니다.</li>
+        <li><strong>플랫폼 → 상단부:</strong> 플랜 B 하판에 구멍 4개(M3 × 12, 위에서 플랫폼으로 셀프 탭)와 선 구멍 하나만 더했습니다. 플랫폼 중심은 상단부 무게중심 바로 아래입니다.</li>
+        <li><strong>손잡이:</strong> 받침판 양쪽에 볼트로 붙이는 손잡이 2개(M3 × 16 + 너트). 책상에서는 손잡이와 다리 3개로 섭니다.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>기구학 · 검사 결과</h2>
+      <div class="tbl"><table id="kin"></table></div>
+      <p class="note">토크는 상단부+플랫폼 0.8 kg, 무게중심 플랫폼 위 70 mm, 받침판을 같은 각도로 기울였을 때의 정적 값입니다. 간섭은 ±20°(12방향) + 높이 ±3 mm 자세에서 움직이는 부품끼리 모두 계산했습니다.</p>
+    </section>
+
+    <section>
+      <h2>부품 (클릭해서 숨기기)</h2>
+      <div class="parts" id="parts"></div>
+    </section>
+
+    <section>
+      <h2>출력 목록</h2>
+      <div class="tbl"><table id="print"></table></div>
+      <p class="note">로드는 세워서(볼이 위) 출력합니다: 볼 아래는 45° 원뿔이라 서포트가 필요 없습니다. 고정링은 플랫폼에 닿는 면을 바닥에, 플랫폼은 윗면을 바닥에 둡니다.</p>
+    </section>
+
+    <section>
+      <h2>나사 · 모두 가진 것</h2>
+      <div class="tbl"><table>
+        <tr><th>품목</th><th>수량</th><th>쓰임</th></tr>
+        <tr><td>M3 × 16</td><td class="num">7</td><td>크랭크 핀 3, 손잡이 4</td></tr>
+        <tr><td>M3 × 12</td><td class="num">16</td><td>서보 끈판 6, 고정링 6, 플랜 B 하판 → 플랫폼 4</td></tr>
+        <tr><td>M3 너트</td><td class="num">10</td><td>크랭크 핀 잠금 6 (2개씩), 손잡이 4</td></tr>
+        <tr><td>M2.5 × 8</td><td class="num">4</td><td>BNO085 보드 → 플랫폼 패드</td></tr>
+        <tr><td>혼 나사</td><td class="num">3 × 4</td><td>서보 동봉 (크랭크 → 혼)</td></tr>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>조립 순서</h2>
+      <ol>
+        <li>서보 3개 ID를 3·4·5로 바꾸고, <strong>중립(2048)에서 혼을 끼웁니다.</strong> 크랭크가 수평 바깥쪽을 볼 때가 0°입니다.</li>
+        <li>서보를 요람에 위에서 꽂고(혼 쪽이 바깥 접선 방향), 끈판을 M3 × 12로 누릅니다. 버스 선은 뒤쪽 창으로.</li>
+        <li>크랭크를 혼에 눌러 끼우고 혼 나사 4개. 핀(M3 × 16)을 크랭크 뒤에서 끝까지 조여 넣습니다.</li>
+        <li>로드 눈을 핀에 끼우고 너트 2개를 서로 잠급니다(로드가 자유롭게 돌 만큼 0.1~0.2 mm 여유).</li>
+        <li>로드 볼을 플랫폼 컵에 넣고 고정링을 아래에서 M3 × 12로. 볼이 걸리면 링 나사를 반 바퀴씩 풉니다.</li>
+        <li>BNO085를 플랫폼 아래 패드에, 플랜 B를 플랫폼 위에 M3 × 12 네 개로. 버스 선과 BNO085 선은 플랫폼 선 구멍으로 위로 올립니다.</li>
+        <li>손잡이를 받침판 아래에 M3 × 16 + 너트로.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>실측 확인</h2>
+      <ul class="warn">
+        <li>STS3215 크기·혼 지름·축 위치는 Stage 1과 같은 값입니다(사용자 실측 45 × 24 × 33). 혼 주머니가 맞는지 Stage 1 C02 시험편 결과를 그대로 씁니다.</li>
+        <li>BNO085 보드는 Adafruit 4754(20.3 × 12.7 구멍)와 SparkFun(20.3 × 20.3) 둘 다 맞게 구멍 8개를 냈습니다. 쓰는 보드를 알려 주세요.</li>
+        <li>PLA 볼과 컵은 마찰이 있습니다. 필요하면 그리스나 연필심 가루를 바르세요. 0.15 mm 간극은 출력기 공차를 보고 조정합니다.</li>
+        <li>서보 5개가 한 버스·한 전원(12 V)을 씁니다. 전원 용량 확인이 필요합니다.</li>
+        <li>STS3215 속도(무부하 약 270°/s 가정)에서 크랭크/기울기 비가 약 2라, 따라갈 수 있는 손 기울임 속도는 약 130°/s입니다. 실측으로 확인합니다.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const GLB_B64 = "__GLB__";
+const GEO = __GEO__;
+const RES = __RES__;
+const PARTS = [
+  ["base_plate", "받침판 + 서보 요람", "#c9ced4", "base", 0],
+  ["handle", "손잡이 ×2", "#9aa3ad", "base", 0],
+  ["strap", "서보 끈판 ×3", "#7d6bd6", "base", 0],
+  ["servo", "STS3215 ×3 (ID 3·4·5)", "#2a2d31", "base", 1],
+  ["horn", "혼 ×3", "#a7abb0", "crank", 1],
+  ["crank", "크랭크 35 mm ×3", "#e48a2a", "crank", 0],
+  ["pin", "핀 M3 × 16 + 너트 2", "#d9bf4d", "crank", 1],
+  ["rod", "로드 60 mm + 볼 ×3", "#2f6fd6", "rod", 0],
+  ["ring", "볼 고정링 ×3", "#0f7a5c", "platform", 0],
+  ["platform", "플랫폼", "#4fb08c", "platform", 0],
+  ["bno085", "BNO085 보드", "#1e6b45", "platform", 1],
+  ["pb_lower_deck", "플랜 B 하판 (구멍 5개 추가)", "#d5dae0", "platform", 0],
+  ["pb_", "상단부 v0.9.2-S 플랜 B", "#8d959e", "platform", 1],
+];
+const PB_COLORS = { pi5_stack: "#2f8a52", nucleo_f401re: "#e9e9e9", fe_urt_1: "#1f4fa0", camera: "#1e6b45",
+  pan_servo: "#2a2d31", tilt_servo: "#2a2d31", turntable: "#2f6fd6", arm_servo: "#4a86e8", arm_idle: "#4a86e8",
+  tilt_cradle: "#e48a2a", driver_frame: "#7d6bd6", top_deck: "#d5dae0" };
+
+// ---------------------------------------------------------------- 3-RRS kinematics (same as s2_kin.py)
+const D2R = Math.PI / 180;
+const BETAS = [0, 1, 2].map(i => (GEO.BETA0 + 120 * i) * D2R);
+function rot(r, p, y) {
+  const cr = Math.cos(r), sr = Math.sin(r), cp = Math.cos(p), sp = Math.sin(p), cy = Math.cos(y), sy = Math.sin(y);
+  return [[cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+          [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+          [-sp, cp * sr, cp * cr]];
+}
+const mv = (R, v) => [0, 1, 2].map(i => R[i][0] * v[0] + R[i][1] * v[1] + R[i][2] * v[2]);
+const legR = b => [Math.cos(b), Math.sin(b), 0], legT = b => [-Math.sin(b), Math.cos(b), 0];
+const ballLocal = b => { const r = legR(b), t = legT(b); return [0, 1, 2].map(k => GEO.RP * r[k] + GEO.T_OFF * t[k]); };
+function plat(v, z, roll, pitch) {
+  const R = rot(roll, pitch, v[2]);
+  return { R, P: BETAS.map(b => { const p = mv(R, ballLocal(b)); return [p[0] + v[0], p[1] + v[1], p[2] + z]; }) };
+}
+let guess = [0, 0, 0];
+function parasitic(roll, pitch, z) {
+  const f = v => { const { P } = plat(v, z, roll, pitch); return BETAS.map((b, i) => { const t = legT(b); return P[i][0] * t[0] + P[i][1] * t[1] - GEO.T_OFF; }); };
+  let v = guess.slice();
+  for (let it = 0; it < 30; it++) {
+    const f0 = f(v), J = [[], [], []], h = 1e-6;
+    for (let j = 0; j < 3; j++) { const w = v.slice(); w[j] += h; const f1 = f(w); for (let i = 0; i < 3; i++) J[i][j] = (f1[i] - f0[i]) / h; }
+    const dx = solve3(J, f0.map(x => -x)); v = v.map((x, i) => x + dx[i]);
+    if (Math.max(...dx.map(Math.abs)) < 1e-10) break;
+  }
+  guess = v; return v;
+}
+function solve3(A, b) {
+  const det = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const d = det(A); return [0, 1, 2].map(c => det(A.map((row, i) => row.map((x, j) => j === c ? b[i] : x))) / d);
+}
+function crankAngle(P, b) {
+  const r = legR(b), u = P[0] * r[0] + P[1] * r[1] - GEO.RB, w = P[2] - GEO.HS;
+  const k = (u * u + w * w + GEO.A * GEO.A - GEO.L * GEO.L) / (2 * GEO.A), rr = Math.hypot(u, w);
+  if (Math.abs(k) > rr) return null;
+  const ph = Math.atan2(w, u), d = Math.acos(k / rr);
+  const c = [ph - d, ph + d].map(a => Math.atan2(Math.sin(a), Math.cos(a)));
+  return Math.abs(c[0]) < Math.abs(c[1]) ? c[0] : c[1];
+}
+function pose(roll, pitch) {
+  const z = GEO.HS + GEO.L, v = parasitic(roll, pitch, z), { R, P } = plat(v, z, roll, pitch);
+  const alpha = BETAS.map((b, i) => crankAngle(P[i], b));
+  if (alpha.some(a => a === null)) return null;
+  const C = BETAS.map((b, i) => { const r = legR(b), t = legT(b), a = alpha[i];
+    return [0, 1, 2].map(k => GEO.RB * r[k] + GEO.T_OFF * t[k] + GEO.A * Math.cos(a) * r[k] + (k === 2 ? GEO.HS + GEO.A * Math.sin(a) : 0)); });
+  return { x: v[0], y: v[1], z, yaw: v[2], R, P, C, alpha };
+}
+
+// ---------------------------------------------------------------- tables
+(function () {
+  const k = RES.kin, t15 = k.tilt15, t20 = k.tilt20, f = (a, n = 1) => (+a).toFixed(n);
+  const unexpected = Object.keys(RES.unexpected || {}).length, failed = (RES.failed_pairs || []).length;
+  const rows = [
+    ["서보 축 반경 / 높이", `${GEO.RB} / ${GEO.HS} mm`],
+    ["크랭크 / 로드 / 볼 반경", `${GEO.A} / ${GEO.L} / ${GEO.RP} mm`],
+    ["볼 중심 높이 (받침판 윗면 기준)", `${GEO.HS + GEO.L} mm`],
+    ["크랭크 각 (±15° / ±20°, 높이 ±3 mm 포함)", `${f(t15.alpha_deg[0])}~${f(t15.alpha_deg[1])}° / ${f(t20.alpha_deg[0])}~${f(t20.alpha_deg[1])}°`],
+    ["크랭크/기울기 비 (중립)", f(k.dalpha_dtilt, 2)],
+    ["볼 소켓 꺾임 최대 (한계 30°)", `${f(t15.phi_max)}° / ${f(t20.phi_max)}°`],
+    ["크랭크-로드 전달각 (90°가 최선)", `${f(t15.trans[0], 0)}~${f(t15.trans[1], 0)}° / ${f(t20.trans[0], 0)}~${f(t20.trans[1], 0)}°`],
+    ["딸려 움직임 (수평 / Yaw)", `${f(t20.xy_max)} mm / ${f(t20.yaw_max)}° (±20°)`],
+    ["서보 정적 토크 최대", `${f(t20.tau_max, 3)} N·m (정지 토크 약 1.9 N·m의 5 %, 7.4 V 기준)`],
+    ["간섭 (예상 외 / 계산 실패)", `${unexpected} / ${failed}`],
+  ];
+  document.getElementById("kin").innerHTML = "<tr><th>항목</th><th>값</th></tr>" + rows.map(([a, b]) => `<tr><td>${a}</td><td class="new">${b}</td></tr>`).join("");
+  const names = { S01_crank: "크랭크", S02_rod: "로드 + 볼", S03_ring: "볼 고정링", S04_strap: "서보 끈판", S05_handle: "손잡이",
+    S06_base_plate: "받침판 + 요람", S07_platform: "플랫폼", P02_lower_deck_s2: "플랜 B 하판 (구멍 추가판)" };
+  document.getElementById("print").innerHTML = "<tr><th>부품</th><th>수량</th><th>크기 mm</th></tr>" +
+    RES.print.map(r => `<tr><td>${names[r[0]] || r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2].map(v => (+v).toFixed(0)).join(" × ")}</td></tr>`).join("");
+})();
+
+// ---------------------------------------------------------------- scene
+const canvas = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+cam.up.set(0, 0, 1);
+const controls = new THREE.OrbitControls(cam, canvas);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8090a0, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(250, -200, 400); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xffffff, 0.25); fill.position.set(-200, 200, 100); scene.add(fill);
+// world horizon reference: a faint ring at platform height
+const ringGeo = new THREE.RingGeometry(150, 151.5, 96);
+const horizon = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x0f7a5c, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+horizon.position.z = GEO.HS + GEO.L + 15; scene.add(horizon);
+const meshes = {}, byPart = {};
+let ready = false, HOME = {}, fly = null;
+function b64ToBuf(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+function partOf(name) { return PARTS.find(p => name === p[0] || name.startsWith(p[0] + "_") || (p[0] === "pb_" && name.startsWith("pb_") && name !== "pb_lower_deck")); }
+new THREE.GLTFLoader().parse(b64ToBuf(GLB_B64), "", (gltf) => {
+  const found = []; gltf.scene.traverse(o => { if (o.isMesh) found.push(o); });
+  for (const m of found) {
+    const name = m.name || (m.parent && m.parent.name);
+    const key = partOf(name); if (!key) continue;
+    let color = key[2];
+    if (name.startsWith("pb_")) color = PB_COLORS[name.slice(3)] || (name.includes("fastener") ? "#d9bf4d" : key[2]);
+    m.material = new THREE.MeshStandardMaterial({ color, roughness: 0.6, flatShading: true, metalness: /servo|horn|pin/.test(name) ? 0.35 : 0.05, side: THREE.DoubleSide });
+    m.matrixAutoUpdate = false; scene.add(m);
+    meshes[name] = m; (byPart[key[0]] = byPart[key[0]] || []).push(m);
+  }
+  ready = true; update();
+  const bb = new THREE.Box3(); for (const m of Object.values(meshes)) bb.expandByObject(m);
+  const c = bb.getCenter(new THREE.Vector3()), r = bb.getSize(new THREE.Vector3()).length() / 2;
+  controls.target.copy(c);
+  const d = r / Math.sin(THREE.MathUtils.degToRad(cam.fov / 2)) * 0.8;
+  cam.position.copy(c).add(new THREE.Vector3(0.6, -0.75, 0.38).normalize().multiplyScalar(d));
+  cam.near = d / 50; cam.far = d * 10; cam.updateProjectionMatrix();
+  HOME.p = cam.position.clone(); HOME.t = controls.target.clone();
+  document.getElementById("loading").hidden = true;
+  const box = document.getElementById("parts");
+  for (const [key, label, color, group, bought] of PARTS) {
+    if (!byPart[key]) continue;
+    const id = "p-" + key, row = document.createElement("label"); row.htmlFor = id;
+    row.innerHTML = `<input type="checkbox" id="${id}" checked><span class="sw" style="background:${color}"></span><span>${label}</span><span class="tag">${bought ? "기존" : "출력"} · ${({ base: "받침", crank: "크랭크", rod: "로드", platform: "플랫폼" })[group]}</span>`;
+    row.querySelector("input").addEventListener("change", e => byPart[key].forEach(m => m.visible = e.target.checked));
+    box.appendChild(row);
+  }
+}, (err) => { document.getElementById("loading").textContent = "모델을 불러오지 못했습니다: " + err; });
+
+// ---------------------------------------------------------------- pose
+const M4 = (R, t) => new THREE.Matrix4().set(R[0][0], R[0][1], R[0][2], t[0], R[1][0], R[1][1], R[1][2], t[1], R[2][0], R[2][1], R[2][2], t[2], 0, 0, 0, 1);
+const I3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+let comp = true, last = null;
+const rxIn = document.getElementById("rx"), ryIn = document.getElementById("ry");
+function update() {
+  const hx = +rxIn.value * D2R, hy = +ryIn.value * D2R;
+  document.getElementById("rx-o").textContent = (+rxIn.value).toFixed(1) + "°";
+  document.getElementById("ry-o").textContent = (+ryIn.value).toFixed(1) + "°";
+  // hand tilt of the base in the world: pitch about y (front/back), roll about x (sideways)
+  const Rb = rot(hy, hx, 0);
+  let roll = 0, pitch = 0, q = pose(0, 0), state = "";
+  if (comp) {   // platform normal in the base frame must be Rb^T e_z; the parasitic yaw turns it, so iterate
+    const n = [Rb[2][0], Rb[2][1], Rb[2][2]];
+    for (let it = 0; it < 4 && q; it++) {
+      const c = Math.cos(-q.yaw), s = Math.sin(-q.yaw), m = [c * n[0] - s * n[1], s * n[0] + c * n[1], n[2]];
+      roll = Math.asin(-m[1]); pitch = Math.atan2(m[0], m[2]);
+      q = pose(roll, pitch);
+    }
+  }
+  if (!q) { q = last; state = "닿지 않는 자세 (마지막 자세 유지)"; }
+  if (!q || !ready) return;
+  last = q;
+  const W = M4(Rb, [0, 0, 0]);
+  const T = { base: W.clone(), platform: W.clone().multiply(M4(q.R, [q.x, q.y, q.z])) };
+  let phiMax = 0;
+  BETAS.forEach((b, i) => {
+    const Rl = rot(0, 0, b), Lm = M4(Rl, [0, 0, 0]);
+    const crank = new THREE.Matrix4().makeTranslation(GEO.RB, 0, GEO.HS).multiply(new THREE.Matrix4().makeRotationY(-q.alpha[i])).multiply(new THREE.Matrix4().makeTranslation(-GEO.RB, 0, -GEO.HS));
+    T["crank" + i] = W.clone().multiply(Lm).multiply(crank);
+    const RlT = [[Rl[0][0], Rl[1][0], Rl[2][0]], [Rl[0][1], Rl[1][1], Rl[2][1]], [Rl[0][2], Rl[1][2], Rl[2][2]]];
+    const C = mv(RlT, q.C[i]), P = mv(RlT, q.P[i]);
+    const th = Math.atan2(P[0] - C[0], P[2] - C[2]);
+    T["rod" + i] = W.clone().multiply(Lm).multiply(new THREE.Matrix4().makeTranslation(C[0], 0, C[2]).multiply(new THREE.Matrix4().makeRotationY(th)));
+    const rod = [0, 1, 2].map(k => q.P[i][k] - q.C[i][k]), nr = Math.hypot(...rod), nz = [q.R[0][2], q.R[1][2], q.R[2][2]];
+    phiMax = Math.max(phiMax, Math.acos(Math.min(1, (rod[0] * nz[0] + rod[1] * nz[1] + rod[2] * nz[2]) / nr)) / D2R);
+  });
+  const groupOf = n => { const k = partOf(n)[3]; if (k === "crank" || k === "rod") { const idx = (+n.split("_")[1]) - (n.startsWith("horn") ? 3 : 1); return k + idx; } return k; };
+  for (const [n, m] of Object.entries(meshes)) { m.matrix.copy(T[groupOf(n)]); m.matrixWorldNeedsUpdate = true; }
+  // HUD
+  const Rw = new THREE.Matrix4().copy(T.platform), nzw = new THREE.Vector3(0, 0, 1).applyMatrix4(new THREE.Matrix4().extractRotation(Rw));
+  const platTilt = Math.acos(Math.min(1, nzw.z)) / D2R, baseTilt = Math.acos(Math.min(1, Rb[2][2])) / D2R;
+  document.getElementById("hud-base").textContent = baseTilt.toFixed(1) + "°";
+  const hp = document.getElementById("hud-plat"); hp.textContent = platTilt.toFixed(2) + "°"; hp.className = platTilt < 0.5 ? "ok" : "bad";
+  document.getElementById("hud-cr").textContent = q.alpha.map(a => (a / D2R).toFixed(0)).join(" / ") + "°";
+  const ph = document.getElementById("hud-phi"); ph.textContent = phiMax.toFixed(1) + "°"; ph.className = phiMax < 30 ? "" : "bad";
+  if (!state && comp && Math.max(...q.alpha.map(a => Math.abs(a / D2R))) > 52) state = "설계 범위(±20°) 밖";
+  const st = document.getElementById("hud-state"); st.textContent = state; st.className = "bad";
+}
+let shaking = false, t0 = 0;
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+rxIn.addEventListener("input", () => { shaking = false; setShake(); update(); });
+ryIn.addEventListener("input", () => { shaking = false; setShake(); update(); });
+document.querySelectorAll("[data-tilt]").forEach(b => b.addEventListener("click", () => { shaking = false; setShake(); const [a, c] = b.dataset.tilt.split(",").map(Number); rxIn.value = a; ryIn.value = c; update(); }));
+function setShake() { document.getElementById("shake").classList.toggle("on", shaking); }
+document.getElementById("shake").addEventListener("click", () => { shaking = !shaking; t0 = performance.now(); setShake(); });
+document.getElementById("comp").addEventListener("click", e => { comp = !comp; e.target.classList.toggle("on", comp); e.target.textContent = comp ? "수평 보정 켬" : "수평 보정 끔"; update(); });
+let xray = false;
+document.getElementById("xray").addEventListener("click", e => {
+  xray = !xray; e.target.classList.toggle("on", xray);
+  for (const k of ["platform", "ring", "pb_lower_deck"]) (byPart[k] || []).forEach(m => { m.material.transparent = xray; m.material.opacity = xray ? 0.25 : 1; m.material.depthWrite = !xray; });
+});
+let hideTop = false;
+document.getElementById("hidetop").addEventListener("click", e => { hideTop = !hideTop; e.target.classList.toggle("on", hideTop); (byPart["pb_"] || []).forEach(m => m.visible = !hideTop); });
+document.getElementById("home").addEventListener("click", () => { if (HOME.p) fly = { p0: cam.position.clone(), t0: controls.target.clone(), p: HOME.p.clone(), t: HOME.t.clone(), s: performance.now() }; });
+function resize() { const r = canvas.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); cam.aspect = r.width / Math.max(r.height, 1); cam.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(canvas);
+function tick(now) {
+  if (shaking) { const s = (now - t0) / 1000 * (reduce ? 0.3 : 1); rxIn.value = (14 * Math.sin(s * 1.3)).toFixed(1); ryIn.value = (12 * Math.sin(s * 0.9 + 1)).toFixed(1); update(); }
+  if (fly) { const k = Math.min(1, (now - fly.s) / 700), e = k * k * (3 - 2 * k); cam.position.lerpVectors(fly.p0, fly.p, e); controls.target.lerpVectors(fly.t0, fly.t, e); if (k >= 1) fly = null; }
+  controls.update(); renderer.render(scene, cam); requestAnimationFrame(tick);
+}
+resize(); requestAnimationFrame(tick);
+</script>
