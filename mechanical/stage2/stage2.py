@@ -46,9 +46,18 @@ box, cyl_y, cyl_z = g.box, g.cyl_y, g.cyl_z
 SV_CLR, WALL = 0.3, 3.0
 SV_R0, SV_R1 = G.RB - g.SV_W / 2, G.RB + g.SV_W / 2          # servo case across the radius
 SV_TOPZ = G.HS + g.SV_SHAFT_FROM_END                         # case top (servo stands on its far end at z = 0)
-BAR_T, BAR_Y = 4.0, (-30.0, -6.0)                            # strap over the servo top
-POST = 6.0                                                   # strap screw posts outside the side walls
+BAR_T, BAR_Y = 4.0, (-30.0, -6.0)                            # strap over the servo top (middle 4 mm, ends = EAR_T)
 BAR_SCREW_Y = -18.0
+
+# ----------------------------------------------------------------------------- bolted joints (user, 11-20)
+# Every fixed joint is a protruding ear pair + M3 x 8 bolt + nut. The material a bolt passes through is at most
+# JOINT_MAX in total (two EAR_T ears = 4.4); M3 x 8 = 4.4 + nut 2.4 + 1.2 spare. Ears carry 45 deg ribs beside the
+# nut, and a raised hex wall (not under the nut) stops the nut turning so one hand drives the bolt.
+JOINT_MAX, EAR_T = 4.5, 2.2
+EAR_L, EAR_W = 9.0, 12.0          # strap ears: length out of the wall, width
+RIB_T = 1.5
+CRADLE_H = 1.6                    # hex wall height around the nut
+STRAP_PRELOAD = 0.3               # wall ears sit this much below the servo top: the strap presses the servo
 
 # ----------------------------------------------------------------------------- crank / rod stack along the tangent (y)
 CR_Y = (2.5, 9.5)            # crank plate (horn 0.5..4.5 sits 2 mm deep in it)
@@ -65,7 +74,8 @@ ROD_TOP_BODY = G.L - 12.0    # body -> neck
 # ----------------------------------------------------------------------------- platform (platform frame: z 0 = ball centres)
 PT_Z = (10.0, 15.0)          # plate
 BOSS_R, RING_H = 14.0, 5.0
-RING_SCREW = 11.3            # retainer screws at +-RING_SCREW along the leg tangent (out of the rod's swing)
+RING_SCREW = 18.0            # retainer bolts at +-RING_SCREW along the leg tangent (out of the rod's swing), on ears
+RING_EAR = (12.0, 24.0, 6.0)  # ear from / to (tangent) and half width (radial)
 CABLE_HOLE = (19.0, 2.0, 10.0)                    # platform x, y, r
 BNO = (-26.0, 15.0)                               # pad centre (under the plate)
 BNO_HOLES = [(sx * 10.16, sy * d) for d in (6.35, 10.16) for sx in (-1, 1) for sy in (-1, 1)]  # Adafruit 4754 / SparkFun
@@ -81,8 +91,11 @@ DECK_SCREWS = [(x + PB_SHIFT[0], y + PB_SHIFT[1]) for x, y in DECK_SCREWS_PB]
 BASE_R, BASE_T = 85.0, 6.0
 FEET = [(a, 62.0) for a in (60.0, 120.0, 270.0)]
 HANDLE_ANGLES = (0.0, 180.0)
-HANDLE_SCREWS = [(72.0, -12.0), (72.0, 12.0)]       # (radial, tangent) in the handle frame
+HANDLE_SCREWS = [(95.0, -10.0), (95.0, 10.0)]       # (radial, tangent) in the handle frame
 HANDLE_Z = (-16.0, -6.0)
+HANDLE_EAR = (82.0, 104.0, 22.0)                    # base-plate ear: radial from / to, half width
+DECK_CB = (3.25, 1.0)                               # counterbore in the plan B deck top: deck passes 3.2 -> 2.2
+BNO_TAB_Z = (PT_Z[0] - 4.0 - EAR_T, PT_Z[0] - 4.0)  # hanging tab the board bolts to (posts at its corners)
 
 
 def deg(a):
@@ -95,6 +108,27 @@ def to_leg(shape, i):
 
 def sphere(r, x=0.0, y=0.0, z=0.0):
     return cq.Workplane("XY").sphere(r).translate((x, y, z))
+
+
+def nut_cradle(x, y, z_face, up=True, af=None):
+    """Raised hex wall around a nut seat on the face at z_face (the bolt does not pass through it)."""
+    af = af or g.NUT_POCKET_AF
+    z0, z1 = (z_face, z_face + CRADLE_H) if up else (z_face - CRADLE_H, z_face)
+    return g.hex_z(af + 2.4, z0, z1, x, y).cut(g.hex_z(af, z0 - 1, z1 + 1, x, y))
+
+
+def ribs_x(x_wall, x_tip, y_list, z_top, up=True):
+    """45 deg triangular ribs (RIB_T thick) between a wall face at x_wall and an ear tip at x_tip, under (or over)
+    an ear whose face is z_top."""
+    out = None
+    ln = abs(x_tip - x_wall)
+    s = 1 if x_tip > x_wall else -1
+    for y in y_list:
+        zf = z_top - ln if up else z_top + ln
+        pts = [(x_wall, z_top), (x_wall + s * ln, z_top), (x_wall, zf)]
+        r = cq.Workplane("XZ").polyline(pts).close().extrude(-RIB_T).translate((0, y, 0))
+        out = r if out is None else out.union(r)
+    return out
 
 
 # ============================================================================= bought parts (leg frame)
@@ -110,8 +144,9 @@ def horn_leg():
 def bno_board():
     """Adafruit 4754 outline (25.4 x 17.8 x 1.6) + parts 3 mm under it [VERIFY board]."""
     x, y = BNO
-    return box(x - 12.7, x + 12.7, y - 8.9, y + 8.9, PT_Z[0] - 4 - 1.6, PT_Z[0] - 4).union(
-        box(x - 5, x + 5, y - 5, y + 5, PT_Z[0] - 4 - 1.6 - 3, PT_Z[0] - 4 - 1.6))
+    zb = BNO_TAB_Z[0]
+    return box(x - 12.7, x + 12.7, y - 8.9, y + 8.9, zb - 1.6, zb).union(
+        box(x - 5, x + 5, y - 5, y + 5, zb - 1.6 - 3, zb - 1.6))
 
 
 # ============================================================================= printed parts
@@ -130,17 +165,31 @@ def cradle_leg():
     back = back.cut(box(G.RB - g.SV_CONN_W / 2 - 1.5, G.RB + g.SV_CONN_W / 2 + 1.5, y0 - t - 1, y0 + 1,
                         zc - g.SV_CONN_H / 2 - 2.5, zc + g.SV_CONN_H / 2 + 2.5))
     k = k.union(back)
-    for x0 in (r0 - t - POST, r1 + t):
-        p = box(x0, x0 + POST, BAR_SCREW_Y - 3, BAR_SCREW_Y + 3, 0, z1 + 0.2)
-        k = k.union(p.cut(cyl_z(g.PILOT_R, z1 - 9, z1 + 1, x0 + POST / 2, BAR_SCREW_Y)))
+    # strap ears out of both side walls (top EAR_T below the servo top - preload), ribs underneath, nut below
+    ze = z1 - STRAP_PRELOAD
+    for xw, xt in ((r0 - t, r0 - t - EAR_L), (r1 + t, r1 + t + EAR_L)):
+        e = box(min(xw, xt), max(xw, xt), BAR_SCREW_Y - EAR_W / 2, BAR_SCREW_Y + EAR_W / 2, ze - EAR_T, ze)
+        e = e.union(ribs_x(xw, xt, (BAR_SCREW_Y - EAR_W / 2, BAR_SCREW_Y + EAR_W / 2 - RIB_T), ze - EAR_T))
+        xh = (xw + xt) / 2 + (1.0 if xt > xw else -1.0)
+        e = e.union(nut_cradle(xh, BAR_SCREW_Y, ze - EAR_T, up=False))
+        k = k.union(e.cut(cyl_z(1.7, ze - 20, ze + 1, xh, BAR_SCREW_Y)))
     return k
 
 
+def strap_holes():
+    c, t = SV_CLR, WALL
+    r0, r1 = SV_R0 - c, SV_R1 + c
+    return [(r0 - t - EAR_L / 2 - 1.0, BAR_SCREW_Y), (r1 + t + EAR_L / 2 + 1.0, BAR_SCREW_Y)]
+
+
 def bar_leg():
-    r0, r1 = SV_R0 - SV_CLR - WALL - POST, SV_R1 + SV_CLR + WALL + POST
-    b = box(r0, r1, BAR_Y[0], BAR_Y[1], SV_TOPZ + 0.2, SV_TOPZ + 0.2 + BAR_T).edges("|Z").fillet(2.0)
-    for x in (r0 + POST / 2, r1 - POST / 2):
-        b = b.cut(cyl_z(1.7, SV_TOPZ - 1, SV_TOPZ + 10, x, BAR_SCREW_Y))
+    """Strap: EAR_T thick over its whole span (ends on the wall ears), 4 mm in the middle over the servo."""
+    r0, r1 = SV_R0 - SV_CLR - WALL - EAR_L, SV_R1 + SV_CLR + WALL + EAR_L
+    z0 = SV_TOPZ
+    b = box(r0, r1, BAR_SCREW_Y - EAR_W / 2, BAR_SCREW_Y + EAR_W / 2, z0, z0 + EAR_T).edges("|Z").fillet(2.0)
+    b = b.union(box(SV_R0 - SV_CLR, SV_R1 + SV_CLR, BAR_Y[0], BAR_Y[1], z0, z0 + BAR_T).edges("|Z").fillet(2.0))
+    for x, y in strap_holes():
+        b = b.cut(cyl_z(1.7, z0 - 1, z0 + 10, x, y))
     return b
 
 
@@ -154,19 +203,28 @@ def base_plate():
         x, y = g.polar(a, r)
         b = b.union(cyl_z(6.0, HANDLE_Z[0], -BASE_T + 0.01, x, y))
     for a in HANDLE_ANGLES:
+        r0, r1, hw = HANDLE_EAR
+        e = box(r0, r1, -hw, hw, -BASE_T, -BASE_T + EAR_T).edges("|Z").fillet(4.0)
+        for tt in (-hw + 4.0, -RIB_T / 2, hw - 4.0 - RIB_T):            # ribs from the plate rim onto the ear
+            e = e.union(ribs_x(BASE_R - 0.5, BASE_R - 0.5 + (BASE_T - EAR_T), (tt,), -BASE_T + EAR_T, up=False))
         for rr, tt in HANDLE_SCREWS:
-            p = np.array(g.polar(a, rr)) + tt * np.array([-math.sin(math.radians(a)), math.cos(math.radians(a))])
-            b = b.cut(cyl_z(1.7, -BASE_T - 1, 1, *p))
+            e = e.union(nut_cradle(rr, tt, -BASE_T + EAR_T, up=True))
+            e = e.cut(cyl_z(1.7, -BASE_T - 1, 1, rr, tt))
+        b = b.union(e.rotate((0, 0, 0), (0, 0, 1), a))
     b = b.cut(cyl_z(12.0, -BASE_T - 1, 1))                    # centre opening: cable slack / hand under the platform
     return b
 
 
 def handle(a_deg):
-    h = box(60.0, 132.0, -30.0, 30.0, *HANDLE_Z).edges("|Z").fillet(8.0)
-    h = h.cut(box(94.0, 120.0, -22.0, 22.0, HANDLE_Z[0] - 1, HANDLE_Z[1] + 1).edges("|Z").fillet(6.0))
+    """Grip loop (10 mm) + a thin tongue (EAR_T) under the base-plate ear; bolts up from below, nut on the ear."""
+    r0, r1, hw = HANDLE_EAR
+    zt = (-BASE_T - EAR_T, -BASE_T)
+    tongue = box(r0, r1 + 2.0, -hw, hw, *zt).edges("|Z").fillet(4.0)
+    grip = box(r1, r1 + 46.0, -hw - 6.0, hw + 6.0, *HANDLE_Z).edges("|Z").fillet(8.0)
+    grip = grip.cut(box(r1 + 8.0, r1 + 34.0, -hw, hw, HANDLE_Z[0] - 1, HANDLE_Z[1] + 1).edges("|Z").fillet(6.0))
+    h = tongue.union(grip)
     for rr, tt in HANDLE_SCREWS:
         h = h.cut(cyl_z(1.7, HANDLE_Z[0] - 1, HANDLE_Z[1] + 1, rr, tt))
-        h = h.cut(g.hex_z(g.NUT_POCKET_AF, HANDLE_Z[0] - 0.01, HANDLE_Z[0] + g.NUT_POCKET_H, rr, tt))
     return h.rotate((0, 0, 0), (0, 0, 1), a_deg)
 
 
@@ -241,9 +299,28 @@ def ring_local():
     ch = (cq.Workplane("XY").workplane(offset=-RING_H - 1.0).circle(rr + (RING_H + 1.0 + zr))
           .workplane(offset=RING_H + 1.0 + zr).circle(rr).loft())
     r = r.cut(ch)
+    y0, y1, hx = RING_EAR
     for s in (-1, 1):
-        r = r.cut(cyl_z(1.7, -RING_H - 1, 1, 0, s * RING_SCREW))
+        e = box(-hx, hx, *sorted((s * y0, s * y1)), -EAR_T, 0).edges("|Z").fillet(2.0)
+        r = r.union(e.cut(cup_cutter())).cut(cyl_z(1.7, -RING_H - 1, 1, 0, s * RING_SCREW))
     return r
+
+
+def boss_ears():
+    """Platform side of the retainer joint: ears on the boss bottom, ribs and nut wall on top (open above: the
+    ears reach past the plate arm)."""
+    y0, y1, hx = RING_EAR
+    out = None
+    for s in (-1, 1):
+        e = box(-hx, hx, *sorted((s * y0, s * y1)), 0, EAR_T).edges("|Z").fillet(2.0)
+        for xr in (-hx, hx - RIB_T):
+            yw, yt = s * (BOSS_R - 1.0), s * (BOSS_R - 1.0 + 6.0)
+            pts = [(yw, EAR_T), (yt, EAR_T), (yw, EAR_T + 6.0)]
+            e = e.union(cq.Workplane("YZ").polyline(pts).close().extrude(RIB_T).translate((xr, 0, 0)))
+        e = e.union(nut_cradle(0, s * RING_SCREW, EAR_T, up=True))
+        e = e.cut(cyl_z(1.7, -1, EAR_T + 3, 0, s * RING_SCREW))
+        out = e if out is None else out.union(e)
+    return out
 
 
 def platform():
@@ -253,20 +330,22 @@ def platform():
         a = math.degrees(math.atan2(b[1], b[0]))
         ln = float(np.hypot(b[0], b[1]))
         arm = box(0, ln, -14.0, 14.0, *PT_Z).rotate((0, 0, 0), (0, 0, 1), a)
-        p = p.union(arm).union(at_ball(cyl_z(BOSS_R, 0, PT_Z[1]), i))
-    for x, y in DECK_SCREWS:
-        p = p.union(cyl_z(5.0, PT_Z[0] - 4.0, PT_Z[0] + 0.01, x, y))
+        p = p.union(arm).union(at_ball(cyl_z(BOSS_R, 0, PT_Z[1]), i)).union(at_ball(boss_ears(), i))
     bx, by = BNO
-    p = p.union(box(bx - 16, bx + 16, by - 13, by + 13, PT_Z[0] - 4.0, PT_Z[0] + 0.01))
+    p = p.union(box(bx - 17, bx + 17, by - 14, by + 14, *BNO_TAB_Z).edges("|Z").fillet(3.0))   # hanging tab
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            p = p.union(box(bx + sx * 17 - (5 if sx > 0 else 0), bx + sx * 17 + (0 if sx > 0 else 5),
+                            by + sy * 14 - (5 if sy > 0 else 0), by + sy * 14 + (0 if sy > 0 else 5),
+                            BNO_TAB_Z[1] - 0.01, PT_Z[0] + 0.01))
     # cuts
     for i in range(3):
         p = p.cut(at_ball(cup_cutter(), i))
-        for s in (-1, 1):
-            p = p.cut(at_ball(cyl_z(g.PILOT_R, -1, 10.0, 0, s * RING_SCREW), i))
+    web = PT_Z[1] - EAR_T          # deck bolts: plate web EAR_T under the deck, nut in a hex seat from below
     for x, y in DECK_SCREWS:
-        p = p.cut(cyl_z(g.PILOT_R, PT_Z[0] - 4.5, PT_Z[1] + 1, x, y))
-    for hx, hy in BNO_HOLES:
-        p = p.cut(cyl_z(g.M25_PILOT_R, PT_Z[0] - 5, PT_Z[0] + 2.0, bx + hx, by + hy))
+        p = p.cut(cyl_z(1.7, PT_Z[0] - 1, PT_Z[1] + 1, x, y)).cut(g.hex_z(g.NUT_POCKET_AF, PT_Z[0] - 1, web, x, y))
+    for hx, hy in BNO_HOLES:       # M2.5 bolt + nut, board under the tab, nut on top in the gap between the posts
+        p = p.cut(cyl_z(g.M25_CLR, BNO_TAB_Z[0] - 1, BNO_TAB_Z[1] + 1, bx + hx, by + hy))
     p = p.cut(cyl_z(CABLE_HOLE[2], PT_Z[0] - 5, PT_Z[1] + 1, CABLE_HOLE[0], CABLE_HOLE[1]))
     return p
 
@@ -285,8 +364,10 @@ def planb_shape(name):
 def lower_deck_s2():
     """Plan B lower deck + 4 M3 clearance holes (platform screws) + the cable hole over the platform's."""
     d = planb_shape("lower_deck")
+    top = PB_DECK_BOT + 3.2
     for x, y in DECK_SCREWS_PB:
         d = d.cut(cyl_z(1.7, PB_DECK_BOT - 1, PB_DECK_BOT + 10, x, y))
+        d = d.cut(cyl_z(DECK_CB[0], top - DECK_CB[1], top + 6.0, x, y))       # head seat: the bolt passes 2.2
     cx, cy = CABLE_HOLE[0] - PB_SHIFT[0], CABLE_HOLE[1] - PB_SHIFT[1]
     d = d.cut(cyl_z(CABLE_HOLE[2], PB_DECK_BOT - 1, PB_DECK_BOT + 10, cx, cy))
     return d
@@ -410,6 +491,67 @@ def checks(P, M):
     return worst
 
 
+def joint_lines():
+    """Bolt axes of every fixed joint at home: (name, point on the axis (base frame, platform at home), parts)."""
+    q0 = kin.pose(G, 0, 0)
+    Tp = frames(q0)["platform"]
+    out = []
+    for i in range(3):
+        Rb = kin.rot(0, 0, G.betas()[i])
+        for k, (x, y) in enumerate(strap_holes()):
+            out.append((f"strap_{i + 1}.{k}", Rb @ np.array([x, y, 0.0]), [f"strap_{i + 1}", "base_plate"]))
+        b = ball_local(i)
+        for k, s in enumerate((-1, 1)):
+            p = np.array(b) + Rb @ np.array([0.0, s * RING_SCREW, 0.0])
+            out.append((f"ring_{i + 1}.{k}", (Tp @ np.r_[p, 1.0])[:3], [f"ring_{i + 1}", "platform"]))
+    for k, a in enumerate(HANDLE_ANGLES):
+        Ra = kin.rot(0, 0, math.radians(a))
+        for j, (rr, tt) in enumerate(HANDLE_SCREWS):
+            out.append((f"handle_{k + 1}.{j}", Ra @ np.array([rr, tt, 0.0]), ["base_plate", f"handle_{k + 1}"]))
+    for j, (x, y) in enumerate(DECK_SCREWS):
+        out.append((f"deck.{j}", (Tp @ np.array([x, y, 0.0, 1.0]))[:3], ["platform", "pb_lower_deck"]))
+    bx, by = BNO
+    for j, (hx, hy) in enumerate(BNO_HOLES[:4]):
+        out.append((f"bno.{j}", (Tp @ np.array([bx + hx, by + hy, 0.0, 1.0]))[:3], ["platform", "bno085"]))
+    return out
+
+
+def joint_stacks(P, M):
+    """Material a bolt passes through, per joint: ray along z, 2.3 mm beside the axis (inside the head footprint,
+    outside the clearance hole), summed over the joint's parts. Must stay <= JOINT_MAX."""
+    T = frames(kin.pose(G, 0, 0))
+    res = {}
+    for name, p, parts in joint_lines():
+        tot = 0.0
+        for off in ((2.3, 0), (-2.3, 0), (0, 2.3), (0, -2.3)):
+            t = 0.0
+            for n in parts:
+                m = M[n].copy().apply_transform(T[P[n][2]])
+                o = np.array([[p[0] + off[0], p[1] + off[1], -200.0]])
+                loc, _, _ = m.ray.intersects_location(o, np.array([[0, 0, 1.0]]))
+                z = np.sort(loc[:, 2]) if len(loc) else np.array([])
+                # keep only the hits within 15 mm of the joint height (other features of a big part do not count)
+                z = z[: len(z) // 2 * 2]
+                ins = [(z[k], z[k + 1]) for k in range(0, len(z), 2)]
+                t += sum(b - a for a, b in ins if abs((a + b) / 2 - near_z(name, p)) < 8.0)
+            tot = max(tot, t)
+        res[name] = round(float(tot), 2)
+    return res
+
+
+def near_z(name, p):
+    return JOINT_Z[name.split(".")[0].split("_")[0]](p)
+
+
+JOINT_Z = {
+    "strap": lambda p: SV_TOPZ,
+    "handle": lambda p: -BASE_T,
+    "ring": lambda p: G.z0(),
+    "deck": lambda p: G.z0() + PT_Z[1],
+    "bno": lambda p: G.z0() + BNO_TAB_Z[0],
+}
+
+
 # ============================================================================= export
 def print_orient(name, shape):
     """Rotate a printed part into its print pose (flat face on the bed)."""
@@ -478,6 +620,9 @@ def main():
     res = {"kin": json.load(open(os.path.join(HERE, "s2_kin.json"))), "print": rows}
     bad = [n for n, m in M.items() if not m.is_watertight]
     res["non_watertight"] = bad
+    res["joint_stack_mm"] = joint_stacks(P, M)
+    res["joint_max_mm"] = JOINT_MAX
+    res["joint_ok"] = all(v <= JOINT_MAX for v in res["joint_stack_mm"].values())
     res["interference"] = checks(P, M)
     res["failed_pairs"] = sorted(set(FAILED))
     res["unexpected"] = {k: v for k, v in res["interference"].items()
