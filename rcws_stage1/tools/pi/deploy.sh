@@ -124,12 +124,45 @@ systemctl --user restart rcws-launcher.service
 loginctl show-user "$USER" 2>/dev/null | grep -q "Linger=yes" || sudo loginctl enable-linger "$USER" \
   || warn "linger 설정 실패: 로그인해야 실행기가 켜집니다."
 
+# Pi screen: the same web pages in a browser window on the Pi desktop (launcher -> operator page).
+# Started at desktop login (XDG autostart) and by hand: ~/rcws_live/screen.sh
+cat > "$DEST/screen.sh" <<'EOS'
+#!/usr/bin/env bash
+# Opens the RCWS pages on the Pi's own monitor. Over SSH: DISPLAY=:0 ~/rcws_live/screen.sh
+export DISPLAY=${DISPLAY:-:0}
+[ -z "${WAYLAND_DISPLAY:-}" ] && [ -S "/run/user/$(id -u)/wayland-0" ] && export WAYLAND_DISPLAY=wayland-0
+B=$(command -v chromium-browser || command -v chromium || command -v firefox || true)
+[ -n "$B" ] || { echo "no browser (sudo apt install chromium-browser)"; exit 1; }
+for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:8000/ && break; sleep 1; done
+URL=http://localhost:8000/
+case "$B" in
+  *firefox) exec "$B" --new-window "$URL" ;;
+  # own profile: no first-run / restore prompts; --app: a plain window without tabs or address bar
+  *) exec "$B" --user-data-dir="$HOME/.config/rcws-screen" --no-first-run --noerrdialogs \
+          --disable-session-crashed-bubble --password-store=basic --start-maximized --app="$URL" ;;
+esac
+EOS
+chmod +x "$DEST/screen.sh"
+mkdir -p "$HOME/.config/autostart"
+cat > "$HOME/.config/autostart/rcws-screen.desktop" <<EOS
+[Desktop Entry]
+Type=Application
+Name=RCWS screen
+Exec=$DEST/screen.sh
+X-GNOME-Autostart-enabled=true
+EOS
+SCREEN_NOTE="모니터: 다음 데스크톱 로그인부터 자동, 지금 띄우기: DISPLAY=:0 ~/rcws_live/screen.sh"
+if ! command -v chromium-browser >/dev/null && ! command -v chromium >/dev/null && ! command -v firefox >/dev/null; then
+  SCREEN_NOTE="모니터: 브라우저 없음 (sudo apt install chromium-browser)"
+fi
+
 IP=$(hostname -I | awk '{print $1}')
 say "완료 ($COMMIT)"
 cat <<EOF
 
   실행기(시작/종료):  http://$IP:8000/     (부팅하면 자동으로 켜짐)
-  조작 화면:          http://$IP:8080/     (추적 실행 중일 때)
+  조작 화면:          http://$IP:8080/     (추적 실행 중일 때, 노트북·휴대폰 여러 대 동시 가능)
+  Pi 화면:            $SCREEN_NOTE
   직접 실행:          ~/rcws_live/go.sh    (Ctrl-C로 종료)
   STM32 링크:         ${UART:-없음 (위 주의 참조)}
 
