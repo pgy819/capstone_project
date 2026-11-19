@@ -16,7 +16,8 @@
 
 namespace rcws {
 
-enum class RecType : uint16_t { FRAME = 1, DETBATCH = 2, MEAS = 3, EST = 4, STATE = 5, NCC = 6, NOTE = 7, TRUTH = 8 };
+enum class RecType : uint16_t { FRAME = 1, DETBATCH = 2, MEAS = 3, EST = 4, STATE = 5, NCC = 6, NOTE = 7, TRUTH = 8,
+                               MOT = 9, AIM = 10, QUAL = 11, TRUTH2 = 12 };
 
 #pragma pack(push, 1)
 struct RecFrame {
@@ -67,6 +68,35 @@ struct RecNcc {
   float u, v, rho, second, radius;
   int16_t tmpl;
   uint8_t ok, scale;   // scale: matching scale factor (1,2,4,8)
+};
+struct RecMot {                 // one track of the multi-target board after a detector batch
+  int64_t t;
+  uint32_t seq;
+  int32_t id;
+  uint8_t st, flags;            // st: MotState; flags: 1 locked, 2 designated, 4 exited
+  uint16_t pad;
+  float u, v, w, h, vu, vv, prio, score;
+};
+struct RecAim {                 // aim output gate, every frame
+  int64_t t;
+  uint32_t seq;
+  uint8_t mode, pad;
+  uint16_t reasons;
+  int32_t target_id;
+  float psi, theta, psi_d, theta_d, hint_dx, hint_dy;
+};
+struct RecQual {                // image quality evaluation
+  int64_t t;
+  uint32_t seq;
+  float mean_luma, sat_frac, sharp, sharp_base;
+  uint8_t raw, flags, pad[2];
+};
+struct RecTruth2 {              // extra synthetic objects (multi-target scenarios)
+  int64_t t;
+  uint32_t seq;
+  int32_t obj;
+  float u, v, w, h;
+  uint8_t visible, pad[3];
 };
 #pragma pack(pop)
 

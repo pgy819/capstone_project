@@ -12,6 +12,9 @@
 #include "common/types.hpp"
 #include "detect/detector.hpp"
 #include "estimation/estimator.hpp"
+#include "perception/aim.hpp"
+#include "perception/mot.hpp"
+#include "perception/quality.hpp"
 #include "perception/zncc_tracker.hpp"
 #include "record/binlog.hpp"
 
@@ -20,6 +23,16 @@ namespace rcws {
 enum class StateReason : uint8_t {
   NONE = 0, DET_ACQUIRE, SPRT_ACCEPT, SPRT_REJECT, ACQ_TIMEOUT, NO_MEAS, NCC_ONLY, MEAS_BACK,
   COAST_TIMEOUT, REACQ_DET, REACQ_TIMEOUT
+};
+
+// v4 (scenarios A-J) additions to the statistics
+struct ScenarioStats {
+  uint64_t other_target_skipped = 0;   // detections of a different board track kept out of this track
+  uint64_t size_jump_rejected = 0;
+  uint64_t reanchor_blocked = 0;       // strong detection elsewhere was another target: no re-anchor
+  uint64_t lock_repointed = 0;         // board lost the lock track while Perception kept it
+  uint64_t aim_hold_frames = 0, aim_follow_frames = 0, aim_predict_frames = 0;
+  uint64_t quality_bad_frames = 0;
 };
 
 struct PerceptionStats {
@@ -37,6 +50,14 @@ class Perception {
   TrackState state() const { return state_; }
   EstState estimate(int64_t t_ns) const { return est_.predict(t_ns); }
   const PerceptionStats& stats() const { return stats_; }
+  const ScenarioStats& scenario_stats() const { return sstats_; }
+  // v4: multi-target board, lock, quality and aim output (scenarios A-J)
+  const TrackBoard& board() const { return mot_; }
+  int lock_id() const { return lock_id_; }
+  int designated_id() const { return designated_; }
+  const AimOut& aim() const { return aim_; }
+  const QualitySample& quality() const { return qual_.last(); }
+  uint8_t quality_flags() const { return qual_.flags(); }
   std::optional<RectF> target_box() const;
   // Latest detector output (for the live preview only)
   const DetectionBatch& last_detections() const { return last_batch_; }
@@ -65,7 +86,12 @@ class Perception {
   const HistFrame* hist(uint32_t seq) const;
   void push_hist(const FrameView& f);
 
-  void handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t now);
+  void handle_batch(const DetectionBatch& b, const FrameView& f, int64_t now);
+  // v4 helpers
+  bool other_target(int id) const;          // detection belongs to an established track that is not ours
+  bool reanchor_allowed(int id) const;
+  void log_board(const DetectionBatch& b);
+  void update_aim(const FrameView& f, int64_t now);
   void run_ncc(const FrameView& f, int64_t now);
   void update_timers(int64_t now);
   void schedule(const FrameView& f);
@@ -84,6 +110,7 @@ class Perception {
   const CameraModel& cam_;
   IDetector* det_;
   BinLog* log_;
+  GimbalAt gimbal_;
   Estimator est_;
   ZnccTracker ncc_;
 
@@ -112,6 +139,17 @@ class Perception {
   bool capture_ = false;
   std::deque<DetInputSnap> inputs_;   // submitted, awaiting results (preview only)
   DetInputSnap shown_input_;
+  // v4
+  TrackBoard mot_;
+  QualityMonitor qual_;
+  AimOut aim_;
+  ScenarioStats sstats_;
+  int lock_id_ = -1;                  // board track this single-target loop follows
+  int64_t lock_t_seen_ = 0;           // last time the lock track was seen (kept if the board drops it)
+  bool lock_has_hist_ = false;
+  int designated_ = -1;               // board's choice when not locked (priority + hysteresis)
+  int64_t t_board_ = 0;               // capture time of the previous batch (ego shift)
+  std::vector<int> batch_ids_;        // board id per detection of the batch being handled
 };
 
 }  // namespace rcws

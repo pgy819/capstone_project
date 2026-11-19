@@ -60,6 +60,27 @@ std::map<std::string, Ref> registry(Config& c) {
   m["track.sprt_beta"] = &t.sprt_beta; m["track.sprt_forget"] = &t.sprt_forget;
   m["track.gate_chi2"] = &t.gate_chi2; m["track.phone_height_m"] = &t.phone_height_m;
   m["track.strong_reject_reinit"] = &t.strong_reject_reinit;
+  m["track.size_jump"] = &t.size_jump;
+
+  auto& o = c.mot;
+  m["mot.enabled"] = &o.enabled; m["mot.n_init"] = &o.n_init; m["mot.tentative_max_miss"] = &o.tentative_max_miss;
+  m["mot.occl_s"] = &o.occl_s; m["mot.lost_keep_s"] = &o.lost_keep_s; m["mot.unseen_s"] = &o.unseen_s;
+  m["mot.q_px"] = &o.q_px; m["mot.r_px0"] = &o.r_px0; m["mot.r_rel"] = &o.r_rel; m["mot.gate_chi2"] = &o.gate_chi2;
+  m["mot.w_iou"] = &o.w_iou; m["mot.w_dist"] = &o.w_dist; m["mot.w_app"] = &o.w_app; m["mot.max_cost"] = &o.max_cost;
+  m["mot.size_jump"] = &o.size_jump; m["mot.overlap_iou"] = &o.overlap_iou;
+  m["mot.amb_hist_margin"] = &o.amb_hist_margin; m["mot.amb_hold_s"] = &o.amb_hold_s; m["mot.edge_margin"] = &o.edge_margin;
+  m["mot.reid_hist"] = &o.reid_hist; m["mot.reid_size"] = &o.reid_size; m["mot.reid_px_per_s"] = &o.reid_px_per_s;
+  m["mot.w_center"] = &o.w_center; m["mot.w_size"] = &o.w_size; m["mot.w_approach"] = &o.w_approach;
+  m["mot.w_conf"] = &o.w_conf; m["mot.w_age"] = &o.w_age; m["mot.size_ref_px"] = &o.size_ref_px;
+  m["mot.approach_ref"] = &o.approach_ref; m["mot.switch_margin"] = &o.switch_margin; m["mot.switch_s"] = &o.switch_s;
+  m["mot.hold_s"] = &o.hold_s; m["mot.scan_period"] = &o.scan_period;
+
+  auto& q = c.qual;
+  m["quality.enabled"] = &q.enabled; m["quality.period"] = &q.period; m["quality.dark_luma"] = &q.dark_luma;
+  m["quality.sat_frac"] = &q.sat_frac; m["quality.blur_ratio"] = &q.blur_ratio;
+  m["quality.bad_n"] = &q.bad_n; m["quality.good_n"] = &q.good_n;
+
+  m["aim.coast_follow_s"] = &c.aim.coast_follow_s;
 
   auto& e = c.est;
   m["estimator.q_cv"] = &e.q_cv; m["estimator.q_ca"] = &e.q_ca;

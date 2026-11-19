@@ -5,7 +5,9 @@
  *  USART1 : PA9/PA10 115200 8N1, RX DMA2_Stream2 / CH4 circular  (Pi 5 vision packets)
  *  USART2 : PA2/PA3  115200 8N1 (ST-LINK VCP, boot banner only)
  *  USART6 : PC6/PC7  1 Mbps 8N1, TX DMA2_Stream6 / CH5 normal    (Feetech STS3215 bus)
- *  PA4    : half-duplex direction, PA5: LD2 status LED, PC13: B1 commissioning button
+ *  PA4    : half-duplex direction, PA5: LD2 status LED
+ *  PC13   : B1 — held at boot: servo ID commissioning; pressed while running: EMERGENCY STOP
+ *           (torque off, latched until the black RESET button)
  *  TIM2   : 500 Hz (PSC 83, ARR 1999) -> PD servo loop inside TIM2_IRQHandler
  *  Build env "sysid" (-DRCWS_SYSID): servo identification test mode instead (see sysid.h)
  *
@@ -14,6 +16,7 @@
 #include "stm32f4xx_hal.h"
 #include "protocol.h"
 #include "feetech_sts.h"
+#include "servo_guard.h"
 #ifdef RCWS_SYSID
 #include "sysid.h"
 #endif
@@ -38,10 +41,22 @@
 #define D_DECAY_SUBTICK 0.85f
 
 #define SERVO_CENTER    2048.0f
-#define PAN_MIN         512.0f
-#define PAN_MAX         3584.0f
+/* v4 (K8): goal clamp = EEPROM soft limits of the gimbal (Pan +-125 deg = 626 / 3470). With the old
+   512 / 3584 the servo stopped at its EEPROM limit while the goal kept integrating beyond it. */
+#define PAN_MIN         626.0f
+#define PAN_MAX         3470.0f
 #define TILT_MIN        1536.0f
 #define TILT_MAX        2560.0f
+
+/* v4 motion shaping and safety (scenarios I, J; servo_guard.h) */
+#define DEADBAND_PX         3.0f      /* no correction for |pixel error| <= 3 px */
+#define V_MAX_DPS           300.0f    /* goal velocity limit */
+#define A_MAX_DPS2          3000.0f   /* goal acceleration limit while following */
+#define A_BRAKE_DPS2        6000.0f   /* deceleration to a stop on HOLD (no coasting on the last velocity) */
+#define COMM_TORQUE_OFF_LIMIT 5000u   /* 10 s without packets: torque off (Pi gone) */
+#define RAMP_TICKS          500u      /* 1 s of slow motion after the torque comes back */
+#define STS_RAMP_SPEED      300u      /* servo speed during RAMP [steps/s] ~ 26 deg/s */
+#define ESTOP_DEBOUNCE_MS   30u
 
 #define COMMISSION_OLD_ID   1u
 #define COMMISSION_NEW_ID   2u
@@ -61,16 +76,20 @@ TIM_HandleTypeDef  htim2;
 /* ------------------------------------------------------------------------- */
 /* Servo-loop state (owned by TIM2_IRQHandler)                               */
 /* ------------------------------------------------------------------------- */
-static float   f_pan_step  = SERVO_CENTER;
-static float   f_tilt_step = SERVO_CENTER;
+static AxisState_t  ax_pan  = { SERVO_CENTER, 0.0f };
+static AxisState_t  ax_tilt = { SERVO_CENTER, 0.0f };
+static AxisLimits_t lim_pan, lim_tilt;
+static Guard_t      g_guard;
+static const GuardCfg_t k_guard_cfg = { COMM_WATCHDOG_LIMIT, COMM_TORQUE_OFF_LIMIT, RAMP_TICKS };
+static volatile uint8_t g_estop = 0u;          /* set by the main loop (B1), read by TIM2 */
 static float   d_ex_lpf = 0.0f;
 static float   d_ey_lpf = 0.0f;
 static int16_t prev_err_x = 0;
 static int16_t prev_err_y = 0;
 static uint8_t is_first_track_frame = 1u;
 
-typedef enum { SERVO_TIMEOUT = 0, SERVO_HOLD, SERVO_TRACKING } ServoState_t;
-static volatile ServoState_t g_servo_state = SERVO_TIMEOUT;   /* read by LED task */
+static volatile GuardState_t g_servo_state = GUARD_HOLD;    /* read by LED task */
+static volatile uint8_t      g_comm_lost = 1u;              /* HOLD because of a comm gap */
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -87,6 +106,7 @@ static void MX_TIM2_Init(void);
 static void Commissioning_CheckAndRun(void);
 static void Servo_ControlStep(void);
 static void Led_Task(void);
+static void Estop_Task(void);
 #endif
 void Error_Handler(void);
 
@@ -119,6 +139,10 @@ int main(void)
     /* PC13 held at boot -> rename servo ID 1 -> 2 (blocking, before TIM2 starts). */
     Commissioning_CheckAndRun();
 
+    lim_pan  = Guard_Limits(PAN_MIN, PAN_MAX, V_MAX_DPS, A_MAX_DPS2, A_BRAKE_DPS2);
+    lim_tilt = Guard_Limits(TILT_MIN, TILT_MAX, V_MAX_DPS, A_MAX_DPS2, A_BRAKE_DPS2);
+    Guard_Init(&g_guard);
+
     if (Protocol_StartRx(&huart1) != HAL_OK) {
         Error_Handler();
     }
@@ -128,6 +152,7 @@ int main(void)
 
     while (1) {
         Protocol_Poll();    /* drain USART1 DMA ring -> FSM parser */
+        Estop_Task();
         Led_Task();
     }
 #endif
@@ -158,16 +183,36 @@ static void Servo_ControlStep(void)
     watchdog = g_comm_watchdog;
     __enable_irq();
 
-    /* 3. Safety hold (500 ms comm timeout or target lost) + first-frame reset. */
-    if (watchdog > COMM_WATCHDOG_LIMIT ||
-        (status != VISION_STATUS_DETECTED && status != VISION_STATUS_COASTING)) {
+    /* 3. Safety supervisor (servo_guard.h): RUN / HOLD / TORQUE_OFF / RAMP / ESTOP. */
+    const uint8_t target_valid = (status == VISION_STATUS_DETECTED || status == VISION_STATUS_COASTING) ? 1u : 0u;
+    const GuardState_t st = Guard_Update(&g_guard, &k_guard_cfg, watchdog, target_valid, g_estop);
+    g_servo_state = st;
+    g_comm_lost = (watchdog > COMM_WATCHDOG_LIMIT) ? 1u : 0u;
+
+    if (st != GUARD_RUN) {
         d_ex_lpf = 0.0f;
         d_ey_lpf = 0.0f;
-        is_first_track_frame = 1u;
-        g_servo_state = (watchdog > COMM_WATCHDOG_LIMIT) ? SERVO_TIMEOUT : SERVO_HOLD;
-        /* f_pan_step / f_tilt_step held */
-    } else {
-        /* 4. Multi-rate incremental PD. */
+        is_first_track_frame = 1u;   /* no derivative kick when tracking resumes */
+    }
+    if (st == GUARD_TORQUE_OFF || st == GUARD_ESTOP) {
+        /* limp: the goal is not moved; repeat the torque-off frame (a busy bus skips one) */
+        ax_pan.v = 0.0f;
+        ax_tilt.v = 0.0f;
+        if ((g_guard.ticks_in_state % 25u) == 0u) {
+            STS_SyncWrite_Torque(0u);
+        }
+        return;
+    }
+    if (st == GUARD_RAMP && g_guard.ticks_in_state < 10u) {
+        if ((g_guard.ticks_in_state % 2u) == 0u) {
+            STS_SyncWrite_Torque(1u);      /* torque back on, then slow positions below */
+        }
+        return;
+    }
+
+    float v_pan = 0.0f, v_tilt = 0.0f;
+    if (st == GUARD_RUN) {
+        /* 4. Multi-rate incremental PD (velocity request in steps/tick). */
         if (new_flag) {
             float raw_dex, raw_dey;
             if (is_first_track_frame) {
@@ -186,21 +231,48 @@ static void Servo_ControlStep(void)
             d_ex_lpf *= D_DECAY_SUBTICK;   /* sub-ticks between camera frames */
             d_ey_lpf *= D_DECAY_SUBTICK;
         }
-
-        f_pan_step  += DIR_PAN  * (KP_PAN  * (float)pkt_err_x + KD_PAN  * d_ex_lpf);
-        f_tilt_step += DIR_TILT * (KP_TILT * (float)pkt_err_y + KD_TILT * d_ey_lpf);
-        g_servo_state = SERVO_TRACKING;
+        const float ex = Guard_Deadband((float)pkt_err_x, DEADBAND_PX);
+        const float ey = Guard_Deadband((float)pkt_err_y, DEADBAND_PX);
+        v_pan  = DIR_PAN  * (KP_PAN  * ex + KD_PAN  * d_ex_lpf);
+        v_tilt = DIR_TILT * (KP_TILT * ey + KD_TILT * d_ey_lpf);
     }
 
-    /* 5. Mechanical limits. */
-    if (f_pan_step < PAN_MIN)   { f_pan_step = PAN_MIN; }
-    if (f_pan_step > PAN_MAX)   { f_pan_step = PAN_MAX; }
-    if (f_tilt_step < TILT_MIN) { f_tilt_step = TILT_MIN; }
-    if (f_tilt_step > TILT_MAX) { f_tilt_step = TILT_MAX; }
+    /* 5. Velocity / acceleration limits, soft position limits with anti-windup; HOLD brakes to a stop. */
+    const uint8_t braking = (st == GUARD_RUN) ? 0u : 1u;
+    const float pan_goal  = Guard_AxisStep(&ax_pan,  &lim_pan,  v_pan,  braking);
+    const float tilt_goal = Guard_AxisStep(&ax_tilt, &lim_tilt, v_tilt, braking);
 
-    /* 6. 22-byte SYNC WRITE via DMA (non-blocking). */
-    STS_SyncWrite_PosSpeed((uint16_t)(f_pan_step + 0.5f), STS_DEFAULT_SPEED,
-                           (uint16_t)(f_tilt_step + 0.5f), STS_DEFAULT_SPEED);
+    /* 6. 22-byte SYNC WRITE via DMA (non-blocking). Slow servo speed while ramping back. */
+    const uint16_t speed = (st == GUARD_RAMP) ? STS_RAMP_SPEED : STS_DEFAULT_SPEED;
+    STS_SyncWrite_PosSpeed((uint16_t)(pan_goal + 0.5f), speed, (uint16_t)(tilt_goal + 0.5f), speed);
+}
+
+/* ========================================================================= */
+/* Emergency stop: B1 pressed while running (falling edge after a release)   */
+/* ========================================================================= */
+static void Estop_Task(void)
+{
+    static uint8_t  armed = 0u;        /* B1 seen released once (it may still be held after commissioning) */
+    static uint32_t t_low = 0u;
+    static uint8_t  reported = 0u;
+    const uint32_t now = HAL_GetTick();
+    const uint8_t pressed = (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) ? 1u : 0u;
+
+    if (!pressed) {
+        armed = 1u;
+        t_low = 0u;
+    } else if (armed && !g_estop) {
+        if (t_low == 0u) {
+            t_low = now ? now : 1u;
+        } else if ((now - t_low) >= ESTOP_DEBOUNCE_MS) {
+            g_estop = 1u;              /* latched until reset */
+        }
+    }
+    if (g_estop && !reported) {
+        static const char msg[] = "ESTOP: B1 pressed, servo torque off. Press RESET to resume.\r\n";
+        (void)HAL_UART_Transmit(&huart2, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1u), 20u);
+        reported = 1u;
+    }
 }
 
 /* ========================================================================= */
@@ -238,18 +310,26 @@ static void Commissioning_CheckAndRun(void)
     }
 }
 
-/* LD2: solid = tracking, 1 Hz = target lost (hold), 5 Hz = comm timeout. */
+/* LD2: solid = RUN, 1 Hz = HOLD (target lost), 2.5 Hz = HOLD (no packets), 5 Hz = RAMP,
+        short blink every 2 s = TORQUE_OFF (Pi gone > 10 s), 10 Hz = ESTOP. */
 static void Led_Task(void)
 {
     static uint32_t last = 0u;
     const uint32_t now = HAL_GetTick();
-    const ServoState_t st = g_servo_state;
+    const GuardState_t st = g_servo_state;
 
-    if (st == SERVO_TRACKING) {
+    if (st == GUARD_RUN) {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
         return;
     }
-    const uint32_t half_period = (st == SERVO_HOLD) ? 500u : 100u;
+    if (st == GUARD_TORQUE_OFF) {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, ((now % 2000u) < 60u) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        return;
+    }
+    uint32_t half_period = 500u;
+    if (st == GUARD_ESTOP)        { half_period = 50u; }
+    else if (st == GUARD_RAMP)    { half_period = 100u; }
+    else if (g_comm_lost)         { half_period = 200u; }
     if ((now - last) >= half_period) {
         last = now;
         HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);

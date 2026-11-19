@@ -40,6 +40,36 @@ cv::Scalar state_color(TrackState s) {
   }
 }
 
+cv::Scalar mot_color(MotState s) {
+  switch (s) {
+    case MotState::TENTATIVE: return {160, 160, 160};
+    case MotState::CONFIRMED: return {80, 200, 80};
+    case MotState::OVERLAP: return {0, 200, 255};
+    case MotState::OCCLUDED: return {0, 140, 255};
+    case MotState::EXITING: return {255, 200, 0};
+    case MotState::AMBIGUOUS: return {0, 0, 255};
+    case MotState::LOST: return {120, 120, 120};
+  }
+  return {200, 200, 200};
+}
+
+std::string aim_text(AimMode m, uint16_t reasons, uint8_t q) {
+  static const char* names[] = {"no target", "acquiring", "coast too long", "reacquiring", "image quality",
+                                "ambiguous identity", "overlap", "exiting", "no estimate"};
+  std::string t = std::string("AIM ") + to_string(m);
+  std::string r;
+  for (int b = 0; b < 9; ++b)
+    if (reasons & (1u << b)) r += (r.empty() ? "" : ", ") + std::string(names[b]);
+  if (!r.empty()) t += "  (" + r + ")";
+  if (q) {
+    t += "   IMAGE:";
+    if (q & 1) t += " DARK";
+    if (q & 2) t += " GLARE";
+    if (q & 4) t += " BLUR";
+  }
+  return t;
+}
+
 cv::Rect to_rect(const RectF& r, float s) {
   return cv::Rect(int(r.x * s), int(r.y * s), std::max(1, int(r.w * s)), std::max(1, int(r.h * s)));
 }
@@ -109,6 +139,22 @@ cv::Mat render_frame(const cv::Mat& gray, const PreviewOverlay& ov, int clients)
     std::snprintf(t, sizeof t, "%s %.2f", d.cls == ObjClass::Phone ? "phone" : "person", d.score);
     cv::putText(img, t, r.tl() + cv::Point(0, -3), cv::FONT_HERSHEY_SIMPLEX, 0.35, col, 1);
   }
+  // v4: multi-target board (scenarios A-D). LOST tracks are not drawn; lock = magenta double box
+  for (const auto& k : ov.tracks) {
+    if (k.st == MotState::LOST) continue;
+    const cv::Scalar col = k.lock ? cv::Scalar(255, 0, 255) : mot_color(k.st);
+    const cv::Rect r = to_rect(k.box, s);
+    cv::rectangle(img, r - cv::Point(3, 3) + cv::Size(6, 6), col, k.lock ? 2 : 1);
+    char t[48];
+    std::snprintf(t, sizeof t, "#%d %s %.2f%s%s", k.id, to_string(k.st), k.prio, k.lock ? " LOCK" : "",
+                  !k.lock && k.designated ? " *" : "");
+    cv::putText(img, t, r.tl() + cv::Point(-3, r.height + 16), cv::FONT_HERSHEY_SIMPLEX, 0.38, col, 1);
+  }
+  // the lock left the view: arrow at the edge it left through (bounded search direction, scenario D)
+  if (ov.hint_dx != 0 || ov.hint_dy != 0) {
+    const cv::Point a(int(img.cols / 2 + ov.hint_dx * (img.cols / 2 - 30)), int(img.rows / 2 + ov.hint_dy * (img.rows / 2 - 30)));
+    cv::arrowedLine(img, a - cv::Point(int(ov.hint_dx * 40), int(ov.hint_dy * 40)), a, {255, 0, 255}, 3, cv::LINE_8, 0, 0.4);
+  }
   // tracked target
   if (ov.has_target) {
     const cv::Scalar col = state_color(ov.state);
@@ -117,7 +163,7 @@ cv::Mat render_frame(const cv::Mat& gray, const PreviewOverlay& ov, int clients)
     cv::line(img, c, (r.tl() + r.br()) / 2, col, 1);
   }
   // status bar
-  cv::rectangle(img, cv::Rect(0, 0, img.cols, 34), {0, 0, 0}, cv::FILLED);
+  cv::rectangle(img, cv::Rect(0, 0, img.cols, 50), {0, 0, 0}, cv::FILLED);
   char l1[160], l2[160];
   std::snprintf(l1, sizeof l1, "%-7s  #%u  %.1f fps  proc %.2f ms  clients %d", to_string(ov.state), ov.seq, ov.fps,
                 ov.proc_ms, clients);
@@ -128,6 +174,8 @@ cv::Mat render_frame(const cv::Mat& gray, const PreviewOverlay& ov, int clients)
     std::snprintf(l2, sizeof l2, "no target estimate");
   cv::putText(img, l1, {6, 14}, cv::FONT_HERSHEY_SIMPLEX, 0.42, state_color(ov.state), 1);
   cv::putText(img, l2, {6, 29}, cv::FONT_HERSHEY_SIMPLEX, 0.42, {255, 255, 255}, 1);
+  const cv::Scalar ac = ov.aim_mode == AimMode::HOLD ? cv::Scalar(0, 160, 255) : cv::Scalar(0, 230, 0);
+  cv::putText(img, aim_text(ov.aim_mode, ov.aim_reasons, ov.qflags), {6, 44}, cv::FONT_HERSHEY_SIMPLEX, 0.42, ac, 1);
   return img;
 }
 

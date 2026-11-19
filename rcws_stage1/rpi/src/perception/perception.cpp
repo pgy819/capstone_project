@@ -64,7 +64,8 @@ cv::Mat lores_to_rgb(const FrameView& f) {
 }  // namespace
 
 Perception::Perception(const Config& cfg, const CameraModel& cam, IDetector* det, BinLog* log, GimbalAt gimbal)
-    : cfg_(cfg), cam_(cam), det_(det), log_(log), est_(cfg, cam, std::move(gimbal)), ncc_(cfg.ncc) {
+    : cfg_(cfg), cam_(cam), det_(det), log_(log), gimbal_(gimbal), est_(cfg, cam, gimbal), ncc_(cfg.ncc),
+      mot_(cfg.mot, cfg.cam.main_w, cfg.cam.main_h), qual_(cfg.qual) {
   gain_ = cfg.cam.gain_init;
 }
 
@@ -114,6 +115,49 @@ void Perception::reset_track() {
   strong_rejects_ = 0;
   sprt_L_ = 0;
   coast_ncc_only_ = false;
+  lock_id_ = -1;
+  lock_t_seen_ = 0;
+  lock_has_hist_ = false;
+  qual_.reset_baseline();
+}
+
+bool Perception::reanchor_allowed(int id) const {
+  // Re-anchoring moves the whole track to a detection outside the gate. Only on our own identity,
+  // or on a CONFIRMED track (repeated, consistent detections, not scattered false alarms) that was
+  // born after ours was last seen (not a phone that coexisted with ours).
+  if (id < 0 || id == lock_id_) return true;
+  const MotTrack* k = mot_.find(id);
+  return k && k->st != MotState::TENTATIVE && !other_target(id);
+}
+
+bool Perception::other_target(int id) const {
+  if (!cfg_.mot.enabled || id < 0 || id == lock_id_ || lock_t_seen_ == 0) return false;
+  const MotTrack* k = mot_.find(id);
+  if (!k) return false;
+  // A track that already existed while ours was still being seen is a different phone. A track
+  // born after ours went missing may be ours, re-created by the board (fast hand motion broke the
+  // association): the single-target gate decides.
+  if (k->t_born <= lock_t_seen_) return true;
+  // While the target is missing (COAST, REACQ) the gate is wide: a single unconfirmed detection
+  // (TENTATIVE: scattered false alarm) must not bring the track back - only our own identity
+  // (re-identified by the board) or a confirmed new track may.
+  if ((state_ == TrackState::COAST || state_ == TrackState::REACQ) && k->st == MotState::TENTATIVE) return true;
+  // REACQ (scenario D): with colour on both sides the board's re-identification decides alone,
+  // so a new phone entering the view is not taken for the one that left
+  if (state_ == TrackState::REACQ) return k->has_hist && lock_has_hist_;
+  return false;
+}
+
+void Perception::log_board(const DetectionBatch& b) {
+  if (!log_) return;
+  for (const auto& k : mot_.tracks()) {
+    RecMot r{};
+    r.t = b.t_sof_ns; r.seq = b.frame_seq; r.id = k.id; r.st = uint8_t(k.st);
+    r.flags = uint8_t((k.id == lock_id_ ? 1 : 0) | (k.id == designated_ ? 2 : 0) | (k.exited ? 4 : 0));
+    r.u = float(k.x[0]); r.v = float(k.x[1]); r.w = k.w; r.h = k.h; r.vu = float(k.x[2]); r.vv = float(k.x[3]);
+    r.prio = k.priority; r.score = k.score;
+    log_->write(RecType::MOT, r);
+  }
 }
 
 std::optional<RectF> Perception::target_box() const {
@@ -156,15 +200,31 @@ void Perception::log_est(int64_t t) {
 }
 
 // ---------------------------------------------------------------- detections
-void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t now) {
+void Perception::handle_batch(const DetectionBatch& b, const FrameView& f, int64_t now) {
   stats_.det_batches++;
-  if (log_) log_->write_det(b, now_seq);
+  if (log_) log_->write_det(b, f.seq);
   last_batch_ = b;
   if (capture_) {
     for (auto it = inputs_.begin(); it != inputs_.end(); ++it)
       if (it->seq == b.frame_seq && it->kind == b.kind) { shown_input_ = *it; inputs_.erase(it); break; }
   }
   const auto& tc = cfg_.det;
+
+  // v4: multi-target board first, so every phone detection carries an identity (scenarios A-D)
+  batch_ids_.assign(b.dets.size(), -1);
+  if (cfg_.mot.enabled) {
+    if (gimbal_ && t_board_) {   // scenario E: remove the image shift caused by the gimbal itself
+      const GimbalPose g0 = gimbal_(t_board_), g1 = gimbal_(b.t_sof_ns);
+      mot_.set_ego_shift(-cam_.fx() * (g1.psi - g0.psi), cam_.fx() * (g1.theta - g0.theta));
+    }
+    t_board_ = b.t_sof_ns;
+    batch_ids_ = mot_.update(b, &f, tc.thr_track, tc.score_min).det_track;
+    // lock bookkeeping: the board may have dropped and re-created the track Perception still follows
+    designated_ = mot_.designate(state_ == TrackState::SEARCH ? -1 : lock_id_, now);
+    if (const MotTrack* lk = mot_.find(lock_id_)) { lock_t_seen_ = lk->t_seen; lock_has_hist_ = lk->has_hist; }
+    log_board(b);
+  }
+  auto id_of = [&](const Detection& d) { return batch_ids_[size_t(&d - b.dets.data())]; };
 
   // collect persons for context search (Sec 3.13.1)
   if (state_ == TrackState::SEARCH || state_ == TrackState::REACQ) {
@@ -182,8 +242,22 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
     if (d.cls != ObjClass::Phone) continue;
     const VisionMeas m = det_meas(d, b);
     if (state_ == TrackState::SEARCH) {
+      // the board's designated target (priority + hysteresis); before any track is confirmed,
+      // the most confident detection as in v3
+      if (designated_ >= 0 && id_of(d) != designated_) continue;
       if (d.score >= tc.thr_acquire && d.score > best_key) { best = &d; best_m = m; best_key = d.score; }
       continue;
+    }
+    if (other_target(id_of(d))) { sstats_.other_target_skipped++; continue; }
+    // scenario F/H: a sudden size change is a different object (two phones merged into one box,
+    // reflection, background clutter), not this target
+    if (tgt_box_.area() > 0 && cfg_.trk.size_jump > 1.f) {
+      const double ratio = std::sqrt(std::max(1.f, d.box.area()) / std::max(1.f, tgt_box_.area()));
+      if (ratio > cfg_.trk.size_jump || ratio < 1.0 / cfg_.trk.size_jump) {
+        sstats_.size_jump_rejected++;
+        log_meas(m, false, -1);
+        continue;
+      }
     }
     const GateResult g = est_.gate(m);
     if (!g.pass) {
@@ -205,6 +279,8 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
     case TrackState::SEARCH:
       if (best) {
         reset_track();
+        lock_id_ = id_of(*best);
+        lock_t_seen_ = b.t_sof_ns;
         est_.update(best_m);
         est_.update_range(best_m);
         log_meas(best_m, true, 0);
@@ -252,8 +328,15 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
     case TrackState::TRACK:
     case TrackState::COAST:
     case TrackState::REACQ: {
-      if (best) strong_rejects_ = 0;
-      else if (strong && ++strong_rejects_ >= cfg_.trk.strong_reject_reinit) {
+      if (best) {
+        strong_rejects_ = 0;
+        // passed other_target(): the board dropped our track and re-created it under a new id
+        const int id = id_of(*best);
+        if (id >= 0 && id != lock_id_) { lock_id_ = id; lock_t_seen_ = b.t_sof_ns; sstats_.lock_repointed++; }
+      }
+      else if (strong && cfg_.mot.enabled && !reanchor_allowed(id_of(*strong))) {
+        sstats_.reanchor_blocked++;   // a confident phone outside the gate is another target: stay
+      } else if (strong && ++strong_rejects_ >= cfg_.trk.strong_reject_reinit) {
         // The detector keeps seeing a confident phone where the filter does not expect it:
         // the filter is wrong, not the detector. Re-anchor the track on the detection.
         const VisionMeas m = det_meas(*strong, b);
@@ -270,6 +353,7 @@ void Perception::handle_batch(const DetectionBatch& b, uint32_t now_seq, int64_t
         ncc_hist_.clear();
         strong_rejects_ = 0;
         stats_.template_reinit++;
+        if (id_of(*strong) >= 0 && id_of(*strong) != lock_id_) { lock_id_ = id_of(*strong); lock_t_seen_ = b.t_sof_ns; }
         if (state_ != TrackState::TRACK) set_state(TrackState::TRACK, StateReason::REACQ_DET, now);
         break;
       }
@@ -491,6 +575,11 @@ void Perception::schedule(const FrameView& f) {
       if (have_pred) submit_main_crop(f, track_roi(cfg_.roi, pred, tgt_box_.w, tgt_box_.h, sp, f.main_w, f.main_h), DetKind::Roi);
       break;
     case TrackState::TRACK: {
+      // v4: a whole-frame scan now and then keeps the board aware of the other phones (scenario A)
+      if (cfg_.mot.enabled && cfg_.mot.scan_period > 0 && frame_counter_ % uint32_t(cfg_.mot.scan_period) == 0) {
+        submit_global(f);
+        break;
+      }
       // confidence-based scheduling (Sec 3.13.10)
       const bool good = !ncc_hist_.empty() && ncc_hist_.back().seq == f.seq && ncc_hist_.back().rho >= 0.85f;
       const int period = good ? cfg_.roi.track_det_period_hi : cfg_.roi.track_det_period_lo;
@@ -554,6 +643,32 @@ FrameControls Perception::controls(const FrameView& f) {
   return c;
 }
 
+// ---------------------------------------------------------------- aim output gate (I, J)
+void Perception::update_aim(const FrameView& f, int64_t now) {
+  AimInputs in;
+  in.t = now;
+  in.state = state_;
+  in.est = est_.predict(now);
+  in.since_meas_s = t_last_meas_ ? s_of(now - t_last_meas_) : 1e9;
+  in.lock = cfg_.mot.enabled ? mot_.find(lock_id_) : nullptr;
+  in.quality_flags = qual_.flags();
+  aim_ = decide_aim(cfg_.aim, in);
+  if (!cfg_.mot.enabled) aim_.target_id = -1;
+  switch (aim_.mode) {
+    case AimMode::HOLD: sstats_.aim_hold_frames++; break;
+    case AimMode::FOLLOW: sstats_.aim_follow_frames++; break;
+    case AimMode::PREDICT: sstats_.aim_predict_frames++; break;
+  }
+  if (in.quality_flags) sstats_.quality_bad_frames++;
+  if (log_) {
+    RecAim r{};
+    r.t = now; r.seq = f.seq; r.mode = uint8_t(aim_.mode); r.reasons = aim_.reasons; r.target_id = aim_.target_id;
+    r.psi = float(aim_.psi); r.theta = float(aim_.theta); r.psi_d = float(aim_.psi_d); r.theta_d = float(aim_.theta_d);
+    r.hint_dx = aim_.hint_dx; r.hint_dy = aim_.hint_dy;
+    log_->write(RecType::AIM, r);
+  }
+}
+
 // ---------------------------------------------------------------- main entry
 FrameControls Perception::on_frame(const FrameView& f) {
   const int64_t t_in = now_ns();
@@ -567,10 +682,17 @@ FrameControls Perception::on_frame(const FrameView& f) {
   if (t_state_ == 0) t_state_ = now;
 
   if (det_)
-    while (auto b = det_->poll()) handle_batch(*b, f.seq, now);
+    while (auto b = det_->poll()) handle_batch(*b, f, now);
 
   run_ncc(f, now);
   update_timers(now);
+  if (cfg_.mot.enabled) mot_.tick(now);
+  if (qual_.evaluate(f, state_ == TrackState::TRACK ? &tgt_box_ : nullptr, state_ == TrackState::TRACK && !coast_ncc_only_) && log_) {
+    const QualitySample& q = qual_.last();
+    RecQual r{now, f.seq, q.mean_luma, q.sat_frac, q.sharp, q.sharp_base, q.raw, q.flags, {0, 0}};
+    log_->write(RecType::QUAL, r);
+  }
+  update_aim(f, now);
   schedule(f);
   const FrameControls c = controls(f);
   log_est(t_cap_of(f, f.main_h / 2.0));

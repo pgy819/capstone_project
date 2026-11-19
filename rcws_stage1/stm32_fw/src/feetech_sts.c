@@ -45,6 +45,27 @@ uint8_t STS_BuildSyncWritePosSpeed(uint8_t *buf,
     return (uint8_t)STS_SYNC_WRITE_LEN;
 }
 
+uint8_t STS_BuildSyncTorque(uint8_t *buf, uint8_t enable)
+{
+    buf[0]  = 0xFFu;
+    buf[1]  = 0xFFu;
+    buf[2]  = STS_BROADCAST_ID;
+    buf[3]  = 0x08u;                      /* (1 + 1) * 2 + 4 */
+    buf[4]  = STS_INST_SYNC_WRITE;
+    buf[5]  = STS_ADDR_TORQUE_ENABLE;
+    buf[6]  = 0x01u;                      /* data length per servo */
+    buf[7]  = STS_PAN_ID;
+    buf[8]  = enable ? 1u : 0u;
+    buf[9]  = STS_TILT_ID;
+    buf[10] = enable ? 1u : 0u;
+    uint32_t sum = 0u;
+    for (uint8_t i = 2u; i <= 10u; i++) {
+        sum += buf[i];
+    }
+    buf[11] = (uint8_t)(~sum & 0xFFu);
+    return (uint8_t)STS_SYNC_TORQUE_LEN;
+}
+
 uint8_t STS_BuildWriteByte(uint8_t *buf, uint8_t id, uint8_t addr, uint8_t value)
 {
     buf[0] = 0xFFu;
@@ -78,6 +99,18 @@ void STS_SyncWrite_PosSpeed(uint16_t pan_pos, uint16_t pan_speed,
 
     HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);      /* TX enable */
     if (HAL_UART_Transmit_DMA(&huart6, tx_buf, (uint16_t)STS_SYNC_WRITE_LEN) != HAL_OK) {
+        HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
+    }
+}
+
+void STS_SyncWrite_Torque(uint8_t enable)
+{
+    if (huart6.gState != HAL_UART_STATE_READY) {
+        return;
+    }
+    (void)STS_BuildSyncTorque(tx_buf, enable);   /* tx_buf (22 B) is large enough for 12 B */
+    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
+    if (HAL_UART_Transmit_DMA(&huart6, tx_buf, (uint16_t)STS_SYNC_TORQUE_LEN) != HAL_OK) {
         HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
     }
 }

@@ -12,9 +12,20 @@
 
 #include "common/types.hpp"
 #include "detect/detector.hpp"
+#include "perception/aim.hpp"
+#include "perception/mot.hpp"
 #include "perception/zncc_tracker.hpp"
 
 namespace rcws {
+
+// v4: one track of the multi-target board, for drawing
+struct MotView {
+  int id = 0;
+  MotState st = MotState::TENTATIVE;
+  RectF box;
+  float prio = 0;
+  bool lock = false, designated = false;
+};
 
 struct PreviewOverlay {
   TrackState state = TrackState::SEARCH;
@@ -27,6 +38,12 @@ struct PreviewOverlay {
   bool est_valid = false;
   double psi_deg = 0, theta_deg = 0, rate_psi = 0, rate_theta = 0, range_m = 0;
   uint32_t seq = 0;
+  // v4 (scenarios A-J): board tracks, aim output gate, image quality
+  std::vector<MotView> tracks;
+  AimMode aim_mode = AimMode::HOLD;
+  uint16_t aim_reasons = 0;
+  float hint_dx = 0, hint_dy = 0;
+  uint8_t qflags = 0;
   // "stack" view only (--preview-view stack)
   uint32_t det_seq = 0;          // frame of the batch in dets
   DetInputSnap det_in;           // model input that produced dets

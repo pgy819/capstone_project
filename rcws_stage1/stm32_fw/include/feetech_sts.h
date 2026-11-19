@@ -28,6 +28,7 @@ extern "C" {
 #define STS_ADDR_ID             0x05u
 #define STS_ADDR_GOAL_POSITION  0x2Au   /* pos(2) + time(2) + speed(2) */
 #define STS_ADDR_LOCK           0x37u   /* EEPROM lock: 0 = unlocked, 1 = locked */
+#define STS_ADDR_TORQUE_ENABLE  0x28u   /* 40: 0 = limp, 1 = holding */
 
 /* Bus layout */
 #define STS_PAN_ID              1u
@@ -38,6 +39,7 @@ extern "C" {
 #define STS_SYNC_WRITE_LEN      22u     /* 2 servos x (pos,time,speed) */
 #define STS_SYNC_WRITE_LENGTH   0x12u   /* (6 + 1) * 2 + 4 = 18 */
 #define STS_WRITE_BYTE_LEN      8u
+#define STS_SYNC_TORQUE_LEN     12u     /* 2 servos x 1 byte */
 
 #define STS_DIR_PORT            GPIOA
 #define STS_DIR_PIN             GPIO_PIN_4
@@ -46,6 +48,9 @@ extern "C" {
 uint8_t STS_BuildSyncWritePosSpeed(uint8_t *buf,
                                    uint16_t pan_pos, uint16_t pan_speed,
                                    uint16_t tilt_pos, uint16_t tilt_speed);
+
+/** Pure builder: SYNC WRITE torque enable (both servos) into buf[12]. Returns 12. */
+uint8_t STS_BuildSyncTorque(uint8_t *buf, uint8_t enable);
 
 /** Pure builder: single-byte WRITE (0x03) packet into buf[8]. Returns 8. */
 uint8_t STS_BuildWriteByte(uint8_t *buf, uint8_t id, uint8_t addr, uint8_t value);
@@ -56,6 +61,9 @@ extern UART_HandleTypeDef huart6;
 /** Non-blocking DMA SYNC WRITE (ISR-safe). Skips if the previous frame is still in flight. */
 void STS_SyncWrite_PosSpeed(uint16_t pan_pos, uint16_t pan_speed,
                             uint16_t tilt_pos, uint16_t tilt_speed);
+
+/** Non-blocking DMA SYNC WRITE of torque enable for both servos (ISR-safe, skipped when busy). */
+void STS_SyncWrite_Torque(uint8_t enable);
 
 /**
  * Blocking one-time ID commissioning (thread mode only, before TIM2 starts).

@@ -86,6 +86,55 @@ struct TrackCfg {
   float gate_chi2 = 9.21f;
   float phone_height_m = 0.15f;
   int strong_reject_reinit = 3;         // consecutive strong detections outside the gate -> re-anchor
+  // scenario F/H: a detection whose size jumps by more than this factor (sqrt of the area ratio)
+  // against the tracked box is not this target (merged box of two phones, reflection, far decoy)
+  float size_jump = 2.0f;
+};
+
+// Multi-target track board (perception/mot.hpp), scenarios A-D
+struct MotCfg {
+  bool enabled = true;
+  int n_init = 3;                       // hits to confirm a track
+  int tentative_max_miss = 2;           // misses that delete an unconfirmed track
+  double occl_s = 0.5;                  // OCCLUDED longer than this -> LOST (= short vs long occlusion)
+  double lost_keep_s = 3.0;             // LOST tracks kept this long for re-identification
+  double unseen_s = 1.0;                // not observed at all (outside every crop) -> LOST
+  double q_px = 2.0e5;                  // CV white-acceleration PSD [px^2/s^3] (hand-held: ~7000 px/s^2)
+  float r_px0 = 2.0f, r_rel = 0.03f;    // detection centre sigma = r_px0 + r_rel * box side
+  float gate_chi2 = 13.8f;              // 2 dof, 99.9 %
+  float w_iou = 1.0f, w_dist = 0.5f, w_app = 0.6f;
+  float max_cost = 1.6f;
+  float size_jump = 2.0f;               // sqrt(area ratio) beyond this never associates
+  float overlap_iou = 0.15f;            // predicted boxes overlapping -> OVERLAP
+  float amb_hist_margin = 0.25f;        // after separation: tracks this alike in colour -> AMBIGUOUS
+  double amb_hold_s = 1.0;
+  float edge_margin = 0.04f;            // fraction of the image size: EXITING band
+  float reid_hist = 0.35f;              // max colour distance for re-identification of a LOST track
+  float reid_size = 1.6f;
+  float reid_px_per_s = 600.f;          // search radius growth while lost
+  // priority score (scenario A): weights of normalised terms, sum 1
+  float w_center = 0.35f, w_size = 0.20f, w_approach = 0.10f, w_conf = 0.20f, w_age = 0.15f;
+  float size_ref_px = 200.f;            // box side that scores 1
+  float approach_ref = 0.5f;            // d ln(size)/dt [1/s] that scores 1
+  float switch_margin = 0.15f;          // challenger must beat the designated target by this ratio
+  double switch_s = 0.3;                // ... continuously for this long
+  double hold_s = 1.0;                  // minimum time a designated target is kept
+  int scan_period = 30;                 // frames between whole-frame scans while tracking (0 = off)
+};
+
+// Image quality gate (scenario G)
+struct QualityCfg {
+  bool enabled = true;
+  int period = 4;                       // frames between evaluations
+  float dark_luma = 28.f;               // mean lores luma below this -> DARK
+  float sat_frac = 0.35f;               // fraction of saturated pixels above this -> GLARE
+  float blur_ratio = 0.35f;             // target sharpness below this x its tracked baseline -> BLUR
+  int bad_n = 3, good_n = 6;            // consecutive evaluations to set / clear a flag
+};
+
+// Aim output gate (scenarios I, J): what may be sent to the gimbal
+struct AimCfg {
+  double coast_follow_s = 0.15;         // follow the prediction this long after the last measurement
 };
 
 struct EstimatorCfg {
@@ -116,6 +165,9 @@ struct Config {
   TrackCfg trk;
   EstimatorCfg est;
   RuntimeCfg rt;
+  MotCfg mot;
+  QualityCfg qual;
+  AimCfg aim;
 
   // Loads "section.key = value" lines from an INI file; unknown keys are reported.
   bool load_ini(const std::string& path, std::string* err);

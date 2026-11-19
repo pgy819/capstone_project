@@ -25,6 +25,7 @@
 #include "record/clip.hpp"
 #include "sim/synthetic.hpp"
 #include "app/preview_server.hpp"
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #ifdef RCWS_HAVE_HAILO
 #include "detect/hailo_detector.hpp"
@@ -47,6 +48,8 @@ struct Args {
   bool window = false;     // on-screen popup on the Pi desktop
   int preview_fps = 10;
   std::string preview_view = "plain";  // plain | stack
+  std::string scenario = "sine";       // synthetic source only (v4 scenario set)
+  std::string record;                  // directory: annotated frames at 30 fps of scene time (demo video)
 };
 
 void usage() {
@@ -55,7 +58,10 @@ void usage() {
                "                   [--frames N] [--clip-seconds S] [--print-every N]\n"
                "                   [--preview PORT] [--preview-fps N]   (live view: http://<pi>:PORT/)\n"
                "                   [--window]                           (popup window on the Pi desktop)\n"
-               "                   [--preview-view plain|stack]         (stack: + detector input + NCC map)\n";
+               "                   [--preview-view plain|stack]         (stack: + detector input + NCC map)\n"
+               "                   [--scenario NAME]                    (synthetic: " << scenario_names() << ")\n"
+               "                   [--record DIR]                       (annotated frames, 30 fps of scene time:\n"
+               "                                                         ffmpeg -framerate 30 -i DIR/f_%05d.jpg demo.mp4)\n";
 }
 
 bool parse(int argc, char** argv, Args* a) {
@@ -73,6 +79,8 @@ bool parse(int argc, char** argv, Args* a) {
     if (k == "--preview" && val(&v)) { a->preview_port = std::stoi(v); continue; }
     if (k == "--preview-fps" && val(&v)) { a->preview_fps = std::stoi(v); continue; }
     if (k == "--window") { a->window = true; continue; }
+    if (k == "--scenario" && val(&a->scenario)) continue;
+    if (k == "--record" && val(&a->record)) continue;
     if (k == "--preview-view" && val(&a->preview_view)) {
       if (a->preview_view != "plain" && a->preview_view != "stack") return false;
       continue;
@@ -107,11 +115,12 @@ int main(int argc, char** argv) {
     src = make_libcamera_source(cfg.cam);
     if (!src) { std::cerr << "built without libcamera\n"; return 1; }
   } else if (args.source == "synthetic") {
-    SynthTraj tr;
-    const double cx = cfg.cam.main_w / 2.0, cy = cfg.cam.main_h / 2.0;
-    tr.center = [cx, cy](double t) { return cv::Point2d(cx + 300 * std::sin(0.8 * t), cy + 120 * std::sin(1.3 * t)); };
-    tr.occl_t0 = 6.0; tr.occl_t1 = 6.3;
-    auto s = std::make_unique<SyntheticSource>(cfg.cam, tr, args.frames > 0 ? args.frames : 1200);
+    bool ok = false;
+    int nf = args.frames;
+    SynthTraj tr = make_scenario(args.scenario, cfg.cam, &nf, &ok);
+    if (!ok) { std::cerr << "unknown scenario " << args.scenario << " (" << scenario_names() << ")\n"; return 2; }
+    if (args.scenario == "sine" && args.frames <= 0) nf = 1200;
+    auto s = std::make_unique<SyntheticSource>(cfg.cam, tr, nf);
     synth = s.get();
     src = std::move(s);
   } else if (args.source.rfind("replay:", 0) == 0) {
@@ -176,6 +185,9 @@ int main(int argc, char** argv) {
   double last_fps = 0, last_proc = 0;
   int64_t t_prev_frame = 0;
   int64_t t_preview = 0;
+  int n_rec = 0;
+  if (!args.record.empty() && args.source == "camera")
+    std::cerr << "--record renders on the vision thread: use it with synthetic or replay sources\n";
 
   if (args.source == "camera") set_thread_rt(cfg.rt.vision_cpu, cfg.rt.vision_prio, "vision");
 
@@ -204,8 +216,10 @@ int main(int argc, char** argv) {
       t_prev_frame = t;
       last_proc = 0.9 * last_proc + 0.1 * ms;
       // live preview at a low rate: only a small luma copy happens on this thread
-      if (want_view && t - t_preview >= 1000000000LL / std::max(1, args.preview_fps)) {
-        t_preview = t;
+      const bool view_due = want_view && t - t_preview >= 1000000000LL / std::max(1, args.preview_fps);
+      const bool rec_due = !args.record.empty() && fr.view.seq % uint32_t(std::max(1, cfg.cam.fps / 30)) == 0;
+      if (view_due || rec_due) {
+        if (view_due) t_preview = t;
         cv::Mat gray;
         float scale = 1.f;
         if (fr.view.lo_y) {
@@ -226,6 +240,13 @@ int main(int argc, char** argv) {
         ov.fps = last_fps;
         ov.proc_ms = last_proc;
         ov.seq = fr.view.seq;
+        for (const auto& k : per.board().tracks())
+          ov.tracks.push_back({k.id, k.st, k.box(), k.priority, k.id == per.lock_id(), k.id == per.designated_id()});
+        ov.aim_mode = per.aim().mode;
+        ov.aim_reasons = per.aim().reasons;
+        ov.hint_dx = per.aim().hint_dx;
+        ov.hint_dy = per.aim().hint_dy;
+        ov.qflags = per.quality_flags();
         if (args.preview_view == "stack") {   // buffer headers only; the template is small and cloned
           ov.det_seq = lb.frame_seq;
           ov.det_in = per.det_input();
@@ -239,14 +260,26 @@ int main(int argc, char** argv) {
           ov.rate_psi = deg(e.psi_d); ov.rate_theta = deg(e.theta_d);
           ov.range_m = e.range_m;
         }
-        preview.publish(gray, ov);
+        if (view_due) preview.publish(gray, ov);
+        if (rec_due) {   // demo recording: rendered on this thread (not for live camera runs)
+          char fn[64];
+          std::snprintf(fn, sizeof fn, "/f_%05d.jpg", n_rec++);
+          cv::imwrite(args.record + fn, render_preview(gray, ov, args.preview_view == "stack", 0));
+        }
       }
     }
-    if (synth && log.is_open())
+    if (synth && log.is_open()) {
       if (auto tr = synth->truth(fr.view.seq)) {
         RecTruth rt{tr->t_ns, fr.view.seq, tr->box.cx(), tr->box.cy(), tr->box.w, tr->box.h, uint8_t(tr->visible), {0, 0, 0}};
         log.write(RecType::TRUTH, rt);
       }
+      const auto all = synth->truth_all(fr.view.seq);
+      for (size_t o = 1; o < all.size(); ++o) {
+        const auto& tr = all[o];
+        RecTruth2 rt{tr.t_ns, fr.view.seq, int32_t(o), tr.box.cx(), tr.box.cy(), tr.box.w, tr.box.h, uint8_t(tr.visible), {0, 0, 0}};
+        log.write(RecType::TRUTH2, rt);
+      }
+    }
     src->release(fr, c);
     ++n;
 
@@ -297,5 +330,14 @@ int main(int argc, char** argv) {
                (unsigned long long)s.det_batches, (unsigned long long)s.det_submitted, (unsigned long long)s.det_rejected,
                (unsigned long long)s.meas_gated_out, (unsigned long long)s.template_reinit,
                (unsigned long long)s.stale_det, (unsigned long long)log.dropped());
+  const auto& v = per.scenario_stats();
+  std::fprintf(stderr,
+               "v4: track ids %d  other-target skipped %llu  size-jump rejected %llu  re-anchor blocked %llu  "
+               "lock re-pointed %llu  ambiguity events %llu  aim FOLLOW/PREDICT/HOLD %llu/%llu/%llu  bad-image frames %llu\n",
+               per.board().next_id() - 1, (unsigned long long)v.other_target_skipped, (unsigned long long)v.size_jump_rejected,
+               (unsigned long long)v.reanchor_blocked, (unsigned long long)v.lock_repointed,
+               (unsigned long long)per.board().id_switch_guards(), (unsigned long long)v.aim_follow_frames,
+               (unsigned long long)v.aim_predict_frames, (unsigned long long)v.aim_hold_frames,
+               (unsigned long long)v.quality_bad_frames);
   return 0;
 }

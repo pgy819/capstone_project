@@ -27,6 +27,9 @@ add_library(rcws_core STATIC
   src/perception/zncc_tracker.cpp
   src/perception/roi.cpp
   src/perception/perception.cpp
+  src/perception/mot.cpp
+  src/perception/quality.cpp
+  src/perception/aim.cpp
   src/detect/detector.cpp
   src/record/binlog.cpp
   src/record/clip.cpp
@@ -84,6 +87,7 @@ add_executable(rcws_tests
   tests/test_pipeline.cpp
   tests/test_preproc.cpp
   tests/test_preview.cpp
+  tests/test_scenarios.cpp
   src/app/preview_server.cpp
 )
 target_link_libraries(rcws_tests PRIVATE rcws_core)

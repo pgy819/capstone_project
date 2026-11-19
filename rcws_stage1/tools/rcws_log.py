@@ -28,7 +28,23 @@ NCC = np.dtype([("t", "<i8"), ("seq", "<u4"), ("u", "<f4"), ("v", "<f4"), ("rho"
 TRUTH = np.dtype([("t", "<i8"), ("seq", "<u4"), ("u", "<f4"), ("v", "<f4"), ("w", "<f4"), ("h", "<f4"),
                   ("visible", "u1"), ("pad", "u1", 3)])
 
-TYPES = {1: ("frame", FRAME), 3: ("meas", MEAS), 4: ("est", EST), 5: ("state", STATE), 6: ("ncc", NCC), 8: ("truth", TRUTH)}
+# v4 (scenarios A-J): multi-target board, aim output gate, image quality, extra synthetic objects
+MOT = np.dtype([("t", "<i8"), ("seq", "<u4"), ("id", "<i4"), ("st", "u1"), ("flags", "u1"), ("pad", "<u2"),
+                ("u", "<f4"), ("v", "<f4"), ("w", "<f4"), ("h", "<f4"), ("vu", "<f4"), ("vv", "<f4"),
+                ("prio", "<f4"), ("score", "<f4")])
+AIM = np.dtype([("t", "<i8"), ("seq", "<u4"), ("mode", "u1"), ("pad", "u1"), ("reasons", "<u2"), ("target_id", "<i4"),
+                ("psi", "<f4"), ("theta", "<f4"), ("psi_d", "<f4"), ("theta_d", "<f4"), ("hint_dx", "<f4"), ("hint_dy", "<f4")])
+QUAL = np.dtype([("t", "<i8"), ("seq", "<u4"), ("mean_luma", "<f4"), ("sat_frac", "<f4"), ("sharp", "<f4"),
+                 ("sharp_base", "<f4"), ("raw", "u1"), ("flags", "u1"), ("pad", "u1", 2)])
+TRUTH2 = np.dtype([("t", "<i8"), ("seq", "<u4"), ("obj", "<i4"), ("u", "<f4"), ("v", "<f4"), ("w", "<f4"), ("h", "<f4"),
+                   ("visible", "u1"), ("pad", "u1", 3)])
+
+TYPES = {1: ("frame", FRAME), 3: ("meas", MEAS), 4: ("est", EST), 5: ("state", STATE), 6: ("ncc", NCC), 8: ("truth", TRUTH),
+         9: ("mot", MOT), 10: ("aim", AIM), 11: ("qual", QUAL), 12: ("truth2", TRUTH2)}
+MOT_STATES = ["TENT", "CONF", "OVERLAP", "OCCL", "EXIT", "AMBIG", "LOST"]
+AIM_MODES = ["HOLD", "FOLLOW", "PREDICT"]
+AIM_REASONS = ["NO_TARGET", "ACQUIRING", "COAST_LONG", "REACQ", "QUALITY", "AMBIGUOUS", "OVERLAP", "EXITING", "NO_ESTIMATE"]
+QUAL_FLAGS = ["DARK", "GLARE", "BLUR"]
 STATES = ["SEARCH", "ACQUIRE", "TRACK", "COAST", "REACQ"]
 REASONS = ["NONE", "DET_ACQUIRE", "SPRT_ACCEPT", "SPRT_REJECT", "ACQ_TIMEOUT", "NO_MEAS", "NCC_ONLY", "MEAS_BACK",
            "COAST_TIMEOUT", "REACQ_DET", "REACQ_TIMEOUT"]
@@ -98,6 +114,41 @@ def summary(log):
             if len(mm):
                 print(f"{name} measurements {len(mm)}  accepted {100 * mm['accepted'].mean():.1f}%  "
                       f"median sigma {np.median(mm['sigma']):.2f} px")
+    summary_v4(log)
+
+
+def summary_v4(log):
+    """Multi-target board, aim gate and image quality (v4)."""
+    a = log["aim"]
+    if len(a):
+        occ = np.bincount(a["mode"], minlength=3) / len(a)
+        print("aim output: " + "  ".join(f"{AIM_MODES[i]} {100 * occ[i]:.1f}%" for i in range(3)))
+        held = a[a["mode"] == 0]
+        if len(held):
+            parts = []
+            for b, name in enumerate(AIM_REASONS):
+                n = int(np.count_nonzero(held["reasons"] & (1 << b)))
+                if n:
+                    parts.append(f"{name} {100 * n / len(held):.0f}%")
+            print("  HOLD reasons (share of HOLD frames): " + ", ".join(parts))
+        ids = sorted(set(int(i) for i in a["target_id"] if i >= 0))
+        print(f"  followed track ids: {ids}")
+    m = log["mot"]
+    if len(m):
+        ids = np.unique(m["id"])
+        print(f"track board: {len(ids)} track ids, max {int(np.max(np.bincount(np.unique(m['t'], return_inverse=True)[1])))} at once")
+        last = {}
+        for r in m:
+            i = int(r["id"])
+            st = MOT_STATES[r["st"]]
+            if last.get(i) != st:
+                print(f"  t={r['t'] * 1e-9:9.3f}  track {i:3d} -> {st:<8} at ({r['u']:6.0f},{r['v']:5.0f})  prio {r['prio']:.2f}"
+                      + ("  [lock]" if r["flags"] & 1 else ""))
+                last[i] = st
+    q = log["qual"]
+    if len(q):
+        parts = [f"{n} {100 * np.count_nonzero(q['flags'] & (1 << b)) / len(q):.1f}%" for b, n in enumerate(QUAL_FLAGS)]
+        print(f"image quality ({len(q)} evaluations): mean luma median {np.median(q['mean_luma']):.0f}, flagged " + ", ".join(parts))
 
 
 if __name__ == "__main__":

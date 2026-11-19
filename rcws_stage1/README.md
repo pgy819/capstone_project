@@ -28,7 +28,7 @@ sudo apt install -y cmake g++ pkg-config libopencv-dev libcamera-dev hailo-all p
 cd rcws/rpi
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/rcws_tests                       # 19 tests, 0 failed checks 이어야 함 (v3: test_preproc 3개, run 2 회귀 시험 1개 추가)
+./build/rcws_tests                       # 35 tests, 0 failed checks 이어야 함 (v4: 시나리오·트랙 보드·게이트 14개 추가)
 sudo setcap cap_sys_nice+ep build/rcws_vision   # SCHED_FIFO 허용 (Core 1, 우선순위 70)
 ```
 
@@ -156,3 +156,62 @@ python3 tools/tests/test_tools.py     # 도구 자체 시험 (numpy + opencv-pyt
 세션 분할: 녹화 1개 = 촬영 세션 1개. `--run`을 둘 이상 주면 마지막(또는 `--val-run`) 세션이 통째로 검증에 간다. 유사 물체만 찍은 녹화는 `--neg-run decoys.rclip`으로 라벨 없이 넣는다. 설계 근거: 상세설계기획서 V2.6 부록 B.6.
 
 라벨 품질: 모니터 시험대에서 TRUTH를 기록한 녹화가 가장 정확하다. 검출기 박스만으로 만든 의사 라벨은 COCO 모델의 편향을 물려받으므로 `--det-thr`를 높게 두고, `--ncc-fill`로 YOLO가 놓친 프레임(어려운 양성 샘플)을 보강한다.
+
+## 7. v4 — 추적 시나리오 대응 (A~J)
+
+조건은 그대로다: 모델 학습·HEF 재컴파일 없음, 추가 구매 없음, 기존 구조(단일 표적 상태 머신 + NCC + IMM) 유지. 그 위에 **다중 트랙 보드**, **화질 게이트**, **조준 출력 게이트**를 얹고, STM32에는 **동작 제한·안전 감시기**를 넣었다. 모두 설정으로 끌 수 있다(`mot.enabled`, `quality.enabled`, `track.size_jump = 0`).
+
+```
+검출 배치 ─▶ 트랙 보드(mot.cpp) ─▶ 각 검출에 ID ─▶ Perception(기존 단일 표적 루프)
+               │  칼만(CV) + 헝가리안, 2단계 할당      │  잠금 ID 외 확정 트랙은 측정에서 제외
+               │  색 히스토그램 재식별               │  크기 급변 거부, 재고정 차단
+               │  상태: TENT/CONF/OVERLAP/OCCL/      ▼
+               │        EXIT/AMBIG/LOST             조준 출력 게이트(aim.cpp) ─▶ FOLLOW / PREDICT / HOLD + 이유
+               └ 우선순위 점수 + 히스테리시스           ▲
+화질 감시(quality.cpp): DARK / GLARE / BLUR ──────────┘
+```
+
+| 상황 | 반영 | 위치 |
+|---|---|---|
+| A 다중 표적 | 휴대폰 검출마다 트랙 ID. 우선순위 = 0.35 화면 중심 + 0.20 크기 + 0.10 접근(박스 크기 증가율) + 0.20 검출 신뢰도 + 0.15 추적 시간. 지정 표적은 도전자가 15 % 이상 높은 상태가 0.3 s 이어지고 현재 표적을 1 s 이상 유지했을 때만 바뀐다. 추적 중에도 30프레임마다 전체 화면을 한 번 검출해 다른 표적을 놓치지 않는다 | `perception/mot.cpp` `designate`, `perception.cpp` `schedule` |
+| B 중첩 | 예측 박스가 겹치면 OVERLAP. 두 휴대폰이 한 박스로 검출되면 크기 급변(√면적비 > 2)으로 거부. 분리된 뒤 색으로 구별이 안 되면 AMBIGUOUS 1 s → 조준 출력 HOLD | `mot.cpp` `check_separation`, `perception.cpp` |
+| C 가림 | 짧은 가림(≤ 0.5 s)은 OCCLUDED로 예측 유지, 길면 LOST로 3 s 보관. 다시 보이면 크기·위치·**색 히스토그램**(U×V 8×8 + 휘도 8, 바타차리야 거리)으로 같은 ID로 재식별. 박스 크기와 관계없이 1600개 표본만 읽는다 | `mot.cpp` `box_histogram`, 재식별 블록 |
+| D 화면 밖 | 가장자리 4 % 띠에서 바깥으로 움직이면 EXITING, 사라지면 LOST(나간 방향 기록). Perception은 REACQ 동안 **다른 표적으로 바꾸지 않고** HOLD + 나간 방향 힌트를 낸다(짐벌 제한 탐색용) | `mot.cpp`, `aim.cpp`, `perception.cpp` `other_target` |
+| E 카메라 움직임 | 트랙 보드 예측 전에 짐벌 각 변화로 생긴 화면 이동(−fx·Δψ, +fy·Δθ)을 뺀다. 지금은 짐벌 각이 상수라 0, 엔코더 회신(U3, U5)이 붙으면 그대로 동작 | `perception.cpp` `handle_batch` |
+| F 오탐 | 기존 SPRT·게이트에 더해: 크기 급변 거부, 미확정(TENTATIVE) 트랙은 COAST/REACQ에서 표적을 되살리지 못함, 게이트 밖 강검출로 재고정할 때 확정된 트랙이어야 함 | `perception.cpp` |
+| G 조명 | 4프레임마다 lores 평균 휘도·포화 비율, 표적 선명도(라플라시안)/기준선. DARK·GLARE·BLUR는 3회 연속이면 켜지고 6회 연속 정상이면 꺼진다 → 조준 출력 HOLD | `perception/quality.cpp` |
+| H 거리·크기 | 기존 역거리 필터·ROI 재검출 유지 + 크기 급변 거부 | — |
+| I 조준 제어 | Pi: TRACK → FOLLOW, COAST 0.15 s까지 PREDICT, 그 뒤 HOLD(마지막 속도로 계속 돌지 않음). STM32: 데드밴드 3 px, 속도 300°/s, 가속 3000°/s², 정지 감속 6000°/s², 목표값을 EEPROM 소프트 제한(626~3470)에 묶고 한계에서 속도 0(와인드업 방지, K8 수정) | `aim.cpp`, `stm32_fw/src/servo_guard.c`, `main.c` |
+| J 안전 | STM32 감시기: 패킷 0.5 s 끊김 → HOLD, 10 s → 토크 해제, 다시 오면 1 s 저속 복귀(RAMP). **Nucleo 파란 버튼(B1) = 긴급 정지**(토크 해제, RESET까지 유지). LD2: 켜짐 RUN, 1 Hz HOLD, 2.5 Hz 통신 끊김, 5 Hz RAMP, 2 s마다 짧게 TORQUE_OFF, 10 Hz ESTOP | `servo_guard.c`, `main.c` |
+
+발사·교전 판단은 이 작품의 범위가 아니어서 넣지 않았다. J는 기구와 주변 사람을 지키는 정지 동작만 다룬다.
+
+### 시나리오 실행 (시연 영상용)
+```bash
+./build/rcws_vision --source synthetic --detector oracle --scenario cross --preview 8080      # 브라우저로 보기
+./build/rcws_vision --source synthetic --detector oracle --scenario exit --record rec_exit       # 30 fps 프레임 저장
+ffmpeg -framerate 30 -i rec_exit/f_%05d.jpg -pix_fmt yuv420p exit.mp4
+python3 tools/rcws_log.py run.rlog       # 조준 출력 점유율·HOLD 이유, 트랙 상태 전이, 화질 플래그 요약
+```
+시나리오: `sine parallel cross merge pillar longocc exit dark clutter`. 화면에는 트랙 ID·상태·우선순위, 잠금(자홍 이중 박스), 지정 표적(`*`), 나간 방향 화살표, 셋째 줄에 조준 출력과 HOLD 이유·화질 플래그가 나온다.
+
+### 시험 결과 (개발 PC, 합성 장면)
+`./build/rcws_tests` 35개(기존 21 + 시나리오·보드·게이트 14) 모두 통과. STM32 감시기는 `stm32_fw/host_test/test_guard.c`(호스트 C 시험).
+
+시드 10개 반복(`RCWS_SWEEP=10 ./build/rcws_tests`, 장면 배경·검출 잡음·누락·오검출이 매번 다름):
+
+| 시나리오 | 내용 | 표적이 다른 휴대폰으로 넘어간 실행 | 표적 트랙 ID가 바뀐 실행 |
+|---|---|---|---|
+| parallel | 두 휴대폰 나란히 이동 | 0 / 10 | 0 / 10 |
+| cross | 색이 다른 두 휴대폰 교차 | 0 / 10 | 0 / 10 |
+| merge | 같은 모양 두 휴대폰 완전 중첩 후 분리 | 0 / 10 | 0 / 10 (분리 때 AMBIGUOUS → HOLD 1 s) |
+| pillar | 기둥 뒤 짧은 가림 + 다른 휴대폰 | 0 / 10 | 0 / 10 |
+| longocc | 1.5 s 가림 → 색으로 재식별 | 0 / 10 | 0 / 10 |
+| exit | 오른쪽으로 나갔다 1.2 s 뒤 복귀, 다른 휴대폰은 화면에 남음 | 0 / 10 | 0 / 10 |
+| dark | 1 s 소등 | 0 / 10 | 1 / 10 (어두운 동안 놓쳐 새 ID, 표적은 같음) |
+| clutter | 유사 물체 + 오검출 8 %/요청 | 0 / 10 | 0 / 10 |
+
+한계:
+- 같은 색·같은 모양의 휴대폰이 완전히 겹쳤다 갈라지면(merge) 어느 쪽이 원래 표적인지 영상만으로는 보장할 수 없다. 합성 장면에서는 두 휴대폰이 등속으로 지나가서 칼만 예측이 대부분 구별해 내지만, 겹친 채 멈추거나 방향을 바꾸면 틀릴 수 있다. 그래서 분리 직후 AMBIGUOUS로 표시하고 1초 동안 조준 출력을 멈추는 것이 이 기능의 목표다.
+- 채점 방법: 두 휴대폰 중심이 박스 크기보다 가까운 프레임은 어느 쪽을 따라가는지 기하로 판정할 수 없어 집계에서 뺐다.
+- 합성 장면은 실제 카메라의 블러·조명·검출기 특성과 다르다. Pi 5 현장 실행(run 3)으로 다시 확인해야 한다. 특히 COCO 'cell phone' 점수가 낮은 실제 검출기에서 트랙 확정(3회)과 재식별 문턱(색 거리 0.35)을 조정해야 할 수 있다.
