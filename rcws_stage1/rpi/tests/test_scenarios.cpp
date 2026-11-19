@@ -32,6 +32,13 @@ struct ScenarioRun {
   ScenarioStats ss;
   std::vector<uint8_t> qflags;
   double t_first_track = -1;
+  struct LockTrace {
+    int id = -1;
+    int st = -1;          // MotState of the lock track, -1 = not on the board
+    bool exited = false;
+    float exit_dx = 0;
+  };
+  std::vector<LockTrace> lock_trace;     // per frame (diagnostics on failure)
 };
 
 ScenarioRun run_scenario(const std::string& name, Config cfg = Config{}, uint32_t seed = 1) {
@@ -106,10 +113,18 @@ ScenarioRun run_scenario(const std::string& name, Config cfg = Config{}, uint32_
     r.state.push_back(uint8_t(per.state()));
     r.aim.push_back(per.aim());
     r.qflags.push_back(per.quality_flags());
+    ScenarioRun::LockTrace lt;
+    lt.id = per.lock_id();
     if (per.lock_id() >= 0) {
       r.lock_ids.insert(per.lock_id());
-      if (const MotTrack* k = per.board().find(per.lock_id())) r.lock_track_states |= 1u << unsigned(k->st);
+      if (const MotTrack* k = per.board().find(per.lock_id())) {
+        r.lock_track_states |= 1u << unsigned(k->st);
+        lt.st = int(k->st);
+        lt.exited = k->exited;
+        lt.exit_dx = k->exit_dx;
+      }
     }
+    r.lock_trace.push_back(lt);
   }
   r.ambiguous_events = per.board().id_switch_guards();
   r.ss = per.scenario_stats();
@@ -319,6 +334,17 @@ TEST(scenario_exit_no_switch_and_return) {
   }
   CHECK(hint);
   CHECK(!moved_while_gone);
+  if (!hint || moved_while_gone) {   // timeline of the lock while it is gone (platform differences)
+    std::printf("  timeline 3.0-4.8 s (changes only): t  state  aim  hint_dx  lock  lock_st  exited  exit_dx\n");
+    std::string last;
+    for (size_t i = size_t(frame_of(3.0, cfg)); i < size_t(frame_of(4.8, cfg)) && i < r.state.size(); ++i) {
+      const auto& lt = r.lock_trace[i];
+      char b[160];
+      std::snprintf(b, sizeof b, "%s %s %.2f %d %s %d %.2f", to_string(TrackState(r.state[i])), to_string(r.aim[i].mode),
+                    r.aim[i].hint_dx, lt.id, lt.st < 0 ? "gone" : to_string(MotState(lt.st)), int(lt.exited), lt.exit_dx);
+      if (b != last) { std::printf("    %.3f  %s\n", i / double(cfg.cam.fps), b); last = b; }
+    }
+  }
   int back = -1;
   for (size_t i = size_t(frame_of(4.8, cfg)); i < r.state.size(); ++i)
     if (r.state[i] == uint8_t(TrackState::TRACK) && r.lock_obj[i] == 0) { back = int(i); break; }

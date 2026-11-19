@@ -57,9 +57,14 @@ sudo setcap cap_sys_nice+ep build/rcws_vision || warn "setcap 실패: 실시간 
 
 # ------------------------------------------------------------------ 4. tests
 say "4/6 단위 시험"
-./build/rcws_tests 2>&1 | tee "$DEST/tests.txt" | grep --line-buffered -E "^\[ FAIL|CHECK|tests," \
-  || die "시험 실패. $DEST/tests.txt 를 알려 주세요."
-grep -q " 0 failed checks" "$DEST/tests.txt" || die "시험 실패. $DEST/tests.txt 를 알려 주세요."
+./build/rcws_tests 2>&1 | tee "$DEST/tests.txt" | grep --line-buffered -E "^\[ FAIL|CHECK|tests," || true
+if ! grep -q " 0 failed checks" "$DEST/tests.txt"; then
+  if [ "${RCWS_ALLOW_TEST_FAIL:-0}" = 1 ]; then
+    warn "시험 실패를 무시하고 계속합니다 (RCWS_ALLOW_TEST_FAIL=1). 실패 내용: $DEST/tests.txt"
+  else
+    die "시험 실패. $DEST/tests.txt 를 알려 주세요. (실패를 알고 계속하려면 RCWS_ALLOW_TEST_FAIL=1)"
+  fi
+fi
 
 # ------------------------------------------------------------------ 5. UART to the STM32
 say "5/6 STM32 UART 점검 (팀 배선: Pi GPIO14 TXD -> STM32 PC7, GPIO15 RXD <- PC6, GND 공통)"
