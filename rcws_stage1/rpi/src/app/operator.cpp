@@ -54,6 +54,12 @@ void Operator::estop_clear(int64_t now) {
   clear_until_ = now + ns(c_.clear_s);
 }
 
+bool Operator::set_home(int64_t now) {
+  if (!estop_) return false;
+  set_home_until_ = now + ns(c_.set_home_s);
+  return true;
+}
+
 const char* Operator::activity(int64_t now) const {
   if (estop_) return "ESTOP";
   if (mode_ == OpMode::AUTO) return "AUTO";
@@ -68,6 +74,7 @@ LinkAim_t Operator::frame(const AimOut& aim, uint8_t seq, double lead_s, int64_t
   f.mode = LINK_MODE_HOLD;
   if (estop_) {
     f.flags = LINK_F_ESTOP_REQ | LINK_F_OPERATOR_HOLD;
+    if (now < set_home_until_) f.mode = LINK_MODE_SET_HOME;
     return f;
   }
   const uint8_t clr = now < clear_until_ ? LINK_F_ESTOP_CLEAR : 0;
@@ -85,8 +92,8 @@ LinkAim_t Operator::frame(const AimOut& aim, uint8_t seq, double lead_s, int64_t
   }
   if (homing_) {
     const bool at_centre = st && st->valid && st->t_ns >= home_t0_ &&
-                           std::abs(int(st->s.pan_goal) - 2048) <= c_.home_tol_counts &&
-                           std::abs(int(st->s.tilt_goal) - 2048) <= c_.home_tol_counts;
+                           std::abs(int(st->s.pan_goal) - int(LINK_PAN_HOME)) <= c_.home_tol_counts &&
+                           std::abs(int(st->s.tilt_goal) - int(LINK_TILT_HOME)) <= c_.home_tol_counts;
     if (at_centre || now - home_t0_ > ns(c_.home_timeout_s)) {
       homing_ = false;
     } else {

@@ -79,15 +79,15 @@ TEST(web_operator_modes) {
   CHECK(f.mode == LINK_MODE_JOG && f.rate_pan == int16_t(std::lround(20.0 / 360 * 4096)) && f.rate_tilt < 0);
   f = op.frame(a, 4, 0, t + 400 * kMs, nullptr);
   CHECK(f.mode == LINK_MODE_HOLD && (f.flags & LINK_F_OPERATOR_HOLD));
-  // home until the STM32 reports both goals at the centre
+  // home until the STM32 reports both goals at the home position
   op.home(t);
   LinkStatusView st;
   st.valid = true;
   st.t_ns = t + 10 * kMs;
-  st.s.pan_goal = 2300;
-  st.s.tilt_goal = 2048;
+  st.s.pan_goal = LINK_PAN_HOME + 250;
+  st.s.tilt_goal = LINK_TILT_HOME;
   CHECK(op.frame(a, 5, 0, t + 20 * kMs, &st).mode == LINK_MODE_HOME);
-  st.s.pan_goal = 2050;
+  st.s.pan_goal = LINK_PAN_HOME + 2;
   CHECK(op.frame(a, 6, 0, t + 30 * kMs, &st).mode == LINK_MODE_HOLD && !op.homing());
   // software ESTOP: every frame asks for it, mode changes refused until cleared
   op.estop(t);
@@ -96,10 +96,16 @@ TEST(web_operator_modes) {
   CHECK(!op.set_mode(OpMode::AUTO, t));
   op.jog(1, 0, t);
   CHECK(op.frame(a, 8, 0, t, nullptr).mode == LINK_MODE_HOLD);
+  CHECK(op.frame(a, 8, 0, t, nullptr).mode == LINK_MODE_HOLD);
+  CHECK(op.set_home(t));                                                       // teach front while limp
+  f = op.frame(a, 8, 0, t + 100 * kMs, nullptr);
+  CHECK(f.mode == LINK_MODE_SET_HOME && (f.flags & LINK_F_ESTOP_REQ));
+  CHECK(op.frame(a, 8, 0, t + 600 * kMs, nullptr).mode == LINK_MODE_HOLD);   // only for 0.5 s
   op.estop_clear(t);
   f = op.frame(a, 9, 0, t + 100 * kMs, nullptr);
   CHECK(!(f.flags & LINK_F_ESTOP_REQ) && (f.flags & LINK_F_ESTOP_CLEAR) && op.mode() == OpMode::MANUAL);
   CHECK(!(op.frame(a, 10, 0, t + 600 * kMs, nullptr).flags & LINK_F_ESTOP_CLEAR));
+  CHECK(!op.set_home(t));                                                      // refused outside E-STOP
   CHECK(op.set_mode(OpMode::AUTO, t));
   CHECK(op.frame(a, 11, 0, t + 700 * kMs, nullptr).mode == LINK_MODE_FOLLOW);
 }

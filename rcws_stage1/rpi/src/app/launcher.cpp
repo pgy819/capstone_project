@@ -33,34 +33,34 @@ volatile sig_atomic_t g_quit = 0;
 void on_term(int) { g_quit = 1; }
 
 const char* kPage = R"HTML(<!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RCWS 실행기</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RCWS Launcher</title>
 <style>
 :root{--bg:#0f1216;--panel:#171b21;--line:#262c35;--text:#e6e9ee;--muted:#8b95a3;--ok:#3fb96b;--bad:#e5484d;--accent:#4c8dff}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"DejaVu Sans",sans-serif}
 main{max-width:720px;margin:0 auto;padding:16px}h1{font-size:18px;margin:4px 0 14px}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 button{font:inherit;color:#fff;border:0;border-radius:8px;padding:12px 20px;font-weight:650;cursor:pointer}
 #start{background:var(--ok)}#stop{background:var(--bad)}button:disabled{opacity:.4;cursor:default}
 #state{font-size:17px;font-weight:650}.muted{color:var(--muted)}a{color:var(--accent);font-weight:600}
-pre{background:#0c0f13;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12.5px;max-height:340px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:0}
+pre{background:#0c0f13;border:1px solid var(--line);border-radius:8px;padding:8px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,"DejaVu Sans Mono",monospace;max-height:340px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:0}
 </style></head><body><main>
-<h1>RCWS Stage 1 실행기</h1>
+<h1>RCWS Stage 1 Launcher</h1>
 <section><div class="row" style="justify-content:space-between"><span id="state">-</span><span class="muted" id="up"></span></div>
-<div class="row" style="margin-top:12px"><button id="start">추적 시작</button><button id="stop">종료</button>
-<a id="open" href="#" style="display:none">조작 화면 열기 →</a></div></section>
-<section><div class="muted" style="margin-bottom:6px">프로그램 출력 (마지막 줄)</div><pre id="out"></pre></section>
-<p class="muted">종료하면 로그와 클립이 저장됩니다. 서보는 STM32가 0.5초 뒤 정지 유지, 10초 뒤 토크를 끕니다.</p>
+<div class="row" style="margin-top:12px"><button id="start">Start Tracking</button><button id="stop">Stop</button>
+<a id="open" href="#" style="display:none">Open Control UI -&gt;</a></div></section>
+<section><div class="muted" style="margin-bottom:6px">Program Output (tail)</div><pre id="out"></pre></section>
+<p class="muted">Stopping saves logs and clips. STM32 holds servos after 0.5 s and turns torque off after 10 s.</p>
 </main><script>
 const $=(i)=>document.getElementById(i);$("open").href=`${location.protocol}//${location.hostname}:8080/`;
 async function poll(){try{const r=await fetch("/state");const s=await r.json();
-$("state").textContent=s.running?"실행 중":(s.stopping?"종료 중…":"정지됨"+(s.exit!==null?` (마지막 종료 코드 ${s.exit})`:""));
-$("state").style.color=s.running?"var(--ok)":"";$("up").textContent=s.running?`실행 ${Math.floor(s.uptime)}초`:"";
+$("state").textContent=s.running?"Running":(s.stopping?"Stopping...":"Stopped"+(s.exit!==null?` (exit ${s.exit})`:""));
+$("state").style.color=s.running?"var(--ok)":"";$("up").textContent=s.running?`Uptime ${Math.floor(s.uptime)}s`:"";
 $("start").disabled=s.running||s.stopping;$("stop").disabled=!s.running||s.stopping;$("open").style.display=s.running?"":"none";
-const o=$("out"),b=o.scrollTop+o.clientHeight>=o.scrollHeight-4;o.textContent=s.tail;if(b)o.scrollTop=o.scrollHeight;}catch(e){$("state").textContent="실행기 응답 없음";}}
+const o=$("out"),b=o.scrollTop+o.clientHeight>=o.scrollHeight-4;o.textContent=s.tail;if(b)o.scrollTop=o.scrollHeight;}catch(e){$("state").textContent="Launcher offline";}}
 $("start").onclick=()=>fetch("/start",{method:"POST"}).then(poll);
-$("stop").onclick=()=>{if(confirm("추적 프로그램을 종료할까요?"))fetch("/stop",{method:"POST"}).then(poll)};
+$("stop").onclick=()=>{if(confirm("Stop the tracking program?"))fetch("/stop",{method:"POST"}).then(poll)};
 poll();setInterval(poll,1000);
 </script></body></html>)HTML";
 
@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
       std::snprintf(j, sizeof j, "{\"running\":%s,\"stopping\":%s,\"uptime\":%.1f,\"exit\":%s,\"tail\":\"", run ? "true" : "false",
                     ch.stopping ? "true" : "false", run ? (rcws::now_ns() - ch.t_start) * 1e-9 : 0.0,
                     ch.last_exit == -999 ? "null" : std::to_string(ch.last_exit).c_str());
-      reply(fd, "200 OK", "application/json", std::string(j) + rcws::web::json_escape(tail(logp, 40)) + "\"}");
+      reply(fd, "200 OK", "application/json; charset=utf-8", std::string(j) + rcws::web::json_escape(tail(logp, 40)) + "\"}");
     } else if (path == "/start" && post) {
       if (ch.pid <= 0) {
         const pid_t pid = fork();

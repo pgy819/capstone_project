@@ -25,6 +25,7 @@ struct OperatorCfg {
   double jog_hold_s = 0.30;   // dead-man: motion stops this long after the last jog message
   double home_timeout_s = 15.0;
   double clear_s = 0.5;       // ESTOP_CLEAR is repeated this long (a frame may be lost)
+  double set_home_s = 0.5;    // SET_HOME is repeated this long
   int home_tol_counts = 4;
 };
 
@@ -37,6 +38,9 @@ class Operator {
   void home(int64_t now);                          // switches to MANUAL
   void estop(int64_t now);
   void estop_clear(int64_t now);
+  // Teach the front pose (only during E-STOP, servos limp, gimbal placed at the front by hand):
+  // SET_HOME frames for set_home_s; the STM32 writes the servo mid-position calibration.
+  bool set_home(int64_t now);
 
   // Frame for this camera frame. `st` = latest STM32 status (nullptr if none).
   LinkAim_t frame(const AimOut& aim, uint8_t seq, double lead_s, int64_t now, const LinkStatusView* st);
@@ -52,6 +56,7 @@ class Operator {
   OpMode mode_ = OpMode::AUTO;
   bool estop_ = false;
   int64_t clear_until_ = 0;
+  int64_t set_home_until_ = 0;
   int64_t jog_until_ = 0;
   double jog_pan_ = 0, jog_tilt_ = 0;
   bool homing_ = false;

@@ -100,7 +100,7 @@ CFG=\${1:-config/rcws.ini}
 NAME=live_\$(date +%m%d_%H%M%S)
 echo "[rcws] code $COMMIT, config \$CFG, log $DEST/logs/\$NAME.rlog"
 thr=\$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)
-echo "[rcws] throttled=\$thr \$([ "\$thr" = 0x0 ] && echo OK || echo '!! 저전압/스로틀 이력')"
+echo "[rcws] throttled=\$thr \$([ "\$thr" = 0x0 ] && echo OK || echo '!! UNDERVOLTAGE/THROTTLED')"
 RC=0
 trap ':' INT
 ./build/rcws_vision --config "\$CFG" --source camera --detector hailo $UART_ARGS \\

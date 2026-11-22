@@ -18,7 +18,10 @@
  *    3  seq        u8   frame counter (wraps); echoed in the uplink
  *    4  mode       u8   0 HOLD / 1 FOLLOW / 2 PREDICT   (perception aim gate)
  *                       3 JOG  (operator: rate_* is the commanded gimbal rate, err_* ignored)
- *                       4 HOME (operator: slow return to the centre position 2048 / 2048)
+ *                       4 HOME (operator: slow return to LINK_PAN_HOME / LINK_TILT_HOME)
+ *                       5 SET_HOME (operator, only while the servos are limp in a software ESTOP:
+ *                         store the current pose as each servo's centre 2048 = Feetech mid-position
+ *                         calibration, write 128 to address 40; kept by the servo across power-off)
  *    5  flags      u8   bit0 OPERATOR_HOLD (web "manual": brake and hold, overrides FOLLOW/PREDICT)
  *                       bit1 ESTOP_REQ   (software emergency stop: torque off, latched)
  *                       bit2 ESTOP_CLEAR (release a software ESTOP; B1 ESTOP still needs RESET)
@@ -34,7 +37,8 @@
  *    4  guard      u8   GuardState_t: 0 RUN 1 HOLD 2 TORQUE_OFF 3 RAMP 4 ESTOP
  *    5  flags      u8   bit0 ESTOP_B1, bit1 COMM_LOST (>0.5 s without AIM), bit2 ESTOP_SW,
  *                       bit3 OPERATOR_HOLD active, bit4 PAN servo answered the boot PING,
- *                       bit5 TILT servo answered, bit6 boot PING done
+ *                       bit5 TILT servo answered, bit6 boot PING done,
+ *                       bit7 SET_HOME written since boot
  *    6  pan_goal   u16  current goal [servo count]
  *    8  tilt_goal  u16
  *   10  rx_ok      u16  valid AIM frames (wraps)
@@ -63,13 +67,20 @@ extern "C" {
 
 #define LINK_ERR_SCALE        16      /* err_* LSB = 1/16 servo count */
 #define LINK_COUNTS_PER_REV   4096.0
+#define LINK_SERVO_CENTER     2048u
+/* Home = the gimbal facing front. The front pose is taught once (web "Set home", mode SET_HOME):
+   each servo then reports 2048 there, so the travel limits are symmetric around it and never
+   cross the 0 / 4095 seam of the single-turn position range. */
+#define LINK_PAN_HOME         LINK_SERVO_CENTER
+#define LINK_TILT_HOME        LINK_SERVO_CENTER
 
 #define LINK_MODE_HOLD        0u
 #define LINK_MODE_FOLLOW      1u
 #define LINK_MODE_PREDICT     2u
 #define LINK_MODE_JOG         3u
 #define LINK_MODE_HOME        4u
-#define LINK_MODE_MAX         LINK_MODE_HOME
+#define LINK_MODE_SET_HOME    5u
+#define LINK_MODE_MAX         LINK_MODE_SET_HOME
 
 /* downlink flags */
 #define LINK_F_OPERATOR_HOLD  0x01u
@@ -84,6 +95,7 @@ extern "C" {
 #define LINK_S_PAN_PING_OK    0x10u
 #define LINK_S_TILT_PING_OK   0x20u
 #define LINK_S_PING_DONE      0x40u
+#define LINK_S_HOME_SET       0x80u
 
 typedef struct {
     uint8_t seq;

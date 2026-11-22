@@ -122,7 +122,7 @@ const char* guard_name(uint8_t g) {
   static const char* k[] = {"RUN", "HOLD", "TORQUE_OFF", "RAMP", "ESTOP"};
   return g < 5 ? k[g] : "?";
 }
-double goal_deg(uint16_t g) { return (int(g) - 2048) * 360.0 / 4096.0; }
+double goal_deg(uint16_t g, uint16_t home) { return (int(g) - int(home)) * 360.0 / 4096.0; }
 
 std::string event_json(const char* level, const std::string& text) {
   char t[32];
@@ -277,19 +277,23 @@ int main(int argc, char** argv) {
       const int id = int(web::json_num(cmd, "id").value_or(-1));
       std::string say;
       if (k == "stop_track" || k == "keep") preview.mark_answered(id);
-      if (k == "stop_track") { per.op_stop_target(id); say = "#" + std::to_string(id) + " 추적 중지 (다시 잡지 않음)"; }
-      else if (k == "keep") { say = "#" + std::to_string(id) + " 계속 추적"; }
-      else if (k == "select") { per.op_select(id); op.set_mode(OpMode::AUTO, tc); say = "#" + std::to_string(id) + " 대상으로 전환"; }
-      else if (k == "clear_stops") { per.op_clear_exclusions(); say = "추적 중지 목록 해제 (다시 잡을 수 있음)"; }
+      if (k == "stop_track") { per.op_stop_target(id); say = "Stopped tracking #" + std::to_string(id) + " (excluded)"; }
+      else if (k == "keep") { say = "Keep tracking #" + std::to_string(id); }
+      else if (k == "select") { per.op_select(id); op.set_mode(OpMode::AUTO, tc); say = "Switched to target #" + std::to_string(id); }
+      else if (k == "clear_stops") { per.op_clear_exclusions(); say = "Cleared excluded targets"; }
       else if (k == "mode") {
         const bool aut = web::json_str(cmd, "value").value_or("") == "auto";
-        say = op.set_mode(aut ? OpMode::AUTO : OpMode::MANUAL, tc) ? (aut ? "자동 추적 모드" : "수동 모드 (정지 유지)")
-                                                                   : "모드 변경 거부: 먼저 비상정지를 해제하세요";
+        say = op.set_mode(aut ? OpMode::AUTO : OpMode::MANUAL, tc) ? (aut ? "Mode: AUTO" : "Mode: MANUAL (hold)")
+                                                                   : "Mode change rejected: clear E-STOP first";
       } else if (k == "jog") {
         op.jog(web::json_num(cmd, "pan").value_or(0), web::json_num(cmd, "tilt").value_or(0), tc);
-      } else if (k == "home") { op.home(tc); say = "홈 위치(정면)로 복귀"; }
-      else if (k == "estop") { op.estop(tc); say = "비상정지(소프트웨어): 서보 토크 끔"; }
-      else if (k == "estop_clear") { op.estop_clear(tc); say = "비상정지 해제: 수동 모드, 서보는 천천히 다시 힘을 받음"; }
+      } else if (k == "home") { op.home(tc); say = "Returning to home position"; }
+      else if (k == "set_home") {
+        say = op.set_home(tc) ? "Set home: current pose stored as front (servo centre 2048)"
+                              : "Set home rejected: press E-STOP first and place the gimbal at the front by hand";
+      }
+      else if (k == "estop") { op.estop(tc); say = "E-STOP (software): servo torque off"; }
+      else if (k == "estop_clear") { op.estop_clear(tc); say = "E-STOP cleared: Manual mode, servos ramping back"; }
       else if (k == "class") {
         const std::string nm = web::json_str(cmd, "name").value_or("");
         int coco = -1;
@@ -298,12 +302,12 @@ int main(int argc, char** argv) {
           target_coco = coco;
           per.op_retarget();
           last_capture_lock = -1;
-          say = std::string("검출 클래스 변경: ") + nm + (coco == 67 ? "" : " (휴대폰 기준으로 조정된 추적기라 성능이 낮을 수 있음)");
+          say = std::string("Detect class: ") + nm + (coco == 67 ? "" : " (tracker is tuned for phone)");
         } else {
-          say = "이 검출기는 클래스 변경을 지원하지 않음 (합성/재생 시험)";
+          say = "This detector does not support changing class";
         }
-      } else if (k == "selftest") { check.t_start = tc; say = "연결 점검 시작 (3초)"; }
-      else if (k == "quit") { say = "웹에서 종료 요청"; g_stop = true; }
+      } else if (k == "selftest") { check.t_start = tc; say = "Connection check started (3 s)"; }
+      else if (k == "quit") { say = "Stop requested from web UI"; g_stop = true; }
       if (!say.empty()) preview.push_event(event_json("info", say));
     }
     if (check.t_start && check.frames0 == 0) { check.frames0 = n + 1; check.batches0 = per.stats().det_batches; }
@@ -357,11 +361,11 @@ int main(int argc, char** argv) {
         const LinkStatusView ls = link.status();
         const bool fresh = ls.valid && tw - ls.t_ns < 300000000LL;
         if (fresh != prev_link_fresh) {
-          preview.push_event(event_json(fresh ? "info" : "warn", fresh ? "STM32 링크 연결됨" : "STM32 응답 없음 (0.3초 이상)"));
+          preview.push_event(event_json(fresh ? "info" : "warn", fresh ? "STM32 link connected" : "STM32 no reply (>0.3 s)"));
           prev_link_fresh = fresh;
         }
         if (fresh && int(ls.s.guard) != prev_guard) {
-          preview.push_event(event_json(ls.s.guard == 4 ? "warn" : "info", std::string("STM32 상태: ") + guard_name(ls.s.guard)));
+          preview.push_event(event_json(ls.s.guard == 4 ? "warn" : "info", std::string("STM32 state: ") + guard_name(ls.s.guard)));
           prev_guard = ls.s.guard;
         }
       }
@@ -485,7 +489,7 @@ int main(int argc, char** argv) {
                           "\"link\":{\"open\":true,\"fresh\":%s,\"guard\":\"%s\",\"flags\":%u,\"pan_deg\":%.2f,\"tilt_deg\":%.2f,"
                           "\"pan_goal\":%u,\"tilt_goal\":%u,\"rx_ok\":%u,\"rx_err\":%u,\"sent\":%llu,\"werr\":%llu,\"crc_err\":%u}}",
                           fresh ? "true" : "false", ls.valid ? guard_name(ls.s.guard) : "-", unsigned(ls.s.flags),
-                          goal_deg(ls.s.pan_goal), goal_deg(ls.s.tilt_goal), ls.s.pan_goal, ls.s.tilt_goal, ls.s.rx_ok, ls.s.rx_err,
+                          goal_deg(ls.s.pan_goal, LINK_PAN_HOME), goal_deg(ls.s.tilt_goal, LINK_TILT_HOME), ls.s.pan_goal, ls.s.tilt_goal, ls.s.rx_ok, ls.s.rx_err,
                           (unsigned long long)link.sent(), (unsigned long long)link.write_errors(), ls.crc_err);
             j += b;
           } else {

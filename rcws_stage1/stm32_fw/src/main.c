@@ -51,13 +51,17 @@
 #define D_LPF_NEW       0.4f
 #define D_DECAY_SUBTICK 0.85f
 
-#define SERVO_CENTER    2048.0f
-/* v4 (K8): goal clamp = EEPROM soft limits of the gimbal (Pan +-125 deg = 626 / 3470). With the old
-   512 / 3584 the servo stopped at its EEPROM limit while the goal kept integrating beyond it. */
-#define PAN_MIN         626.0f
-#define PAN_MAX         3470.0f
-#define TILT_MIN        1536.0f
-#define TILT_MAX        2560.0f
+#define SERVO_CENTER       ((float)LINK_SERVO_CENTER)
+#define PAN_HOME           ((float)LINK_PAN_HOME)    /* 2048 = front (taught with SET_HOME) */
+#define TILT_HOME          ((float)LINK_TILT_HOME)
+#define PAN_TRAVEL_COUNTS  1422.0f                   /* +-125 deg around home (cable limit +-130 deg) */
+#define TILT_TRAVEL_COUNTS  512.0f                   /* +-45 deg around home */
+/* Goal clamp around home, bounded to the STS3215 single-turn range [0, 4095]:
+   Pan [626, 3470], Tilt [1536, 2560]. */
+#define PAN_MIN         ((PAN_HOME  > PAN_TRAVEL_COUNTS)  ? (PAN_HOME  - PAN_TRAVEL_COUNTS)  : 0.0f)
+#define PAN_MAX         ((PAN_HOME  + PAN_TRAVEL_COUNTS  < (float)STS_POS_MAX) ? (PAN_HOME  + PAN_TRAVEL_COUNTS)  : (float)STS_POS_MAX)
+#define TILT_MIN        ((TILT_HOME > TILT_TRAVEL_COUNTS) ? (TILT_HOME - TILT_TRAVEL_COUNTS) : 0.0f)
+#define TILT_MAX        ((TILT_HOME + TILT_TRAVEL_COUNTS < (float)STS_POS_MAX) ? (TILT_HOME + TILT_TRAVEL_COUNTS) : (float)STS_POS_MAX)
 
 /* v4 motion shaping and safety (scenarios I, J; servo_guard.h) */
 #define DEADBAND_PX         3.0f      /* no correction for |pixel error| <= 3 px */
@@ -67,7 +71,7 @@
 #define COMM_TORQUE_OFF_LIMIT 5000u   /* 10 s without packets: torque off (Pi gone) */
 #define RAMP_TICKS          500u      /* 1 s of slow motion after the torque comes back */
 #define STS_RAMP_SPEED      300u      /* servo speed during RAMP [steps/s] ~ 26 deg/s */
-#define BOOT_SLOW_TICKS     1500u     /* first 3 s after boot: slow move to the centre goal */
+#define BOOT_SLOW_TICKS     2500u     /* first 5 s after boot: slow move to home (covers 125 deg at 300 steps/s) */
 #define STATUS_PERIOD_MS    20u       /* uplink STATUS 50 Hz */
 #define JOG_MAX_DPS         60.0f     /* operator jog (web) rate limit */
 #define HOME_GAIN           0.01f     /* HOME: goal velocity = gain * (centre - goal) per tick */
@@ -93,8 +97,8 @@ TIM_HandleTypeDef  htim2;
 /* ------------------------------------------------------------------------- */
 /* Servo-loop state (owned by TIM2_IRQHandler)                               */
 /* ------------------------------------------------------------------------- */
-static AxisState_t  ax_pan  = { SERVO_CENTER, 0.0f };
-static AxisState_t  ax_tilt = { SERVO_CENTER, 0.0f };
+static AxisState_t  ax_pan  = { PAN_HOME, 0.0f };
+static AxisState_t  ax_tilt = { TILT_HOME, 0.0f };
 static AxisLimits_t lim_pan, lim_tilt;
 static Guard_t      g_guard;
 static const GuardCfg_t k_guard_cfg = { COMM_WATCHDOG_LIMIT, COMM_TORQUE_OFF_LIMIT, RAMP_TICKS };
@@ -110,9 +114,11 @@ static uint32_t boot_ticks = 0u;
 static volatile GuardState_t g_servo_state = GUARD_HOLD;    /* read by LED / uplink */
 static volatile uint8_t      g_comm_lost = 1u;              /* HOLD because of a comm gap */
 static volatile uint8_t      g_operator_hold = 0u;
-static volatile uint16_t     g_pan_goal_u16 = 2048u;        /* published by TIM2 for the uplink */
-static volatile uint16_t     g_tilt_goal_u16 = 2048u;
+static volatile uint16_t     g_pan_goal_u16 = LINK_PAN_HOME;        /* published by TIM2 for the uplink */
+static volatile uint16_t     g_tilt_goal_u16 = LINK_TILT_HOME;
 static uint8_t               g_ping_flags = 0u;             /* LINK_S_*_PING_OK | LINK_S_PING_DONE */
+static volatile uint8_t      g_home_set = 0u;               /* LINK_S_HOME_SET: SET_HOME written */
+static uint8_t               calib_step = 0u;               /* TIM2: 0 idle, 1 pan, 2 tilt, 3 done */
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -131,6 +137,8 @@ static void Servo_ControlStep(void);
 static void Led_Task(void);
 static void Estop_Task(void);
 static void Status_Task(void);
+static size_t put_str(char *b, size_t n, const char *s);
+static size_t put_u16(char *b, size_t n, uint16_t v);
 #endif
 void Error_Handler(void);
 
@@ -178,10 +186,29 @@ int main(void)
         const uint8_t ok = STS_BootPing(&p0, &t0);
         g_ping_flags = (uint8_t)(LINK_S_PING_DONE | ((ok & 1u) ? LINK_S_PAN_PING_OK : 0u) |
                                  ((ok & 2u) ? LINK_S_TILT_PING_OK : 0u));
-        static const char m_ok[]  = "servo self-check: Pan(ID2) OK, Tilt(ID1) OK\r\n";
-        static const char m_bad[] = "servo self-check: a servo did not answer (see web page)\r\n";
-        const char *m = (ok == 3u) ? m_ok : m_bad;
-        (void)HAL_UART_Transmit(&huart2, (const uint8_t *)m, (uint16_t)strlen(m), 50u);
+        char m[128];
+        size_t n = 0u;
+        n = put_str(m, n, "servo self-check: Pan(ID2) ");
+        n = (ok & 1u) ? put_u16(m, put_str(m, n, "pos "), p0) : put_str(m, n, "NO ANSWER");
+        n = put_str(m, n, ", Tilt(ID1) ");
+        n = (ok & 2u) ? put_u16(m, put_str(m, n, "pos "), t0) : put_str(m, n, "NO ANSWER");
+        n = put_str(m, n, "  (front = 2048 after Set home)\r\n");
+        (void)HAL_UART_Transmit(&huart2, (const uint8_t *)m, (uint16_t)n, 50u);
+
+        /* Start where the servos are: no motion at power-up (the old 2048 boot move could swing a
+           not-yet-taught tilt into the frame). A servo outside its travel window means the front
+           pose is not taught: stay limp (software ESTOP) until "Set home" or an explicit release. */
+        if (ok == 3u) {
+            ax_pan.goal  = (float)p0;
+            ax_tilt.goal = (float)t0;
+            g_pan_goal_u16  = p0;
+            g_tilt_goal_u16 = t0;
+            if ((float)p0 < PAN_MIN || (float)p0 > PAN_MAX || (float)t0 < TILT_MIN || (float)t0 > TILT_MAX) {
+                g_estop_sw = 1u;
+                static const char w[] = "servo outside its travel window: torque off. Teach the front pose (web: E-STOP -> Set home)\r\n";
+                (void)HAL_UART_Transmit(&huart2, (const uint8_t *)w, (uint16_t)(sizeof(w) - 1u), 50u);
+            }
+        }
     }
 
     lim_pan  = Guard_Limits(PAN_MIN, PAN_MAX, V_MAX_DPS, A_MAX_DPS2, A_BRAKE_DPS2);
@@ -267,6 +294,28 @@ static void Servo_ControlStep(void)
         /* limp: the goal is not moved; repeat the torque-off frame (a busy bus skips one) */
         ax_pan.v = 0.0f;
         ax_tilt.v = 0.0f;
+        /* Web "Set home": only in a software ESTOP (servos limp, placed at the front by hand).
+           One WRITE 128 -> address 40 per servo (Feetech mid-position calibration): the servo
+           stores the offset itself and reports 2048 here from now on, also after power-off. */
+        if (st == GUARD_ESTOP && g_estop_sw && !g_estop && fresh && mode == LINK_MODE_SET_HOME) {
+            if (calib_step == 0u) {
+                calib_step = 1u;
+            }
+            if (calib_step == 1u && STS_WriteByteDMA(STS_PAN_ID, STS_ADDR_TORQUE_ENABLE, STS_TORQUE_CALIB_MID)) {
+                calib_step = 2u;
+            } else if (calib_step == 2u && STS_WriteByteDMA(STS_TILT_ID, STS_ADDR_TORQUE_ENABLE, STS_TORQUE_CALIB_MID)) {
+                calib_step = 3u;
+                ax_pan.goal  = SERVO_CENTER;   /* the servos are now at 2048: torque comes back without a jump */
+                ax_tilt.goal = SERVO_CENTER;
+                g_pan_goal_u16  = LINK_SERVO_CENTER;
+                g_tilt_goal_u16 = LINK_SERVO_CENTER;
+                g_home_set = 1u;
+            }
+            return;
+        }
+        if (mode != LINK_MODE_SET_HOME) {
+            calib_step = 0u;                   /* a later request may teach the pose again */
+        }
         if ((g_guard.ticks_in_state % 25u) == 0u) {
             STS_SyncWrite_Torque(0u);
         }
@@ -291,8 +340,8 @@ static void Servo_ControlStep(void)
             v_tilt = v_tilt > jmax ? jmax : (v_tilt < -jmax ? -jmax : v_tilt);
         } else {
             const float hmax = HOME_MAX_DPS * GUARD_STEPS_PER_DEG * GUARD_TICK_S;
-            v_pan  = HOME_GAIN * (SERVO_CENTER - ax_pan.goal);
-            v_tilt = HOME_GAIN * (SERVO_CENTER - ax_tilt.goal);
+            v_pan  = HOME_GAIN * (PAN_HOME - ax_pan.goal);
+            v_tilt = HOME_GAIN * (TILT_HOME - ax_tilt.goal);
             v_pan  = v_pan  > hmax ? hmax : (v_pan  < -hmax ? -hmax : v_pan);
             v_tilt = v_tilt > hmax ? hmax : (v_tilt < -hmax ? -hmax : v_tilt);
         }
@@ -332,7 +381,7 @@ static void Servo_ControlStep(void)
     g_tilt_goal_u16 = (uint16_t)(tilt_goal + 0.5f);
 
     /* 6. 22-byte SYNC WRITE via DMA (non-blocking). Slow servo speed while ramping back and right
-          after boot (the first goal is the centre, wherever the gimbal was left). */
+          after boot (if the boot read failed, the first goal is home wherever the gimbal was left). */
     const uint16_t speed = (st == GUARD_RAMP || boot_ticks < BOOT_SLOW_TICKS) ? STS_RAMP_SPEED : STS_DEFAULT_SPEED;
     STS_SyncWrite_PosSpeed((uint16_t)(pan_goal + 0.5f), speed, (uint16_t)(tilt_goal + 0.5f), speed);
 }
@@ -365,6 +414,22 @@ static void Estop_Task(void)
     }
 }
 
+/* tiny formatting helpers for the boot report (no printf in the image) */
+static size_t put_str(char *b, size_t n, const char *s)
+{
+    while (*s && n < 120u) { b[n++] = *s++; }
+    return n;
+}
+
+static size_t put_u16(char *b, size_t n, uint16_t v)
+{
+    char t[6];
+    int k = 0;
+    do { t[k++] = (char)('0' + (v % 10u)); v = (uint16_t)(v / 10u); } while (v && k < 5);
+    while (k > 0 && n < 120u) { b[n++] = t[--k]; }
+    return n;
+}
+
 /* ========================================================================= */
 /* Uplink STATUS to the Pi, 50 Hz (thread mode, DMA, never blocks)            */
 /* ========================================================================= */
@@ -381,7 +446,7 @@ static void Status_Task(void)
     s.guard     = (uint8_t)g_servo_state;
     s.flags     = (uint8_t)((g_estop ? LINK_S_ESTOP_B1 : 0u) | (g_comm_lost ? LINK_S_COMM_LOST : 0u) |
                             (g_estop_sw ? LINK_S_ESTOP_SW : 0u) | (g_operator_hold ? LINK_S_OPERATOR_HOLD : 0u) |
-                            g_ping_flags);
+                            g_ping_flags | (g_home_set ? LINK_S_HOME_SET : 0u));
     s.pan_goal  = g_pan_goal_u16;
     s.tilt_goal = g_tilt_goal_u16;
     s.rx_ok     = (uint16_t)g_proto_ok_count;

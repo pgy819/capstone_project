@@ -154,6 +154,20 @@ void STS_SyncWrite_Torque(uint8_t enable)
     }
 }
 
+uint8_t STS_WriteByteDMA(uint8_t id, uint8_t addr, uint8_t value)
+{
+    if (STS_HUART.gState != HAL_UART_STATE_READY) {
+        return 0u;
+    }
+    (void)STS_BuildWriteByte(tx_buf, id, addr, value);
+    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
+    if (HAL_UART_Transmit_DMA(&STS_HUART, tx_buf, (uint16_t)STS_WRITE_BYTE_LEN) != HAL_OK) {
+        HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
+        return 0u;
+    }
+    return 1u;
+}
+
 static HAL_StatusTypeDef sts_write_byte_blocking(uint8_t id, uint8_t addr, uint8_t value)
 {
     uint8_t pkt[STS_WRITE_BYTE_LEN];

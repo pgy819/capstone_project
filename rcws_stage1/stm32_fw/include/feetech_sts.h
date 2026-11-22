@@ -35,6 +35,7 @@ extern "C" {
 #define STS_ADDR_TORQUE_ENABLE  0x28u   /* 40: 0 = limp, 1 = holding */
 #define STS_ADDR_PRESENT_POS    0x38u   /* 56: present position (2 bytes) */
 #define STS_ADDR_MODE           0x21u   /* 33: 0 = position, 1 = wheel (team firmware used 1) */
+#define STS_TORQUE_CALIB_MID    128u    /* written to address 40: current position becomes 2048 */
 
 /* Bus layout */
 #define STS_PAN_ID              2u      /* team assignment: ID 2 = Pan (left-right) */
@@ -83,6 +84,9 @@ void STS_SyncWrite_PosSpeed(uint16_t pan_pos, uint16_t pan_speed,
 
 /** Non-blocking DMA SYNC WRITE of torque enable for both servos (ISR-safe, skipped when busy). */
 void STS_SyncWrite_Torque(uint8_t enable);
+
+/** Non-blocking single-byte WRITE via DMA (TIM2 context). Returns 1 if sent, 0 if the bus was busy. */
+uint8_t STS_WriteByteDMA(uint8_t id, uint8_t addr, uint8_t value);
 
 /**
  * Blocking one-time ID commissioning (thread mode only, before TIM2 starts).
