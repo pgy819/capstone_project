@@ -141,8 +141,14 @@ int16_t SysId_Profile(uint8_t prof, uint32_t k, uint8_t *done)
 extern UART_HandleTypeDef huart2;
 
 #define CENTER          2048
-#define PAN_LIM         1536      /* +-135 deg around centre */
-#define TILT_LIM        512       /* +-45 deg, same window as the tracking firmware */
+#define PAN_LO          (CENTER - (int16_t)STS_PAN_TRAVEL)     /* 626  : +-125 deg, same window as tracking */
+#define PAN_HI          (CENTER + (int16_t)STS_PAN_TRAVEL)     /* 3470 */
+#define TILT_LO         (CENTER - (int16_t)STS_TILT_TRAVEL)    /* 1536 : +-45 deg */
+#define TILT_HI         (CENTER + (int16_t)STS_TILT_TRAVEL)    /* 2560 */
+#define MOVE_SPEED      300u      /* steps/s for the move to centre (~26 deg/s, as the tracking RAMP) */
+#define LOAD_ABORT      800       /* |load| > 80 % ...                                         */
+#define LOAD_ABORT_TICKS 50u      /* ... for 0.1 s of fresh samples -> stall: stop the profile  */
+#define B1_DEBOUNCE_MS  20u
 #define RING_N          128u      /* records; power of two */
 
 typedef struct {
@@ -156,6 +162,11 @@ static volatile uint8_t  s_prof = SYSID_PROF_IDLE;
 static volatile uint8_t  s_start_req = SYSID_PROF_IDLE;
 static volatile uint8_t  s_stop_req = 0u;
 static volatile uint8_t  s_max_speed = 0u;
+static volatile uint8_t  s_armed = 0u;      /* both servos answered and sit inside the travel window */
+static volatile uint8_t  s_estop = 0u;      /* B1 latch (thread -> ISR), cleared only by RESET */
+static volatile uint8_t  s_abort_note = 0u; /* ISR -> thread: print why the profile was stopped */
+static uint8_t           s_torque_off_sent = 0u;
+static uint32_t          s_load_cnt = 0u;
 static uint32_t          s_k = 0u;
 static uint16_t          s_seq = 0u;
 static uint8_t           s_sticky_flags = 0u;
@@ -188,33 +199,89 @@ static void vcp_text(const char *s)
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)s, (uint16_t)strlen(s), 20u);
 }
 
-static HAL_StatusTypeDef write_byte_blocking(uint8_t id, uint8_t addr, uint8_t value)
+static size_t put_str(char *b, size_t n, const char *s)
 {
-    uint8_t pkt[STS_WRITE_BYTE_LEN];
-    (void)STS_BuildWriteByte(pkt, id, addr, value);
-    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
-    const HAL_StatusTypeDef st = HAL_UART_Transmit(&STS_HUART, pkt, (uint16_t)sizeof(pkt), 20u);
-    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
-    return st;
+    while (*s != '\0' && n < 126u) { b[n++] = *s++; }
+    return n;
 }
 
+static size_t put_u16(char *b, size_t n, uint16_t v)
+{
+    char t[6];
+    int i = 0;
+    do { t[i++] = (char)('0' + (v % 10u)); v = (uint16_t)(v / 10u); } while (v != 0u && i < 5);
+    while (i > 0 && n < 126u) { b[n++] = t[--i]; }
+    return n;
+}
+
+static void bus_blocking(const uint8_t *pkt, uint16_t len)
+{
+    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
+    (void)HAL_UART_Transmit(&STS_HUART, (uint8_t *)pkt, len, 20u);
+    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
+}
+
+static void torque_off_blocking(void)
+{
+    uint8_t pkt[STS_SYNC_TORQUE_LEN];
+    (void)STS_BuildSyncTorque(pkt, 0u);
+    bus_blocking(pkt, (uint16_t)sizeof(pkt));
+}
+
+static int in_window(uint16_t p, int16_t lo, int16_t hi)
+{
+    return ((int32_t)p >= lo) && ((int32_t)p <= hi);
+}
+
+static uint32_t absdiff(uint16_t a, uint16_t b)
+{
+    return (a > b) ? (uint32_t)(a - b) : (uint32_t)(b - a);
+}
+
+/*
+ * No blind move at power-up: the servos are read first. Only when both answer and both sit inside
+ * the tracking travel window (= the front pose was taught with "Set home") is the gimbal moved
+ * slowly to 2048 and the profiles enabled. Otherwise torque goes off and every profile is refused
+ * (a not-taught tilt can be near the 0/4095 seam, where a position goal swings it into the frame).
+ */
 void SysId_Init(void)
 {
     tim5_us_init();
-    (void)write_byte_blocking(STS_PAN_ID, STS_ADDR_TORQUE_EN, 1u);
-    HAL_Delay(2);
-    (void)write_byte_blocking(STS_TILT_ID, STS_ADDR_TORQUE_EN, 1u);
-    HAL_Delay(2);
 
-    /* slow move to centre before the 500 Hz loop takes over */
+    uint16_t p0 = 0u, t0 = 0u;
+    const uint8_t ok = STS_BootPing(&p0, &t0);
+    char m[128];
+    size_t n = put_str(m, 0u, "\r\n# servo read: Pan(ID2) ");
+    n = (ok & 1u) ? put_u16(m, n, p0) : put_str(m, n, "NO ANSWER");
+    n = put_str(m, n, ", Tilt(ID1) ");
+    n = (ok & 2u) ? put_u16(m, n, t0) : put_str(m, n, "NO ANSWER");
+    n = put_str(m, n, "\r\n");
+    (void)HAL_UART_Transmit(&huart2, (uint8_t *)m, (uint16_t)n, 20u);
+
+    if (ok != 3u) {
+        torque_off_blocking();
+        vcp_text("# LOCKED: a servo does not answer (bus wiring / power / ID). Torque off.\r\n");
+        return;
+    }
+    if (!in_window(p0, PAN_LO, PAN_HI) || !in_window(t0, TILT_LO, TILT_HI)) {
+        torque_off_blocking();
+        vcp_text("# LOCKED: outside the travel window, front pose not taught. Torque off.\r\n"
+                 "#   flash env:nucleo_f401re -> web E-STOP -> hand to front -> Set home -> flash env:sysid\r\n");
+        return;
+    }
+
+    /* hold where it is, then a slow move to centre (inside the window, so 2048 = front is safe) */
     uint8_t pkt[STS_SYNC_WRITE_LEN];
-    (void)STS_BuildSyncWritePosSpeed(pkt, CENTER, 500u, CENTER, 500u);
-    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
-    (void)HAL_UART_Transmit(&STS_HUART, pkt, (uint16_t)sizeof(pkt), 20u);
-    HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
-    HAL_Delay(1500);
+    (void)STS_BuildSyncWritePosSpeed(pkt, p0, MOVE_SPEED, t0, MOVE_SPEED);
+    bus_blocking(pkt, (uint16_t)sizeof(pkt));
+    HAL_Delay(5);
+    (void)STS_BuildSyncWritePosSpeed(pkt, CENTER, MOVE_SPEED, CENTER, MOVE_SPEED);
+    bus_blocking(pkt, (uint16_t)sizeof(pkt));
+    const uint32_t d = (absdiff(p0, CENTER) > absdiff(t0, CENTER)) ? absdiff(p0, CENTER) : absdiff(t0, CENTER);
+    HAL_Delay(d * 1000u / MOVE_SPEED + 500u);
 
-    vcp_text("\r\n# RCWS sysid mode. p/t axis, S step, R prbs, C chirp, M speed, X stop\r\n");
+    s_armed = 1u;
+    vcp_text("# RCWS sysid mode. p/t axis, S step, R prbs, C chirp, M speed, X stop. B1 = ESTOP\r\n");
 }
 
 static void push_record(uint32_t t_tick, int16_t u, Meas_t m, uint8_t flags)
@@ -250,6 +317,31 @@ static void push_record(uint32_t t_tick, int16_t u, Meas_t m, uint8_t flags)
 void SysId_Tick(void)
 {
     const uint32_t t_tick = now_us();
+
+    /* 0. locked or B1 ESTOP: no position writes. ESTOP sends one torque-off frame and stays silent. */
+    if (s_estop) {
+        if (s_prof != SYSID_PROF_IDLE) {
+            /* close the capture: last record carries done + abort */
+            Meas_t z = {0};
+            push_record(t_tick, 0, z, (uint8_t)(0x04u | 0x20u));
+            s_prof = SYSID_PROF_IDLE;
+        }
+        if (!s_torque_off_sent && STS_HUART.gState == HAL_UART_STATE_READY) {
+            (void)STS_BuildSyncTorque(s_tx, 0u);
+            s_rx_wanted = 0u;
+            HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_SET);
+            if (HAL_UART_Transmit_DMA(&STS_HUART, s_tx, STS_SYNC_TORQUE_LEN) == HAL_OK) {
+                s_torque_off_sent = 1u;
+            } else {
+                HAL_GPIO_WritePin(STS_DIR_PORT, STS_DIR_PIN, GPIO_PIN_RESET);
+            }
+        }
+        return;
+    }
+    if (!s_armed) {
+        return;
+    }
+
     uint8_t flags = s_sticky_flags;
     s_sticky_flags = 0u;
 
@@ -263,7 +355,21 @@ void SysId_Tick(void)
         flags |= 0x02u;
     }
 
-    /* 2. profile state machine */
+    /* 2. latest measurement (reply to the previous tick's READ) */
+    Meas_t m;
+    __disable_irq();
+    m.y = s_meas.y;
+    m.v = s_meas.v;
+    m.load = s_meas.load;
+    m.t_us = s_meas.t_us;
+    m.fresh = s_meas.fresh;
+    s_meas.fresh = 0u;
+    __enable_irq();
+    if (m.fresh) {
+        flags |= 0x01u;
+    }
+
+    /* 3. profile state machine (+ stall watch on the test axis) */
     if (s_stop_req) {
         s_stop_req = 0u;
         s_prof = SYSID_PROF_IDLE;
@@ -272,6 +378,7 @@ void SysId_Tick(void)
         s_prof = s_start_req;
         s_start_req = SYSID_PROF_IDLE;
         s_k = 0u;
+        s_load_cnt = 0u;
     }
     int16_t off = 0;
     uint8_t logging = 0u;
@@ -279,16 +386,28 @@ void SysId_Tick(void)
         uint8_t done;
         off = SysId_Profile(s_prof, s_k++, &done);
         logging = 1u;
+        if (m.fresh) {
+            const int16_t a = (m.load < 0) ? (int16_t)-m.load : m.load;
+            s_load_cnt = (a > LOAD_ABORT) ? (s_load_cnt + 1u) : 0u;
+        }
+        if (s_load_cnt >= LOAD_ABORT_TICKS) {
+            done = 1u;
+            off = 0;                 /* back to centre */
+            flags |= 0x20u;
+            s_abort_note = 1u;
+        }
         if (done) {
             flags |= 0x04u;
             s_prof = SYSID_PROF_IDLE;
         }
     }
 
-    const int16_t lim = (s_axis == STS_TILT_ID) ? TILT_LIM : PAN_LIM;
-    if (off > lim)  { off = lim; }
-    if (off < -lim) { off = (int16_t)-lim; }
-    const int16_t goal = (int16_t)(CENTER + off);
+    /* 4. goal, clamped to the absolute travel window (never beyond the tracking limits) */
+    int16_t goal = (int16_t)(CENTER + off);
+    const int16_t lo = (s_axis == STS_TILT_ID) ? TILT_LO : PAN_LO;
+    const int16_t hi = (s_axis == STS_TILT_ID) ? TILT_HI : PAN_HI;
+    if (goal > hi) { goal = hi; }
+    if (goal < lo) { goal = lo; }
     const uint16_t pan  = (s_axis == STS_PAN_ID)  ? (uint16_t)goal : (uint16_t)CENTER;
     const uint16_t tilt = (s_axis == STS_TILT_ID) ? (uint16_t)goal : (uint16_t)CENTER;
     const uint16_t spd  = s_max_speed ? 0u : STS_DEFAULT_SPEED;
@@ -296,7 +415,7 @@ void SysId_Tick(void)
         flags |= 0x10u;
     }
 
-    /* 3. one DMA frame: SYNC WRITE + READ(present pos/speed/load) */
+    /* 5. one DMA frame: SYNC WRITE + READ(present pos/speed/load) */
     if (STS_HUART.gState == HAL_UART_STATE_READY) {
         (void)STS_BuildSyncWritePosSpeed(s_tx, pan, spd, tilt, spd);
         (void)SysId_BuildRead(&s_tx[STS_SYNC_WRITE_LEN], s_axis, STS_ADDR_PRESENT, SYSID_READ_N);
@@ -311,20 +430,8 @@ void SysId_Tick(void)
         flags |= 0x08u;
     }
 
-    /* 4. record: goal of this tick + latest measurement (from the previous tick's reply) */
+    /* 6. record: goal of this tick + latest measurement */
     if (logging) {
-        Meas_t m;
-        __disable_irq();
-        m.y = s_meas.y;
-        m.v = s_meas.v;
-        m.load = s_meas.load;
-        m.t_us = s_meas.t_us;
-        m.fresh = s_meas.fresh;
-        s_meas.fresh = 0u;
-        __enable_irq();
-        if (m.fresh) {
-            flags |= 0x01u;
-        }
         push_record(t_tick, goal, m, flags);
     }
 }
@@ -336,6 +443,11 @@ void STS_TxDoneHook(void)
         return;
     }
     s_rx_wanted = 0u;
+    /* The FE-URT-1 echoes the 30-byte request on RX. Nobody read it, so ORE (and RXNE/IDLE) are
+       set now; arming the IT receive on top of that would end in an ORE error callback every tick.
+       SR then DR read clears ORE, RXNE and IDLE (F4 sequence). The echo is complete before TC. */
+    (void)STS_USART->SR;
+    (void)STS_USART->DR;
     if (HAL_UARTEx_ReceiveToIdle_IT(&STS_HUART, s_rx, (uint16_t)sizeof(s_rx)) == HAL_OK) {
         s_rx_pending = 1u;
     } else {
@@ -367,6 +479,16 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 static void handle_cmd(uint8_t c)
 {
     const uint8_t idle = (s_prof == SYSID_PROF_IDLE && s_start_req == SYSID_PROF_IDLE);
+    if (c == 'S' || c == 'R' || c == 'C') {
+        if (s_estop) {
+            vcp_text("# refused: ESTOP latched (press RESET)\r\n");
+            return;
+        }
+        if (!s_armed) {
+            vcp_text("# refused: LOCKED (servo not answering or front pose not taught)\r\n");
+            return;
+        }
+    }
     switch (c) {
     case 'p': if (idle) { s_axis = STS_PAN_ID;  vcp_text("# axis pan (ID 2)\r\n"); }  break;
     case 't': if (idle) { s_axis = STS_TILT_ID; vcp_text("# axis tilt (ID 1)\r\n"); } break;
@@ -384,8 +506,37 @@ static void handle_cmd(uint8_t c)
     }
 }
 
+static void estop_poll(void)
+{
+    static uint8_t  armed = 0u;      /* B1 seen released once */
+    static uint32_t t_low = 0u;
+    if (s_estop) {
+        return;
+    }
+    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_SET) {
+        armed = 1u;
+        t_low = 0u;
+        return;
+    }
+    if (!armed) {
+        return;
+    }
+    if (t_low == 0u) {
+        t_low = HAL_GetTick() | 1u;
+    } else if (HAL_GetTick() - t_low >= B1_DEBOUNCE_MS) {
+        s_estop = 1u;
+        vcp_text("# ESTOP: B1 pressed, torque off. Press RESET to resume.\r\n");
+    }
+}
+
 void SysId_Poll(void)
 {
+    estop_poll();
+    if (s_abort_note) {
+        s_abort_note = 0u;
+        vcp_text("# ABORT: load > 80 % for 0.1 s (stall / hit the frame). Back to centre.\r\n");
+    }
+
     /* commands: polled RXNE, no interrupt needed at this rate */
     USART_TypeDef *u = huart2.Instance;
     const uint32_t sr = u->SR;

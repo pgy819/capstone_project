@@ -1,7 +1,15 @@
 /**
  * sysid.h — STS3215 system-identification test mode (build env: sysid)
  *
- * Replaces the vision servo loop with a 500 Hz excitation + measurement loop:
+ * Replaces the vision servo loop with a 500 Hz excitation + measurement loop.
+ *
+ * Safety (real hardware): at power-up both servos are READ first, no blind move. Only when both
+ * answer and sit inside the tracking travel window (Pan 626~3470, Tilt 1536~2560, i.e. the front
+ * pose was taught with "Set home" in the tracking firmware) does the gimbal move slowly to 2048 and
+ * the profiles unlock. Otherwise: torque off, "# LOCKED" on the VCP, every profile refused.
+ * Goals are clamped to that window. B1 = ESTOP (torque off, latched until RESET). |load| > 80 %
+ * for 0.1 s on the test axis stops the profile (flag bit5) and returns to centre.
+ *
  *   TIM2 tick (2 ms): goal position for the test axis (step / PRBS / chirp), the other axis held
  *                     at centre, one DMA frame on USART1 (bus) = SYNC WRITE(22 B) + READ(8 B) of
  *                     Present Position/Speed/Load of the test servo.
@@ -25,7 +33,8 @@
  *   12 i16 u_goal        (counts, absolute goal position of the test axis written in this tick)
  *   14 i16 y_pos         16 i16 v_speed (counts/s)   18 i16 load (0.1 %, signed)
  *   20 u8  flags         bit0 new measurement since last record, bit1 RX timeout/error,
- *                        bit2 profile finished, bit3 TX overrun (bus busy), bit4 max-speed mode
+ *                        bit2 profile finished, bit3 TX overrun (bus busy), bit4 max-speed mode,
+ *                        bit5 aborted (stall watch or B1 ESTOP)
  *   21 u8  profile<<4 | axis_id
  *   22 u8  reserved      23 u8  sum of bytes 2..22 (mod 256)
  */

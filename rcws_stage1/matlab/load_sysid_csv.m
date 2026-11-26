@@ -22,6 +22,9 @@ T = readtable(path);
 if height(T) < 100
     error('load_sysid_csv:short', '%s: only %d records', path, height(T));
 end
+if ismember('abort', T.Properties.VariableNames) && any(T.abort)
+    error('load_sysid_csv:aborted', '%s: run was aborted by the firmware (stall watch or B1 ESTOP) - repeat it', path);
+end
 
 Ts = 0.002;
 t = T.t_s - T.t_s(1);

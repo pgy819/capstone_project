@@ -42,6 +42,9 @@ extern "C" {
 #define STS_TILT_ID             1u      /* ID 1 = Tilt (up-down) */
 #define STS_DEFAULT_SPEED       3400u
 #define STS_POS_MAX             4095u
+/* Travel window around home (2048 = front after "Set home"), shared by the tracking and sysid builds */
+#define STS_PAN_TRAVEL          1422u   /* +-125 deg (EEPROM soft limit 626~3470, cable limit +-130 deg) */
+#define STS_TILT_TRAVEL         512u    /* +-45 deg */
 
 #define STS_SYNC_WRITE_LEN      22u     /* 2 servos x (pos,time,speed) */
 #define STS_SYNC_WRITE_LENGTH   0x12u   /* (6 + 1) * 2 + 4 = 18 */

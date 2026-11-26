@@ -14,7 +14,10 @@ The firmware (stm32_fw, env 'sysid') streams 24-byte records at 500 Hz over the 
     load        present load, 0.1 %
     t_meas_s    time the status packet was received, s (same origin as t_s)
     fresh       1 if y/v/load were updated since the previous record
-    rx_err, overrun, max_speed   flags
+    rx_err, overrun, max_speed, abort   flags (abort: firmware stall watch or B1 ESTOP)
+
+The firmware refuses to run while it is LOCKED (a servo not answering, or the front pose not taught
+with "Set home" in the tracking firmware); the tool then stops at once with that message.
 
 Needs pyserial (pip install pyserial).
 """
@@ -29,7 +32,8 @@ SYNC = b"\xA5\x5A"
 FMT = "<2sHIIhhhhBBBB"
 PROFILES = {"step": b"S", "prbs": b"R", "chirp": b"C"}
 AXES = {"pan": b"p", "tilt": b"t"}
-F_FRESH, F_RXERR, F_DONE, F_OVERRUN, F_MAXSPD = 0x01, 0x02, 0x04, 0x08, 0x10
+F_FRESH, F_RXERR, F_DONE, F_OVERRUN, F_MAXSPD, F_ABORT = 0x01, 0x02, 0x04, 0x08, 0x10, 0x20
+STOP_WORDS = ("refused", "LOCKED", "ESTOP")
 
 
 def parse_stream(buf):
@@ -76,13 +80,14 @@ def to_rows(recs):
             "t_meas_s": (((r["t_meas"] - t0) + 2**31) % 2**32 - 2**31) * 1e-6,
             "fresh": int(bool(f & F_FRESH)), "rx_err": int(bool(f & F_RXERR)),
             "overrun": int(bool(f & F_OVERRUN)), "max_speed": int(bool(f & F_MAXSPD)),
+            "abort": int(bool(f & F_ABORT)),
             "seq": r["seq"],
         })
     return rows
 
 
 def write_csv(path, rows):
-    keys = ["t_s", "u", "y", "v", "load", "t_meas_s", "fresh", "rx_err", "overrun", "max_speed", "seq"]
+    keys = ["t_s", "u", "y", "v", "load", "t_meas_s", "fresh", "rx_err", "overrun", "max_speed", "abort", "seq"]
     with open(path, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=keys)
         w.writeheader()
@@ -97,7 +102,8 @@ def report(rows):
     gaps = sum(((b - a) & 0xFFFF) - 1 for a, b in zip(seq, seq[1:]))
     return (f"{n} records, {rows[-1]['t_s']:.1f} s, seq gaps {gaps}, "
             f"fresh {sum(r['fresh'] for r in rows) / n:.1%}, rx_err {sum(r['rx_err'] for r in rows)}, "
-            f"overrun {sum(r['overrun'] for r in rows)}")
+            f"overrun {sum(r['overrun'] for r in rows)}"
+            + ("  ** ABORTED (stall or ESTOP): do not use this run **" if any(r["abort"] for r in rows) else ""))
 
 
 def main():
@@ -128,17 +134,22 @@ def main():
         buf, recs = b"", []
         t_end = time.time() + a.timeout
         done = False
-        while time.time() < t_end and not done:
+        refused = False
+        while time.time() < t_end and not done and not refused:
             buf += ser.read(4096)
             new, text, buf = parse_stream(buf)
             for line in text:
                 print(line)
+                refused |= any(w in line for w in STOP_WORDS)
             recs.extend(new)
             done = any(r["flags"] & F_DONE for r in new)
             if new and len(recs) % 2500 < len(new):
                 print(f"  {len(recs)} records", flush=True)
         if a.max_speed:
             ser.write(b"M")       # back to default for the next run
+        if refused and not recs:
+            print("firmware refused the run (see the '#' line above); nothing saved", file=sys.stderr)
+            sys.exit(2)
         if not done:
             ser.write(b"X")
             print("timeout before the profile finished", file=sys.stderr)

@@ -54,8 +54,8 @@
 #define SERVO_CENTER       ((float)LINK_SERVO_CENTER)
 #define PAN_HOME           ((float)LINK_PAN_HOME)    /* 2048 = front (taught with SET_HOME) */
 #define TILT_HOME          ((float)LINK_TILT_HOME)
-#define PAN_TRAVEL_COUNTS  1422.0f                   /* +-125 deg around home (cable limit +-130 deg) */
-#define TILT_TRAVEL_COUNTS  512.0f                   /* +-45 deg around home */
+#define PAN_TRAVEL_COUNTS  ((float)STS_PAN_TRAVEL)    /* +-125 deg around home (cable limit +-130 deg) */
+#define TILT_TRAVEL_COUNTS ((float)STS_TILT_TRAVEL)   /* +-45 deg around home */
 /* Goal clamp around home, bounded to the STS3215 single-turn range [0, 4095]:
    Pan [626, 3470], Tilt [1536, 2560]. */
 #define PAN_MIN         ((PAN_HOME  > PAN_TRAVEL_COUNTS)  ? (PAN_HOME  - PAN_TRAVEL_COUNTS)  : 0.0f)
