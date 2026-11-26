@@ -65,7 +65,7 @@ capstone_project/
 
 ## Pi 배포와 웹 조작 화면
 
-* 배포: `ssh -t <사용자>@rcwspi.local "curl -fsSL https://raw.githubusercontent.com/pgy819/capstone_project/preview-stack/rcws_stage1/tools/pi/deploy.sh | bash -s preview-stack"` → `~/rcws_live`에 빌드·시험, UART 점검, 실행기 서비스 설치
+* 배포: `ssh -t <사용자>@rcwspi.local "curl -fsSL https://raw.githubusercontent.com/pgy819/capstone_project/main/rcws_stage1/tools/pi/deploy.sh | bash"` → `~/rcws_live`에 빌드·시험, UART 점검, 실행기 서비스 설치
 * 실행기 `http://<pi>:8000/`: 추적 시작/종료 (부팅 시 자동 실행, systemd 사용자 서비스)
 * 조작 화면 `http://<pi>:8080/` (추적 실행 중, 휴대폰 화면 대응). WebSocket으로 상태를 받고 명령을 보냄
   * 새 대상 포착 시 사진 1장 + "계속 추적 / 추적 중지" (중지한 트랙은 다시 잡지 않음)

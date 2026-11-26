@@ -2,8 +2,8 @@
 # RCWS Stage 1 - Raspberry Pi 5 deploy: packet v2 link to the STM32 + operator web page + launcher.
 #
 #   UART: /dev/ttyAMA0 (GPIO14/15, needs dtparam=uart0=on). Override: RCWS_UART=/dev/xxx bash deploy.sh
-#   PC:  ssh -t pgy819@rcwspi.local "curl -fsSL https://raw.githubusercontent.com/pgy819/capstone_project/preview-stack/rcws_stage1/tools/pi/deploy.sh | bash -s preview-stack"
-#   Pi:  bash deploy.sh [branch]        (default: preview-stack)
+#   PC:  ssh -t pgy819@rcwspi.local "curl -fsSL https://raw.githubusercontent.com/pgy819/capstone_project/main/rcws_stage1/tools/pi/deploy.sh | bash"
+#   Pi:  bash deploy.sh [branch]        (default: main)
 #
 # Installs into ~/rcws_live (earlier deployments ~/rcws, ~/run3 are left alone):
 #   ~/rcws_live/src         git checkout
@@ -12,7 +12,7 @@
 #   launcher                http://<pi>:8000/  start / stop without SSH (systemd user service)
 set -euo pipefail
 
-BRANCH=${1:-preview-stack}
+BRANCH=${1:-main}
 REPO=https://github.com/pgy819/capstone_project.git
 DEST="$HOME/rcws_live"
 SRC="$DEST/src"
