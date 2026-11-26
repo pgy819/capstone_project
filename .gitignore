@@ -13,3 +13,10 @@ __pycache__/
 /v2/
 /v3/
 /2axis-tracking-gimbal/
+# editor / IDE (PlatformIO + VS Code generate these per machine)
+.vscode/
+.cache/
+compile_commands.json
+# regenerable data: python tools/sysid_synth.py --out-dir synth, MATLAB results
+rcws_stage1/tools/synth/
+*.mat
